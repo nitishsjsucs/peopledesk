@@ -4,8 +4,8 @@ This file is the hand-off log for whoever continues the build. SPEC.md (revision
 
 ## Commit plan position
 
-- Done: commits 1 to 5 (scaffold; five Vitest projects; CI; D1 migrations; synth PRNG, UTC dates and org generator).
-- Next: commit 6 (synth: archetypes, blueprints, versioned corpus).
+- Done: commits 1 to 6 (scaffold; five Vitest projects; CI; D1 migrations; synth org; archetypes, blueprints and versioned corpus).
+- Next: commit 7 (synth: restricted-value disjointness, markdown rendering, chunking).
 
 ## Status at the last commit
 
