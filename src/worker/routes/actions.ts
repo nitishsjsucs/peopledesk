@@ -89,7 +89,11 @@ export const actionRoutes = new Hono<AppEnv>()
     return c.json(out);
   });
 
-/** Records the outcome in the originating conversation's transcript (chat-proposed actions only). */
+/**
+ * Records the outcome in the originating conversation's transcript (chat-proposed actions only). Best
+ * effort: the decision is already committed in D1, so a failure here must not turn a completed
+ * approval into an error response.
+ */
 async function notifyConversation(
   env: Env,
   s: Services,
@@ -98,8 +102,12 @@ async function notifyConversation(
   status: "executed" | "rejected" | "failed",
   summary: string,
 ): Promise<void> {
-  const view = await s.actions.getOwn(principal, actionId);
-  if (!view?.conversationId) return;
-  const agent = await agentFor(env, principal.employeeId, view.conversationId);
-  await agent.recordActionOutcome({ principal, actionId, outcome: { status, summary } });
+  try {
+    const view = await s.actions.getOwn(principal, actionId);
+    if (!view?.conversationId) return;
+    const agent = await agentFor(env, principal.employeeId, view.conversationId);
+    await agent.recordActionOutcome({ principal, actionId, outcome: { status, summary } });
+  } catch (err) {
+    console.warn(JSON.stringify({ msg: "record_action_outcome_failed", actionId, error: String(err) }));
+  }
 }

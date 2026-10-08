@@ -95,3 +95,19 @@ describe("chat turns (stub provider)", () => {
     await expectError(await api(`/api/conversations/${id}/turns/${r.turnId}/gateway-logs`, { as: "tenured_employee" }), 404, "not_found");
   });
 });
+
+describe("approval outcomes in the transcript", () => {
+  it("records an approved chat proposal as a system message in its conversation", async () => {
+    const { planned, spareEmployees } = await import("../helpers/fixtures.ts");
+    const who = spareEmployees(1, (e) => !planned.has(e.id))[0]!.email;
+    const id = await newConversation(who);
+    const r = await send(who, id, "Please open an IT ticket, my laptop will not boot after the update");
+    expect(r.kind).toBe("approval_required");
+    const approve = await api(`/api/actions/${r.pendingAction!.actionId}/approve`, { as: who, body: {} });
+    expect(approve.status).toBe(200);
+    const conv = await expectJson(await api(`/api/conversations/${id}`, { as: who }), ConversationSchema);
+    const note = conv.messages.find((m) => m.role === "system");
+    expect(note?.kind).toBe("action_outcome");
+    expect(note?.text).toMatch(/Approved and done: TKT-\d{6}/);
+  });
+});
