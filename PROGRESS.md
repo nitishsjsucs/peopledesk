@@ -4,8 +4,8 @@ This file is the hand-off log for whoever continues the build. SPEC.md (revision
 
 ## Commit plan position
 
-- Done: commits 1 to 6 (scaffold; five Vitest projects; CI; D1 migrations; synth org; archetypes, blueprints and versioned corpus).
-- Next: commit 7 (synth: restricted-value disjointness, markdown rendering, chunking).
+- Done: commits 1 to 7 (scaffold; five Vitest projects; CI; D1 migrations; synth org; archetypes, blueprints and versioned corpus; disjointness, rendering, chunking).
+- Next: commit 8 (seed statements, char(10) seed.sql, committed asof-2026-10-01 dataset, generate script).
 
 ## Status at the last commit
 
@@ -19,9 +19,10 @@ This file is the hand-off log for whoever continues the build. SPEC.md (revision
 
 1. `vite.config.ts` reads an optional `INSPECTOR_PORT` env var and passes it to `cloudflare({ inspectorPort })`. Reason: this Mac builds several repos at once and the default workerd inspector port can collide. Without the variable the plugin default applies, so the spec's behavior is unchanged.
 2. Commit 1 includes a minimal `vitest.config.ts` (node project only) and `test/node/toolchain.test.ts` (exact pins, ESM package, .nvmrc). Reason: every commit must leave `npm test` green, and `vitest run` with no test files exits non-zero. Commit 2 replaces the config with the five-project shape.
-
 3. Until auth lands (commit 10), `/api/health` is served without a token so the pinned-config tests can run. Commit 10 puts it behind `requireAuth` as SPEC section 8 says.
 4. CI's dataset determinism step (`npm run generate && git diff --exit-code ...`) is added in commit 8, when the generator exists.
+6. Restricted-value disjointness versus the archetype bands (SPEC section 12). The spec's rank 2 and rank 3 bands for `count_per_year` (13-24, 25-36) and `notice_weeks` (13-20, 21-30) are almost entirely covered by numbers that rank 1 documents already contain (days 3-60, hours 1-40, percents 1-25 in half steps, review cadences 6/12/18/24). Measured on the committed seed: `count_per_year` rank 2 had 1 free value of 12 and rank 3 had 0, `notice_weeks` likewise. The mandated resampling therefore threw ("could not draw an acceptable count_per_year value for POL-098.f1@v2"). Resolution: the bands stay exactly as specified, the generator still enforces disjointness and throws when it cannot, and the 17 restricted blueprint facts that used those two archetypes were re-authored onto archetypes whose restricted bands are feasible (days, hours, money, percent). `count_per_year` and `notice_weeks` are used by `all` documents only; a test pins that rule.
+7. Number normalization lives in `evals/lib/normalize.ts` as the spec's file tree says, and `src/shared/synth/corpus.ts` imports it, so the generator's N(r) and the scorer and leak check share one normalizer.
 5. Small helper modules not named in the SPEC file tree: `src/worker/errors.ts` (AppError and the error envelope), `src/worker/hono-env.ts` (Hono context typing), `test/web/setup.ts` (testing-library cleanup).
 
 ## Local machine notes for builders

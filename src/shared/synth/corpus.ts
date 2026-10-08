@@ -10,6 +10,8 @@ import { BLUEPRINTS, OWNER_TEAMS, docIdFor } from "./blueprints.ts";
 import { addMonths, firstOfMonth } from "./dates.ts";
 import { rng } from "./prng.ts";
 import type { Rng } from "./prng.ts";
+import { renderVersionMarkdown } from "./render-markdown.ts";
+import { extractNumbers } from "../../../evals/lib/normalize.ts";
 
 export type Fact = {
   /** Stable across versions, e.g. "POL-014.f2". */
@@ -101,8 +103,6 @@ function versionDates(structure: VersionStructure, m0: string, r: Rng): Array<{ 
   return froms.map((from, i) => ({ from, to: i + 1 < n ? (froms[i + 1] as string) : null }));
 }
 
-export type ValueGuard = (rank: Clearance, normalized: string) => boolean;
-
 /**
  * Draws a value from the archetype band for `rank`. `accept` rejects values (restricted-value
  * disjointness, distinctness inside a document); the draw is retried up to 50 times on the fact's
@@ -136,15 +136,20 @@ function makeFact(factId: string, archetype: ArchetypeKey, subject: string, valu
   };
 }
 
-export type CorpusOptions = {
-  /**
-   * Called once per rank, before that rank's facts are drawn, with every document of a lower rank
-   * already complete. Returns the normalized numeric tokens a value of this rank must avoid.
-   */
-  forbiddenTokens?: (rank: Clearance, lowerRankDocs: PolicyDoc[]) => ReadonlySet<string>;
-};
+/**
+ * N(r): every normalized numeric token (numerals, money, percentages, number words; ids and dates
+ * stripped, exactly as the scorer and leak check see text) in any version of any document below rank r,
+ * including distractors and change summaries.
+ */
+export function lowerRankTokens(lowerRankDocs: readonly PolicyDoc[]): Set<string> {
+  const tokens = new Set<string>();
+  for (const d of lowerRankDocs) {
+    for (const v of d.versions) for (const n of extractNumbers(renderVersionMarkdown(d, v))) tokens.add(n);
+  }
+  return tokens;
+}
 
-export function generateCorpus(asOf: string, options: CorpusOptions = {}): Corpus {
+export function generateCorpus(asOf: string): Corpus {
   const m0 = firstOfMonth(asOf);
   const structures = assignStructures();
   const docs: PolicyDoc[] = BLUEPRINTS.map((bp, i) => {
@@ -176,11 +181,11 @@ export function generateCorpus(asOf: string, options: CorpusOptions = {}): Corpu
     };
   });
 
-  // Documents are completed in rank order: all rank 1 documents (every version), then rank 2, then
-  // rank 3, so a restricted value can be checked against everything a lower clearance can read.
+  // Restricted-value disjointness, enforced (not only asserted): documents are completed in rank
+  // order, all rank 1 documents (every version) first, then rank 2, then rank 3. A rank 2 or 3 value is
+  // resampled until its normalized form is absent from N(r), the tokens of every lower-rank document.
   for (const rank of [1, 2, 3] as const) {
-    const lower = docs.filter((d) => d.rank < rank);
-    const forbidden = options.forbiddenTokens?.(rank, lower) ?? new Set<string>();
+    const forbidden = rank === 1 ? new Set<string>() : lowerRankTokens(docs.filter((d) => d.rank < rank));
     for (const doc of docs.filter((d) => d.rank === rank)) fillFacts(doc, forbidden);
   }
   return { asOf, m0, docs };

@@ -4,8 +4,11 @@ import { AMBIGUITY_GROUPS } from "../../src/shared/synth/ambiguity-groups.ts";
 import { ARCHETYPE_KEYS } from "../../src/shared/synth/archetypes.ts";
 import { BLUEPRINTS } from "../../src/shared/synth/blueprints.ts";
 import { EXPECTED_COUNTS } from "../../src/shared/synth/counts.ts";
+import { chunkMarkdown } from "../../src/shared/synth/chunk.ts";
 import { generateCorpus } from "../../src/shared/synth/corpus.ts";
 import type { Corpus } from "../../src/shared/synth/corpus.ts";
+import { SECTION_NAMES, renderVersionMarkdown } from "../../src/shared/synth/render-markdown.ts";
+import { extractNumbers } from "../../evals/lib/normalize.ts";
 
 const AS_OFS = ["2026-10-01", "2027-03-15", "2028-01-31"];
 const NUMBER_WORDS = /\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|twenty|thirty|hundred|thousand|half|dozen)\b/;
@@ -63,6 +66,14 @@ describe("policy blueprints", () => {
   });
 });
 
+describe("restricted blueprints", () => {
+  it("use only archetypes whose restricted bands can be disjoint from rank 1 numbers", () => {
+    for (const b of BLUEPRINTS.filter((x) => x.audience !== "all")) {
+      for (const [a] of b.facts) expect(["count_per_year", "notice_weeks"], b.title).not.toContain(a);
+    }
+  });
+});
+
 describe.each(AS_OFS)("versioned corpus as of %s", (asOf) => {
   const corpus: Corpus = generateCorpus(asOf);
   const versions = corpus.docs.flatMap((d) => d.versions);
@@ -116,6 +127,57 @@ describe.each(AS_OFS)("versioned corpus as of %s", (asOf) => {
         expect(changed.map((f) => f.factId).sort()).toEqual([...v.changedFactIds].sort());
         expect(v.changeSummary).toMatch(/changed from .+ to .+\./);
       });
+    }
+  });
+});
+
+describe("rendering, chunking and restricted-value disjointness", () => {
+  const corpus = generateCorpus("2026-10-01");
+
+  it("renders front matter, the effective line and six sections per version", () => {
+    for (const d of corpus.docs) {
+      for (const v of d.versions) {
+        const md = renderVersionMarkdown(d, v);
+        expect(md).not.toMatch(/\r/);
+        expect(md.startsWith(`---\ndoc_id: ${d.docId}\nversion: ${v.version}\n`)).toBe(true);
+        expect(md).toContain(`effective_to: ${v.effectiveTo ?? "null"}`);
+        expect(md).toContain(`# ${d.title}\nEffective from ${v.effectiveFrom}.`);
+        const chunks = chunkMarkdown(md, { docId: d.docId, version: v.version, title: d.title });
+        expect(chunks.map((c) => c.section)).toEqual([...SECTION_NAMES]);
+        expect(chunks.map((c) => c.chunkId)).toEqual(SECTION_NAMES.map((_, i) => `${d.docId}@${v.version}#${i + 1}`));
+        const policy = chunks.find((c) => c.section === "Policy");
+        for (const f of v.facts) expect(policy?.text).toContain(f.sentence);
+        expect(chunks.some((c) => c.text.includes(`Form PD-${d.distractors.formNumber}`))).toBe(true);
+      }
+    }
+  });
+
+  it("puts 1 or 2 distractor numbers in every document", () => {
+    for (const d of corpus.docs) {
+      expect(d.distractors.formNumber).toBeGreaterThanOrEqual(400);
+      expect(d.distractors.formNumber).toBeLessThanOrEqual(499);
+    }
+    expect(corpus.docs.some((d) => d.distractors.reviewMonths !== null)).toBe(true);
+    expect(corpus.docs.some((d) => d.distractors.reviewMonths === null)).toBe(true);
+  });
+
+  it("keeps every restricted fact value out of every lower-rank document version", () => {
+    for (const rank of [2, 3] as const) {
+      const lower = new Set<string>();
+      for (const d of corpus.docs.filter((x) => x.rank < rank)) {
+        for (const v of d.versions) for (const n of extractNumbers(renderVersionMarkdown(d, v))) lower.add(n);
+      }
+      for (const d of corpus.docs.filter((x) => x.rank === rank)) {
+        for (const v of d.versions) {
+          for (const f of v.facts) expect(lower.has(f.normalized), `${f.factId}@${v.version}=${f.normalized}`).toBe(false);
+        }
+      }
+    }
+  });
+
+  it("extracts each fact's normalized value from its rendered sentence", () => {
+    for (const d of corpus.docs) {
+      for (const f of d.versions.flatMap((v) => v.facts)) expect(extractNumbers(f.sentence)).toEqual([f.normalized]);
     }
   });
 });
