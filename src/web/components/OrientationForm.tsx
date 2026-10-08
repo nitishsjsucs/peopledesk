@@ -30,12 +30,15 @@ export function OrientationForm({ initialSessionId, initialEmployeeId, supersede
     ...(me.inOnboarding ? [{ employeeId: me.employeeId, fullName: `${me.fullName} (you)` }] : []),
     ...(team.data?.members ?? []).filter((m) => m.inOnboarding && !m.booked),
   ];
+  // The attendee is always one of the listed options. A manager or HR admin who is not in onboarding
+  // is not an option, so the default is the first listed attendee: exactly what the select shows.
+  const attendee = attendees.some((a) => a.employeeId === employeeId) ? employeeId : (attendees[0]?.employeeId ?? me.employeeId);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     const parsed = ScheduleOrientationSessionInput.safeParse({
       sessionId,
-      ...(employeeId && employeeId !== me.employeeId ? { employeeId } : {}),
+      ...(attendee !== me.employeeId ? { employeeId: attendee } : {}),
     });
     if (!parsed.success) {
       setError("Choose a session.");
@@ -57,7 +60,7 @@ export function OrientationForm({ initialSessionId, initialEmployeeId, supersede
       {me.role !== "employee" ? (
         <div className="field">
           <label htmlFor="attendee">Attendee</label>
-          <select id="attendee" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
+          <select id="attendee" value={attendee} onChange={(e) => setEmployeeId(e.target.value)}>
             {attendees.length === 0 ? <option value={me.employeeId}>No one in onboarding needs a booking</option> : null}
             {attendees.map((a) => (
               <option key={a.employeeId} value={a.employeeId}>
