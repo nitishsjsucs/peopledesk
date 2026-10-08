@@ -9,6 +9,7 @@ import { mcpRoutes } from "./mcp/route.ts";
 import { AppError, errorResponse } from "./errors.ts";
 import type { AppEnv } from "./hono-env.ts";
 import { actionRoutes } from "./routes/actions.ts";
+import { conversationRoutes } from "./routes/conversations.ts";
 import { healthRoutes } from "./routes/health.ts";
 import { meRoutes } from "./routes/me.ts";
 import { onboardingRoutes } from "./routes/onboarding.ts";
@@ -73,6 +74,7 @@ export function buildApp(): Hono<AppEnv> {
   app.route("/api", orientationRoutes);
   app.route("/api", teamRoutes);
   app.route("/api", actionRoutes);
+  app.route("/api", conversationRoutes);
 
   app.notFound((c) => errorResponse(404, "not_found", "Not found.", c.get("requestId") ?? "none"));
 

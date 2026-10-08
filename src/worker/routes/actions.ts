@@ -15,6 +15,9 @@ import { AppError } from "../errors.ts";
 import type { AppEnv } from "../hono-env.ts";
 import { ToolError } from "../mcp/errors.ts";
 import { approvalOriginFor } from "../mcp/route.ts";
+import type { Principal } from "../auth/principal.ts";
+import type { Services } from "../container.ts";
+import { agentFor } from "./conversations.ts";
 import { validate } from "../validation.ts";
 
 const TOOL_TO_HTTP: Record<ToolErrorCode, [ContentfulStatusCode, ApiErrorCode]> = {
@@ -63,11 +66,40 @@ export const actionRoutes = new Hono<AppEnv>()
   .post("/actions/:id/approve", validate("json", ApproveRequestSchema), async (c) => {
     const id = c.req.param("id");
     if (!UUID_RE.test(id)) throw notFound();
-    return c.json(await c.get("services").actions.approve(c.get("principal"), id));
+    const principal = c.get("principal");
+    const s = c.get("services");
+    const outcome = await s.actions.approve(principal, id);
+    if (!outcome.replayed) {
+      const summary =
+        outcome.status === "executed"
+          ? `Approved and done: ${Object.values(outcome.result).join(", ")}.`
+          : `Approved, but it could not be completed (${outcome.errorCode}).`;
+      await notifyConversation(c.env, s, principal, id, outcome.status, summary);
+    }
+    return c.json(outcome);
   })
   .post("/actions/:id/reject", validate("json", RejectRequestSchema), async (c) => {
     const id = c.req.param("id");
     if (!UUID_RE.test(id)) throw notFound();
     const { reason } = c.req.valid("json");
-    return c.json(await c.get("services").actions.reject(c.get("principal"), id, reason));
+    const principal = c.get("principal");
+    const s = c.get("services");
+    const out = await s.actions.reject(principal, id, reason);
+    await notifyConversation(c.env, s, principal, id, "rejected", "Rejected. Nothing was submitted.");
+    return c.json(out);
   });
+
+/** Records the outcome in the originating conversation's transcript (chat-proposed actions only). */
+async function notifyConversation(
+  env: Env,
+  s: Services,
+  principal: Principal,
+  actionId: string,
+  status: "executed" | "rejected" | "failed",
+  summary: string,
+): Promise<void> {
+  const view = await s.actions.getOwn(principal, actionId);
+  if (!view?.conversationId) return;
+  const agent = await agentFor(env, principal.employeeId, view.conversationId);
+  await agent.recordActionOutcome({ principal, actionId, outcome: { status, summary } });
+}

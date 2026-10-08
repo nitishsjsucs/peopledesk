@@ -3,6 +3,7 @@ import { ActionListSchema, PendingActionViewSchema } from "../../src/shared/api-
 import { proposeTicket, ticketArgs } from "../helpers/actions.ts";
 import { planned, spareEmployees } from "../helpers/fixtures.ts";
 import { api, expectError, expectJson } from "../helpers/http.ts";
+import { newConversation } from "../helpers/chat.ts";
 import { call, mcpClient } from "../helpers/mcp.ts";
 
 const spares = spareEmployees(6, (e) => !planned.has(e.id)).map((e) => e.email);
@@ -68,6 +69,16 @@ describe("CSRF protection on state-changing routes", () => {
       await expectError(await api(path, { as: spares[4], body: {}, origin: "https://evil.example" }), 403, "forbidden");
       await expectError(await api(path, { as: spares[4], body: {}, origin: null }), 403, "forbidden");
     }
+  });
+
+  it("rejects cross-origin and non-JSON requests on the conversation routes", async () => {
+    await expectError(await api("/api/conversations", { as: spares[4], body: {}, origin: "https://evil.example" }), 403, "forbidden");
+    await expectError(await api("/api/conversations", { as: spares[4], body: {}, contentType: "text/plain" }), 400, "validation_error");
+    const id = await newConversation(spares[4]!);
+    const path = `/api/conversations/${id}/messages`;
+    await expectError(await api(path, { as: spares[4], body: { text: "hello there" }, origin: "https://evil.example" }), 403, "forbidden");
+    await expectError(await api(path, { as: spares[4], body: { text: "hello there" }, origin: null }), 403, "forbidden");
+    await expectError(await api(path, { as: spares[4], body: { text: "hello there" }, contentType: "text/plain" }), 400, "validation_error");
   });
 
   it("accepts Sec-Fetch-Site: same-origin when Origin is absent", async () => {

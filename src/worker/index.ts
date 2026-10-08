@@ -1,8 +1,8 @@
-import { Agent } from "agents";
 import { buildApp } from "./app.ts";
 
-export class ConversationAgent extends Agent<Env> {}
+export { ConversationAgent } from "./chat/agent.ts";
 
+// Built once per isolate.
 const app = buildApp();
 
 export default {

@@ -8,8 +8,13 @@ import type { Role } from "../../shared/domain.ts";
 
 export type DirectoryEntry = { employeeId: string; fullName: string; inOnboarding: boolean; booked: boolean };
 
+/** The part of D1Database this module uses (keeps the name resolution importable from Node tests). */
+type D1Like = {
+  prepare(sql: string): { bind(...values: unknown[]): { all<T>(): Promise<{ results: T[] }> } };
+};
+
 export async function directorySlice(
-  db: D1Database,
+  db: D1Like,
   principal: { employeeId: string; role: Role },
 ): Promise<DirectoryEntry[]> {
   if (principal.role === "employee") return [];

@@ -137,3 +137,29 @@ describe("chunk alignment", () => {
     expect(gate.droppedForClearance).toBe(1);
   });
 });
+
+describe("a failing AI Search inside a chat turn", () => {
+  it("returns kind error with retrieval_unavailable, not a refusal", async () => {
+    const { runTurn } = await import("../../src/worker/chat/orchestrator.ts");
+    const { StubProvider } = await import("../../src/worker/llm/stub.ts");
+    const { principalFor, testServices } = await import("../helpers/services.ts");
+    const services = testServices();
+    services.retriever = new AiSearchRetriever(new FakeAiSearch(new Error("filter field audience_rank is not indexed")));
+    const r = await runTurn(
+      {
+        provider: new StubProvider(),
+        services,
+        principal: await principalFor("tenured_employee"),
+        conversationId: crypto.randomUUID(),
+        turnId: crypto.randomUUID(),
+        asOf: "2026-10-01",
+        approvalOrigin: "http://localhost",
+        history: { userMessages: [], assistantTurns: [] },
+      },
+      "How fast does paid time off accrue?",
+    );
+    expect(r.kind).toBe("error");
+    expect(r.error?.code).toBe("retrieval_unavailable");
+    expect(r.text).not.toBe("I couldn't find that in the policies available to you.");
+  });
+});

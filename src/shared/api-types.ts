@@ -16,6 +16,10 @@ import {
   TICKET_PRIORITIES,
   TICKET_SOURCES,
   TICKET_STATUSES,
+  TOOL_ERROR_CODES,
+  TOOL_NAMES,
+  TURN_ERROR_CODES,
+  TURN_KINDS,
   IDENTITY_KINDS,
   LLM_PROVIDER_IDS,
   PERSONA_KEYS,
@@ -225,3 +229,118 @@ export type ApproveResponse = z.infer<typeof ApproveResponseSchema>;
 
 export const RejectRequestSchema = z.strictObject({ reason: z.string().max(200).optional() });
 export const RejectResponseSchema = z.object({ status: z.literal("rejected") });
+
+// Chat
+
+export const CitationSchema = z.object({
+  passageId: z.string(),
+  docId: z.string(),
+  version: z.number().int(),
+  title: z.string(),
+  section: z.string(),
+  effectiveFrom: z.string(),
+  effectiveTo: z.string().nullable(),
+  sourceKey: z.string(),
+  quote: z.string(),
+});
+export type Citation = z.infer<typeof CitationSchema>;
+
+export const TurnTraceSchema = z.object({
+  asOf: z.string(),
+  llmProvider: z.string(),
+  model: z.string(),
+  totalMs: z.number(),
+  router: z.object({
+    intent: z.string(),
+    tool: z.string().optional(),
+    ms: z.number(),
+    inputTokens: z.number(),
+    outputTokens: z.number(),
+    retries: z.number(),
+  }),
+  retrieval: z
+    .object({
+      query: z.string(),
+      returned: z.number(),
+      droppedForClearance: z.number(),
+      droppedNotEffective: z.number(),
+      passageIds: z.array(z.string()),
+      aiSearchChunkIds: z.array(z.string()).optional(),
+      ms: z.number(),
+      retriever: z.enum(RETRIEVER_KINDS),
+    })
+    .optional(),
+  tool: z.object({ name: z.string(), ms: z.number() }).optional(),
+  composer: z
+    .object({
+      ms: z.number(),
+      inputTokens: z.number(),
+      outputTokens: z.number(),
+      invalidCitationsDropped: z.number(),
+      retries: z.number(),
+    })
+    .optional(),
+  /** "<purpose>:<env.AI.aiGatewayLogId>" after each call: hints only; logs are joined by metadata. */
+  gatewayLogIdHints: z.array(z.string()),
+});
+export type TurnTrace = z.infer<typeof TurnTraceSchema>;
+
+export const TurnResultSchema = z.object({
+  turnId: z.string(),
+  conversationId: z.string(),
+  kind: z.enum(TURN_KINDS),
+  text: z.string(),
+  citations: z.array(CitationSchema),
+  toolCall: z
+    .object({
+      tool: z.enum(TOOL_NAMES),
+      arguments: z.unknown(),
+      status: z.enum(["ok", "error"]),
+      error: z.object({ code: z.enum(TOOL_ERROR_CODES), message: z.string() }).optional(),
+    })
+    .optional(),
+  toolResult: z.unknown().optional(),
+  pendingAction: PendingActionViewSchema.optional(),
+  error: z.object({ code: z.enum(TURN_ERROR_CODES), message: z.string() }).optional(),
+  trace: TurnTraceSchema,
+});
+export type TurnResult = z.infer<typeof TurnResultSchema>;
+
+export const TranscriptMessageSchema = z.object({
+  id: z.number().int(),
+  turnId: z.string(),
+  role: z.enum(["user", "assistant", "system"]),
+  kind: z.string(),
+  text: z.string(),
+  payload: z.unknown().optional(),
+  createdAt: z.string(),
+});
+export type TranscriptMessage = z.infer<typeof TranscriptMessageSchema>;
+
+export const ConversationSummarySchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export const ConversationListSchema = z.object({ conversations: z.array(ConversationSummarySchema) });
+export const ConversationCreatedSchema = z.object({ id: z.string() });
+export const ConversationSchema = z.object({ id: z.string(), title: z.string(), messages: z.array(TranscriptMessageSchema) });
+export const SendMessageRequestSchema = z.strictObject({ text: z.string().trim().min(1).max(2000) });
+export const CreateConversationRequestSchema = z.strictObject({});
+
+export const GatewayLogsSchema = z.object({
+  logs: z.array(
+    z.object({
+      logId: z.string(),
+      purpose: z.string(),
+      model: z.string(),
+      tokensIn: z.number().optional(),
+      tokensOut: z.number().optional(),
+      durationMs: z.number(),
+      cost: z.number().optional(),
+      cached: z.boolean(),
+    }),
+  ),
+  missing: z.array(z.object({ logId: z.string(), reason: z.string() })),
+});
