@@ -4,8 +4,8 @@ This file is the hand-off log for whoever continues the build. SPEC.md (revision
 
 ## Commit plan position
 
-- Done: commits 1 to 3 (scaffold; five Vitest projects with pinned config vars; CI workflow).
-- Next: commit 4 (D1 migrations).
+- Done: commits 1 to 4 (scaffold; five Vitest projects with pinned config vars; CI workflow; D1 migrations).
+- Next: commit 5 (synth: PRNG, UTC dates, org generator).
 
 ## Status at the last commit
 

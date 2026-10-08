@@ -5,6 +5,7 @@ import type { AppEnv } from "../hono-env.ts";
 
 export const healthRoutes = new Hono<AppEnv>().get("/health", async (c) => {
   const cfg = c.get("config");
+  const meta = await c.env.DB.prepare("SELECT sha256 FROM dataset_meta WHERE id = 1").first<{ sha256: string }>();
   const body: Health = {
     ok: true,
     authMode: cfg.authMode,
@@ -13,7 +14,8 @@ export const healthRoutes = new Hono<AppEnv>().get("/health", async (c) => {
     retriever: cfg.retriever,
     asOf: c.get("clock").asOf(),
     version: APP_VERSION,
-    datasetSha256: null,
+    // Which generated dataset is seeded; the eval runner refuses to grade a mismatched server.
+    datasetSha256: meta?.sha256 ?? null,
   };
   return c.json(body);
 });
