@@ -1,9 +1,12 @@
 import { Agent } from "agents";
+import { buildApp } from "./app.ts";
 
 export class ConversationAgent extends Agent<Env> {}
 
+const app = buildApp();
+
 export default {
-  async fetch(): Promise<Response> {
-    return Response.json({ error: { code: "not_found", message: "Not found", requestId: "none" } }, { status: 404 });
+  fetch(request, env, ctx) {
+    return app.fetch(request, env, ctx);
   },
 } satisfies ExportedHandler<Env>;
