@@ -5,8 +5,10 @@
 //      (deletes children first, upserts employees so identity_links survive). If the remote file
 //      import rejects the statements that fire the FTS5 triggers, the same seedStatements() list is
 //      sent in chunks of 50 through `wrangler d1 execute --remote --command`.
-//   3. 155 R2 puts with customMetadata through getPlatformProxy with remote bindings.
-// The R2 S3 API fallback (x-amz-meta-* headers) is P1 and not implemented.
+//   3. 155 R2 puts with customMetadata through getPlatformProxy with remote bindings, or through R2's
+//      S3-compatible API with x-amz-meta-* headers (`--r2 s3`, or automatically when the proxy fails and
+//      CLOUDFLARE_ACCOUNT_ID, R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY are set). `wrangler r2 object put`
+//      has no custom-metadata option, which is why neither path uses it.
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
@@ -15,9 +17,10 @@ import type { Manifest } from "../src/shared/synth/dataset.ts";
 import type { Org } from "../src/shared/synth/org.ts";
 import { r2PolicyObjects } from "../src/shared/synth/r2-objects.ts";
 import { renderSeedSql, seedStatements } from "../src/shared/synth/seed-sql.ts";
-import { remoteProxyConfig, repo, wrangler } from "./lib/cloudflare.ts";
+import { productionEnv, remoteProxyConfig, repo, wrangler } from "./lib/cloudflare.ts";
+import { amzDateOf, sha256Hex, signRequest } from "./lib/sigv4.ts";
 
-const { values } = parseArgs({ options: { "as-of": { type: "string" } } });
+const { values } = parseArgs({ options: { "as-of": { type: "string" }, r2: { type: "string", default: "proxy" } } });
 const asOf = values["as-of"];
 if (!asOf) {
   console.error("usage: npm run seed:remote -- --as-of YYYY-MM-DD (generate it first: npm run generate -- --as-of <date>)");
@@ -47,16 +50,61 @@ try {
 type Bucket = {
   put(key: string, body: string, opts: { customMetadata: Record<string, string>; httpMetadata: { contentType: string } }): Promise<unknown>;
 };
-const { env, dispose } = await getPlatformProxy<{ POLICY_BUCKET: Bucket }>({ configPath: remoteProxyConfig(), persist: false });
-try {
-  const objects = r2PolicyObjects(manifest);
-  for (const obj of objects) {
-    await env.POLICY_BUCKET.put(obj.key, readFileSync(join(dataDir, obj.key), "utf8"), {
-      customMetadata: obj.customMetadata,
-      httpMetadata: { contentType: "text/markdown; charset=utf-8" },
-    });
+const objects = r2PolicyObjects(manifest);
+const bodyOf = (key: string) => readFileSync(join(dataDir, key), "utf8");
+
+async function putAllViaProxy(): Promise<void> {
+  const { env, dispose } = await getPlatformProxy<{ POLICY_BUCKET: Bucket }>({ configPath: remoteProxyConfig(), persist: false });
+  try {
+    for (const obj of objects) {
+      await env.POLICY_BUCKET.put(obj.key, bodyOf(obj.key), {
+        customMetadata: obj.customMetadata,
+        httpMetadata: { contentType: "text/markdown; charset=utf-8" },
+      });
+    }
+  } finally {
+    await dispose();
   }
-  console.log(JSON.stringify({ seeded: asOf, r2Objects: objects.length, datasetSha256: manifest.datasetSha256 }));
-} finally {
-  await dispose();
 }
+
+async function putAllViaS3(): Promise<void> {
+  const accountId = process.env["CLOUDFLARE_ACCOUNT_ID"];
+  const accessKeyId = process.env["R2_ACCESS_KEY_ID"];
+  const secretAccessKey = process.env["R2_SECRET_ACCESS_KEY"];
+  if (!accountId || !accessKeyId || !secretAccessKey) {
+    throw new Error("The S3 path needs CLOUDFLARE_ACCOUNT_ID, R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY (an R2 API token).");
+  }
+  const bucket = productionEnv().r2_buckets[0]?.bucket_name ?? "peopledesk-policies";
+  for (const obj of objects) {
+    const body = bodyOf(obj.key);
+    const url = `https://${accountId}.r2.cloudflarestorage.com/${bucket}/${obj.key}`;
+    const headers: Record<string, string> = { "content-type": "text/markdown; charset=utf-8" };
+    for (const [k, v] of Object.entries(obj.customMetadata)) headers[`x-amz-meta-${k}`] = v;
+    const signed = await signRequest({
+      method: "PUT",
+      url,
+      headers,
+      payloadHash: await sha256Hex(body),
+      accessKeyId,
+      secretAccessKey,
+      region: "auto",
+      amzDate: amzDateOf(new Date()),
+    });
+    const { host: _host, ...sendHeaders } = signed.headers;
+    const res = await fetch(url, { method: "PUT", headers: sendHeaders, body });
+    if (!res.ok) throw new Error(`S3 PUT ${obj.key} answered ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  }
+}
+
+if (values.r2 === "s3") {
+  await putAllViaS3();
+} else {
+  try {
+    await putAllViaProxy();
+  } catch (err) {
+    if (!process.env["R2_ACCESS_KEY_ID"]) throw err;
+    console.warn(`R2 puts through getPlatformProxy failed (${String(err).slice(0, 200)}); using the S3 API.`);
+    await putAllViaS3();
+  }
+}
+console.log(JSON.stringify({ seeded: asOf, r2Objects: objects.length, datasetSha256: manifest.datasetSha256 }));
