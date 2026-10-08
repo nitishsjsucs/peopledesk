@@ -5,6 +5,12 @@ import { ApprovalCard } from "../components/ApprovalCard.tsx";
 import { OrientationForm } from "../components/OrientationForm.tsx";
 
 export function ScheduleOrientationPage() {
+  // Edit on the review card navigates to this same route with new state. Keying by the location
+  // remounts the page, so the prefilled form replaces the review card instead of being hidden by it.
+  return <ScheduleOrientation key={useLocation().key} />;
+}
+
+function ScheduleOrientation() {
   const [params] = useSearchParams();
   const edit = (useLocation().state as { edit?: PendingActionView } | null)?.edit;
   const editArgs = edit && edit.tool === "schedule_orientation_session" ? (edit.arguments as { sessionId?: string; employeeId?: string }) : undefined;

@@ -70,4 +70,39 @@ describe("TicketForm", () => {
     await screen.findByTestId("approval-card");
     expect((calls[0]?.body as { supersedes?: string }).supersedes).toBe(old.actionId);
   });
+
+  it("goes back from the review step to the prefilled form on Edit, and the update supersedes the proposal", async () => {
+    let n = 0;
+    const calls = installFetch([
+      {
+        method: "POST",
+        path: "/api/actions",
+        status: 201,
+        body: (init: RequestInit) => {
+          const sent = JSON.parse(String(init.body)) as { arguments: Record<string, unknown> };
+          n++;
+          return pendingTicket({ actionId: `00000000-0000-4000-8000-00000000000${n}`, arguments: sent.arguments, source: "form", conversationId: null });
+        },
+      },
+    ]);
+    renderPage();
+    fill("Subject", "Monitor flickers");
+    fill("Description", "The external monitor flickers every few seconds.");
+    fireEvent.click(screen.getByRole("button", { name: "Review request" }));
+    await screen.findByTestId("approval-card");
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    // The form comes back, prefilled from the proposal, instead of the review card staying on screen.
+    expect(await screen.findByRole("heading", { name: "Edit ticket request" })).toBeTruthy();
+    expect(screen.queryByTestId("approval-card")).toBeNull();
+    expect((screen.getByLabelText("Subject") as HTMLInputElement).value).toBe("Monitor flickers");
+    fill("Subject", "Monitor flickers and goes black");
+    fireEvent.click(screen.getByRole("button", { name: "Update request" }));
+    await screen.findByTestId("approval-card");
+    expect(calls).toHaveLength(2);
+    expect(calls[1]!.body).toMatchObject({
+      tool: "create_support_ticket",
+      arguments: { subject: "Monitor flickers and goes black" },
+      supersedes: "00000000-0000-4000-8000-000000000001",
+    });
+  });
 });

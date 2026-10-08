@@ -1,8 +1,10 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter, Route, Routes } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import type { Me, PendingActionView } from "../../src/shared/api-types.ts";
 import { OrientationForm } from "../../src/web/components/OrientationForm.tsx";
 import { MeContext } from "../../src/web/lib/session.tsx";
+import { ScheduleOrientationPage } from "../../src/web/pages/ScheduleOrientationPage.tsx";
 import { installFetch, me, pendingTicket } from "./fixtures.ts";
 
 const session = (id: string, seatsRemaining: number, capacity = 10) => ({
@@ -115,5 +117,50 @@ describe("OrientationForm", () => {
     fireEvent.click(screen.getByRole("button", { name: "Review request" }));
     await waitFor(() => expect(posts()).toHaveLength(1));
     expect(posts()[0]!.body).toEqual({ tool: "schedule_orientation_session", arguments: { sessionId: "ORI-002" } });
+  });
+});
+
+describe("ScheduleOrientationPage", () => {
+  it("goes back from the review step to the prefilled form on Edit, and the update supersedes the proposal", async () => {
+    let n = 0;
+    const calls = installFetch([
+      { path: "/api/orientation-sessions", body: sessions },
+      {
+        method: "POST",
+        path: "/api/actions",
+        status: 201,
+        body: (init: RequestInit) => {
+          n++;
+          return { ...proposed(JSON.parse(String(init.body)).arguments), actionId: `00000000-0000-4000-8000-00000000000${n}` };
+        },
+      },
+    ]);
+    render(
+      <MemoryRouter initialEntries={["/requests/orientation"]}>
+        <MeContext.Provider value={newHire}>
+          <Routes>
+            <Route path="/requests/orientation" element={<ScheduleOrientationPage />} />
+          </Routes>
+        </MeContext.Provider>
+      </MemoryRouter>,
+    );
+    fireEvent.click(await screen.findByLabelText("New hire orientation ORI-002, ORI-002"));
+    fireEvent.click(screen.getByRole("button", { name: "Review request" }));
+    await screen.findByTestId("approval-card");
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    expect(await screen.findByRole("heading", { name: "Edit orientation request" })).toBeTruthy();
+    expect(screen.queryByTestId("approval-card")).toBeNull();
+    const prefilled = (await screen.findByLabelText("New hire orientation ORI-002, ORI-002")) as HTMLInputElement;
+    expect(prefilled.checked).toBe(true);
+    fireEvent.click(screen.getByLabelText("New hire orientation ORI-003, ORI-003"));
+    fireEvent.click(screen.getByRole("button", { name: "Update request" }));
+    await screen.findByTestId("approval-card");
+    const posts = calls.filter((c) => c.method === "POST");
+    expect(posts).toHaveLength(2);
+    expect(posts[1]!.body).toEqual({
+      tool: "schedule_orientation_session",
+      arguments: { sessionId: "ORI-003" },
+      supersedes: "00000000-0000-4000-8000-000000000001",
+    });
   });
 });

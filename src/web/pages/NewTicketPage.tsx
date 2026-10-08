@@ -6,6 +6,12 @@ import { TicketForm } from "../components/TicketForm.tsx";
 import type { TicketValues } from "../components/TicketForm.tsx";
 
 export function NewTicketPage() {
+  // Edit on the review card navigates to this same route with new state. Keying by the location
+  // remounts the page, so the prefilled form replaces the review card instead of being hidden by it.
+  return <NewTicket key={useLocation().key} />;
+}
+
+function NewTicket() {
   const edit = (useLocation().state as { edit?: PendingActionView } | null)?.edit;
   const [proposed, setProposed] = useState<PendingActionView | null>(null);
   const initial = edit && edit.tool === "create_support_ticket" ? (edit.arguments as Partial<TicketValues>) : undefined;
