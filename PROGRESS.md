@@ -4,8 +4,9 @@ This file is the hand-off log for whoever continues the build. SPEC.md (revision
 
 ## Commit plan position
 
-- Done: commits 1 to 12 (scaffold; five Vitest projects; CI; D1 migrations; synth org; archetypes, blueprints and versioned corpus; disjointness, rendering, chunking; seed statements, seed.sql and the committed asof-2026-10-01 dataset; local seeding and batch-based worker test setup; auth with local and remote JWKS, principal resolution and the dev issuer; authz capability matrix; PolicyStore, D1 FTS5 retriever and permission gate).
-- Next: commit 13 (AI Search adapter with strict failure mode and chunk alignment).
+- Done: commits 1 to 13 (scaffold; five Vitest projects; CI; D1 migrations; synth org; archetypes, blueprints and versioned corpus; disjointness, rendering, chunking; seed statements, seed.sql and the committed asof-2026-10-01 dataset; local seeding and batch-based worker test setup; auth with local and remote JWKS, principal resolution and the dev issuer; authz capability matrix; PolicyStore, D1 FTS5 retriever and permission gate; AI Search adapter and chunk alignment).
+- Next: commit 14 (policy, ticket, onboarding, orientation and minimal team routes).
+- Open item carried forward: `retrieval.ai-search-adapter.test.ts` still needs the case "a throwing fake makes the chat turn return kind error with retrieval_unavailable"; it needs the orchestrator (commit 18).
 
 ## Status at the last commit
 
