@@ -149,7 +149,7 @@ describe("summary and README writer", () => {
     expect(block).toContain("qwen3-1.7b-q4_0");
     expect(block).toContain(s.command);
     expect(block).toContain("target is 90%");
-    expect(block).not.toMatch(/—/);
+    expect(block).not.toMatch(/\u2014/);
     const readme = `# x\n${README_START}\nNo eval run recorded yet.\n${README_END}\nend\n`;
     const updated = replaceResultsBlock(readme, block);
     expect(updated).toContain(block);

@@ -4,16 +4,17 @@ This file is the hand-off log for whoever continues the build. SPEC.md (revision
 
 ## Commit plan position
 
-- Done: all P0 commits, 1 to 25, plus one extra commit (production scripts, between 23 and 24).
+- Done: every commit in the plan. P0 commits 1 to 25, one extra commit (production scripts, between 23 and 24), and P1 commits 26 to 28.
   1 scaffold; 2 five Vitest projects; 3 CI; 4 D1 migrations; 5 synth PRNG, dates and org; 6 archetypes, blueprints, versioned corpus; 7 disjointness, rendering, chunking; 8 seed statements, seed.sql and the committed dataset; 9 local seeding and batch test setup; 10 auth; 11 authz matrix; 12 PolicyStore, D1 FTS5 retriever, permission gate; 13 AI Search adapter and chunk alignment; 14 read routes; 15 MCP server, read tools, `/mcp`, in-process client; 16 ActionService, write tools, approval endpoints; 17 LLM providers and gateway log reader; 18 ConversationAgent and orchestration; 19 safety tests; 20 web shell and chat; 21 web pages and forms; 22 eval dataset; 23 eval runner, scorer, report; extra: remote seeding, identity linking, verification and llama-server scripts; 24 README; 25 first local eval run and README results.
-- Next: P1 commits 26 to 28 (home page, manager onboarding view and ticket status filter; dark theme and policy viewer tests; R2 S3 API fallback and link-identity polish). Work for them may already be in the working tree or later commits; check `git log`.
+  26 home page, manager onboarding view, ticket status filter; 27 dark theme and policy viewer tests; 28 R2 S3 API fallback (SigV4 signer tested against AWS's documented example) and link-identity `--list`/`--remove`.
+- Next (outside the commit plan): the remaining P1 extras (a policy version diff view, empty-state illustrations); everything that needs Nitish (SPEC section 17): `wrangler login`, deploy, `verify:ai-search`, `verify:gateway`, the production eval in the eval window, the resume wording choices, and pushing to GitHub.
 
 ## Status at the last commit
 
 All checks run on 2026-10-08 on this Mac.
 
 - `npm run typecheck`: pass (worker, web and node tsconfigs, TypeScript 7.0.2)
-- `npm test`: pass, 407 tests in 52 files across the five projects (`worker`, `worker-access`, `worker-adversarial`, `node`, `web`)
+- `npm test`: pass, 416 tests in 57 files across the five projects (`worker`, `worker-access`, `worker-adversarial`, `node`, `web`)
 - `npm run build`: pass
 - `npm run deploy:check`: pass (offline dry run lists `CONVERSATION_AGENT`, `DB`, `POLICY_SEARCH`, `POLICY_BUCKET`, `AI`)
 - `npm run generate && git diff --exit-code -- data/generated evals/dataset`: no diff
@@ -53,12 +54,14 @@ Command: `npm run eval -- --base-url http://localhost:8782 --run-id local-qwen3-
 20. Eval harness: `npm run eval` also accepts `--dataset` and `--limit`; a limited run records the full dataset size, so `update-readme` refuses it as partial. Production auth sends Access service-token client ids and secrets (`PEOPLEDESK_SERVICE_TOKENS`) as `CF-Access-Client-Id`/`CF-Access-Client-Secret`. `summary.json` records the exact command.
 21. Extra commit between 23 and 24 for the scripts the spec's npm scripts point at (`seed-remote`, `link-identity`, `verify-ai-search`, `verify-gateway`, `llm-serve`). The production ones need `npx wrangler login` and have not been run; they reuse tested modules. Remote bindings for `getPlatformProxy` come from a throwaway config generated from `env.production`, so `wrangler.jsonc` stays local-first. `llm-serve` defaults follow the spec (port 8080, `-np 2`) and take `--port`, `--parallel`, `--ngl`.
 22. The first local eval used port 8782 (preview), llama-server on port 8120 with `-np 1`, and `--concurrency 1`, instead of the spec's 4173, 8080, `-np 2` and concurrency 2, because ports and the GPU are shared with other builds on this Mac. With one llama-server slot, concurrency 2 would only queue requests.
+23. P1 commit 26 and 27 both touched `styles.css` and `AppShell.tsx`; commit 26 was made from an intermediate copy of those two files (home styles and the brand link only) so each commit stays self-contained. `seed:remote --r2 s3` (and the automatic fallback) needs an R2 API token (`R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`) and `CLOUDFLARE_ACCOUNT_ID`; it has not been run against R2.
 
 ## Coordination notes
 
 - Another agent works in this same checkout concurrently. It committed `ac700fa` (a README status rewrite) and `e474ae3` (the CI pathspec fix). My commit `cffaf55` (commit 16) accidentally swept that agent's uncommitted README draft in through `git add -A`. Since then: stage explicit paths only, and check `git status` and `git log` before committing.
 - Commit 24 merged the README: the spec's section 20 outline plus a current Status table and the other agent's "Why" section.
-- Manual UI check on 2026-10-08 with `vite dev` on port 8782: dev login, a cited answer, a chat-proposed ticket approved from its card, the policy viewer and the orientation form all worked against locally seeded data.
+- Manual UI check on 2026-10-08 with `vite dev` on port 8782: dev login, a cited answer, a chat-proposed ticket approved from its card, the policy viewer and the orientation form all worked against locally seeded data; after the P1 commits, the home page, the manager onboarding view and the dark theme were checked the same way.
+- The README's Status table and test counts are maintained by hand; refresh them when the test count changes.
 
 ## Local machine notes for builders
 

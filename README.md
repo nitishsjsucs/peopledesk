@@ -10,9 +10,9 @@ All people, policies, tickets and numbers are synthetic, generated deterministic
 
 | | |
 |---|---|
-| **Works today** | Every P0 item of [SPEC.md](SPEC.md) section 1, including a first recorded local eval run: the deterministic synthetic organization and versioned policy corpus, D1 and R2 seeding, Access-shaped JWT authentication, the authorization matrix, permission-aware retrieval, the API, the six MCP tools at `/mcp`, the approval checkpoint, four LLM providers, the chat agent, the React UI, the 200-case eval harness, and the production seeding and verification scripts |
-| **Tests** | 407 tests in 52 files across five Vitest projects, all passing (`npm test`, 2026-10-08) |
-| **Not done yet** | A production eval run (needs a Cloudflare deployment), and the P1 items listed in SPEC.md section 1 |
+| **Works today** | Every P0 item of [SPEC.md](SPEC.md) section 1, including a first recorded local eval run: the deterministic synthetic organization and versioned policy corpus, D1 and R2 seeding, Access-shaped JWT authentication, the authorization matrix, permission-aware retrieval, the API, the six MCP tools at `/mcp`, the approval checkpoint, four LLM providers, the chat agent, the React UI, the 200-case eval harness, and the production seeding and verification scripts. Also the P1 home page, manager onboarding view, ticket status filter, dark theme and R2 S3 seeding fallback |
+| **Tests** | 416 tests in 57 files across five Vitest projects, all passing (`npm test`, 2026-10-08) |
+| **Not done yet** | A production deployment and production eval run (both need a Cloudflare account), and two P1 extras: a policy version diff view and empty-state illustrations |
 | **Deployed** | No. Nothing runs on Cloudflare yet; the deploy steps below need `npx wrangler login` |
 | **CI** | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs typecheck, dataset determinism, tests, build, an offline deploy dry run and a generated-types check. All six pass locally at this commit (2026-10-08) |
 
@@ -138,7 +138,7 @@ Tests run in the Workers Vitest integration (`@cloudflare/vitest-plugin`, the re
 | `worker-access` | workerd, `AUTH_MODE=access` | The production remote-JWKS path offline (served by `outboundService`), service tokens that can propose but never approve, and provider failure handling |
 | `worker-adversarial` | workerd, adversarial model | A model that always reaches for other people's data and fabricates citations; server checks keep every turn safe |
 | `node` | Node | Generator determinism and exact counts, the seed file round trip through `wrangler d1 execute`, the authorization matrix, the eval dataset invariants, scorer, leak check and report |
-| `web` | happy-dom | Chat page, approval card, ticket form, restricted markdown renderer |
+| `web` | happy-dom | Chat page, approval card, ticket form, restricted markdown renderer, policy viewer, home, tickets and onboarding pages |
 
 Every workerd test file starts from the same seeded dataset, applied with `DB.batch` (never `exec`, which splits multi-line text).
 
