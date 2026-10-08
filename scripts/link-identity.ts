@@ -1,8 +1,10 @@
-// npm run link-identity -- (--remote | --local) (--email <access email> | --service-token <common_name>) --employee E0001
+// npm run link-identity -- (--remote | --local) (--email <access email> | --service-token <client id>) --employee E0001
 // npm run link-identity -- (--remote | --local) --list
 // npm run link-identity -- (--remote | --local) --remove <identity>
 // Maps a real Cloudflare Access identity (a user email, or a service token's common_name) onto a seeded
 // employee by inserting an identity_links row. Only a user identity can ever approve actions.
+// A service token's common_name is its Client ID (the CF-Access-Client-Id value, "<hex>.access"), per
+// the Access application-token docs; the Access application also needs a Service Auth policy for it.
 import { parseArgs } from "node:util";
 import { sqlLiteral } from "../src/shared/synth/seed-sql.ts";
 import { wrangler } from "./lib/cloudflare.ts";
@@ -38,7 +40,7 @@ const email = values.email?.trim().toLowerCase();
 const commonName = values["service-token"]?.trim();
 if (values.remote === values.local || !/^E\d{4}$/.test(employee) || !!email === !!commonName) {
   console.error(
-    "usage: npm run link-identity -- (--remote | --local) (--email EMAIL | --service-token COMMON_NAME) --employee E0001\n" +
+    "usage: npm run link-identity -- (--remote | --local) (--email EMAIL | --service-token CLIENT_ID) --employee E0001\n" +
       "       npm run link-identity -- (--remote | --local) (--list | --remove IDENTITY)",
   );
   process.exit(2);

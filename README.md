@@ -162,7 +162,7 @@ npm run eval -- --base-url http://localhost:4173 --run-id local-qwen3-1.7b-<date
 npm run eval:readme -- evals/results/local-qwen3-1.7b-<date>/summary.json
 ```
 
-`eval:readme` writes the block below from `summary.json` only, and refuses stub providers, aborted runs and partial runs. Local numbers come from Qwen3-1.7B and SQLite FTS5, far smaller and simpler than the production model and AI Search, so expect them to be well below production.
+`eval:readme` writes the block below from `summary.json` only, and refuses stub providers, aborted runs and partial runs. Local numbers come from Qwen3-1.7B and SQLite FTS5, far smaller and simpler than the production model and AI Search, so they are not a prediction of production numbers in either direction.
 
 ## Results
 
@@ -247,7 +247,7 @@ npm run verify:gateway                            # which AI Gateway log reader 
 npm run link-identity -- --remote --email <your Access email> --employee <persona id>
 ```
 
-Production eval, inside the dataset's 14-day validity window: create one Access service token per persona, link each with `npm run link-identity -- --remote --service-token <common_name> --employee <id>`, then
+Production eval, inside the dataset's 14-day validity window: create one Access service token per persona, and add a policy with the action **Service Auth** that includes those tokens to the Access application (without it, Access answers service-token requests with an identity-provider login). The Access JWT for a service token carries the token's Client ID (`<hex>.access`) as `common_name` and an empty `sub`, so link each token by its Client ID with `npm run link-identity -- --remote --service-token <Client ID> --employee <id>`, then
 
 ```bash
 npm run deploy:eval-window   # same build, ALLOW_SERVICE_TOKENS=true
