@@ -4,8 +4,8 @@ This file is the hand-off log for whoever continues the build. SPEC.md (revision
 
 ## Commit plan position
 
-- Done: commits 1 to 8 (scaffold; five Vitest projects; CI; D1 migrations; synth org; archetypes, blueprints and versioned corpus; disjointness, rendering, chunking; seed statements, seed.sql and the committed asof-2026-10-01 dataset).
-- Next: commit 9 (local seeding of D1 and R2, batch-based worker test setup).
+- Done: commits 1 to 9 (scaffold; five Vitest projects; CI; D1 migrations; synth org; archetypes, blueprints and versioned corpus; disjointness, rendering, chunking; seed statements, seed.sql and the committed asof-2026-10-01 dataset; local seeding and batch-based worker test setup).
+- Next: commit 10 (auth: JWT verifier, principal resolution, dev issuer).
 
 ## Status at the last commit
 

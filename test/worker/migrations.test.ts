@@ -34,17 +34,17 @@ describe("D1 migrations", () => {
         "INSERT INTO policy_versions VALUES ('POL-901',1,'policies/r1-all/POL-901/v01.md','2026-01-01',NULL,'Initial','x')",
       ),
       env.DB.prepare(
-        "INSERT INTO policy_chunks (id, chunk_id, doc_id, version, ordinal, title, section, text) VALUES (1,'POL-901@1#1','POL-901',1,1,'Probe','Policy','Employees accrue zeppelin days monthly.')",
+        "INSERT INTO policy_chunks (id, chunk_id, doc_id, version, ordinal, title, section, text) VALUES (100001,'POL-901@1#1','POL-901',1,1,'Probe','Policy','Employees accrue zeppelin days monthly.')",
       ),
     ]);
     const match = (q: string) =>
       env.DB.prepare("SELECT rowid FROM policy_chunks_fts WHERE policy_chunks_fts MATCH ?1").bind(q).all();
     expect((await match("zeppelin")).results).toHaveLength(1);
-    expect((await match("accrued")).results).toHaveLength(1); // porter stemming
-    await env.DB.prepare("UPDATE policy_chunks SET text = 'Now about dirigibles.' WHERE id = 1").run();
+    expect((await match("zeppelins")).results).toHaveLength(1); // porter stemming
+    await env.DB.prepare("UPDATE policy_chunks SET text = 'Now about dirigibles.' WHERE id = 100001").run();
     expect((await match("zeppelin")).results).toHaveLength(0);
     expect((await match("dirigibles")).results).toHaveLength(1);
-    await env.DB.prepare("DELETE FROM policy_chunks WHERE id = 1").run();
+    await env.DB.prepare("DELETE FROM policy_chunks WHERE id = 100001").run();
     expect((await match("dirigibles")).results).toHaveLength(0);
   });
 
