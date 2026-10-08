@@ -1,9 +1,10 @@
-import { env, SELF } from "cloudflare:test";
+import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { HealthSchema } from "../../src/shared/api-types.ts";
 import { EXPECTED_COUNTS } from "../../src/shared/synth/counts.ts";
 import type { Manifest } from "../../src/shared/synth/dataset.ts";
 import manifestJson from "../../data/generated/asof-2026-10-01/manifest.json";
+import { api } from "../helpers/http.ts";
 
 const manifest = manifestJson as unknown as Manifest;
 
@@ -60,7 +61,7 @@ describe("seeded D1 and R2 (batch path)", () => {
   });
 
   it("reports the seeded dataset hash on /api/health", async () => {
-    const res = await SELF.fetch("http://localhost/api/health");
+    const res = await api("/api/health", { as: "tenured_employee" });
     expect(HealthSchema.parse(await res.json()).datasetSha256).toBe(manifest.datasetSha256);
   });
 });
