@@ -4,8 +4,8 @@ This file is the hand-off log for whoever continues the build. SPEC.md (revision
 
 ## Commit plan position
 
-- Done: commits 1 to 20 (scaffold; five Vitest projects; CI; D1 migrations; synth org; archetypes, blueprints and versioned corpus; disjointness, rendering, chunking; seed statements, seed.sql and the committed asof-2026-10-01 dataset; local seeding and batch-based worker test setup; auth with local and remote JWKS, principal resolution and the dev issuer; authz capability matrix; PolicyStore, D1 FTS5 retriever and permission gate; AI Search adapter and chunk alignment; read routes for policies, tickets, onboarding, orientation and team; MCP server with cached tool definitions, the four read tools, /mcp and the in-process client; ActionService with the single-batch approval, the two write tools and the approval endpoints; LLM providers and the binding gateway-log reader; ConversationAgent, turn lock, router and composer orchestration, citation validator, conversation routes; safety tests with the adversarial model and service tokens; web app shell, chat with citation chips, source drawer and approval cards).
-- Next: commit 21 (web: policy list and viewer, request forms, tickets, onboarding and actions pages).
+- Done: commits 1 to 21 (scaffold; five Vitest projects; CI; D1 migrations; synth org; archetypes, blueprints and versioned corpus; disjointness, rendering, chunking; seed statements, seed.sql and the committed asof-2026-10-01 dataset; local seeding and batch-based worker test setup; auth with local and remote JWKS, principal resolution and the dev issuer; authz capability matrix; PolicyStore, D1 FTS5 retriever and permission gate; AI Search adapter and chunk alignment; read routes for policies, tickets, onboarding, orientation and team; MCP server with cached tool definitions, the four read tools, /mcp and the in-process client; ActionService with the single-batch approval, the two write tools and the approval endpoints; LLM providers and the binding gateway-log reader; ConversationAgent, turn lock, router and composer orchestration, citation validator, conversation routes; safety tests with the adversarial model and service tokens; web app shell, chat with citation chips, source drawer and approval cards; policy list and viewer, request forms, tickets, onboarding and actions pages).
+- Next: commit 22 (evals: 200-case dataset generator with invariant tests).
 
 ## Status at the last commit
 
@@ -43,6 +43,8 @@ This file is the hand-off log for whoever continues the build. SPEC.md (revision
 17. `evals/lib/leak.ts` landed in commit 19 (not 23) because the adversarial safety test uses it; `test/node/eval.leak.test.ts` came with it. `chat.no-approval-via-chat.test.ts` landed in commit 18.
 
 18. Web: extra modules `src/web/lib/session.tsx` (signed-in user context) and `src/web/lib/use-async.ts` (loader hook); `lib/api.ts` has a `setFetch` test seam. The chat shows the answer body with citation chips; the deterministic "Source:" line stays in `TurnResult.text` and is hidden in the bubble because the chips carry it.
+
+19. Manual check on 2026-10-08 with `vite dev` on port 8782: dev login, a cited policy answer, a chat-proposed ticket approved from its card (TKT-000151 created), the policy viewer with the version timeline and the orientation form all worked against the locally seeded D1 and R2.
 
 ## Local machine notes for builders
 

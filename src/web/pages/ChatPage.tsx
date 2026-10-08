@@ -109,16 +109,18 @@ export function ChatPage() {
       <section className="chat-main" aria-label="Chat">
         {loadError ? <ErrorBanner error={loadError} /> : null}
         {entries.length === 0 && !sending ? (
-          <EmptyState title={`Hi ${me.fullName.split(" ")[0]}, how can I help?`}>
-            <p>Answers cite the policy version they come from. Actions wait for your approval.</p>
-            <div className="citations" style={{ justifyContent: "center" }}>
-              {SUGGESTIONS.map((s) => (
-                <button key={s} type="button" className="btn" onClick={() => void onSend(s)}>
-                  {s}
-                </button>
-              ))}
-            </div>
-          </EmptyState>
+          <div className="chat-empty">
+            <EmptyState title={`Hi ${me.fullName.split(" ")[0]}, how can I help?`}>
+              <p>Answers cite the policy version they come from. Actions wait for your approval.</p>
+              <div className="citations" style={{ justifyContent: "center" }}>
+                {SUGGESTIONS.map((s) => (
+                  <button key={s} type="button" className="btn" onClick={() => void onSend(s)}>
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </EmptyState>
+          </div>
         ) : (
           <MessageList entries={entries} sending={sending} onOpenCitation={setCitation} onRetry={(t) => void onSend(t)} />
         )}

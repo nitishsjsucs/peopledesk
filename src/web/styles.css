@@ -202,6 +202,12 @@ a {
   padding: 4px 6px;
 }
 
+input[type="radio"],
+input[type="checkbox"] {
+  width: auto;
+  accent-color: var(--primary);
+}
+
 input,
 select,
 textarea {
@@ -435,7 +441,19 @@ label {
 
 .message-assistant {
   align-self: flex-start;
+  max-width: 85%;
+}
+
+.message-assistant:has(.approval-card),
+.message-assistant:has(.card) {
   width: 85%;
+}
+
+.chat-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .message-assistant .bubble {
