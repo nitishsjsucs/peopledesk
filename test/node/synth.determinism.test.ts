@@ -62,6 +62,9 @@ describe("generator determinism", () => {
       const printed = JSON.parse(stdout.trim().split("\n").pop() as string) as { datasetSha256: string };
       expect(printed.datasetSha256).toBe(a.manifest.datasetSha256);
       expect(readFileSync(join(out, "data/generated/asof-2026-10-01/seed.sql"), "utf8")).toBe(read("seed.sql"));
+      expect(readFileSync(join(out, "evals/dataset/asof-2026-10-01/cases.jsonl"), "utf8")).toBe(
+        readFileSync(join(repo, "evals/dataset/asof-2026-10-01/cases.jsonl"), "utf8"),
+      );
     },
     60_000,
   );
