@@ -2,6 +2,12 @@
 // here does I/O, so building the container is cheap on every request.
 import type { Clock } from "./clock.ts";
 import type { AppConfig } from "./env.ts";
+import { AdversarialStubProvider } from "./llm/adversarial-stub.ts";
+import { OpenAiCompatibleProvider } from "./llm/openai-compatible.ts";
+import type { LlmProvider } from "./llm/provider.ts";
+import { StubProvider } from "./llm/stub.ts";
+import { WorkersAiProvider } from "./llm/workers-ai.ts";
+import type { AiBindingLike } from "./llm/workers-ai.ts";
 import { PermissionGate } from "./policies/permission-gate.ts";
 import { AiSearchRetriever } from "./policies/retriever-ai-search.ts";
 import { D1Fts5Retriever } from "./policies/retriever-d1-fts.ts";
@@ -35,6 +41,21 @@ export function retrieverFor(cfg: AppConfig, env: Env): PolicyRetriever {
     return new AiSearchRetriever(env.POLICY_SEARCH);
   }
   return new D1Fts5Retriever(env.DB);
+}
+
+/** Selection is by LLM_PROVIDER only; there is no fallback from one provider to another. */
+export function providerFor(cfg: AppConfig, env: Env): LlmProvider {
+  switch (cfg.llm.provider) {
+    case "workers-ai":
+      if (!env.AI) throw new Error("LLM_PROVIDER=workers-ai without the AI binding (parseConfig should have caught this)");
+      return new WorkersAiProvider({ ai: env.AI as unknown as AiBindingLike, model: cfg.llm.model, gatewayId: cfg.llm.gatewayId });
+    case "openai-compatible":
+      return new OpenAiCompatibleProvider({ baseUrl: cfg.llm.baseUrl, model: cfg.llm.model });
+    case "stub":
+      return new StubProvider();
+    case "adversarial-stub":
+      return new AdversarialStubProvider();
+  }
 }
 
 export function buildServices(env: Env, cfg: AppConfig, clock: Clock): Services {
