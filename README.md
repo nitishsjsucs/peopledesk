@@ -10,9 +10,9 @@ All people, policies, tickets and numbers are synthetic, generated deterministic
 
 | | |
 |---|---|
-| **Works today** | Every P0 item of [SPEC.md](SPEC.md) section 1 except the first recorded eval run: the deterministic synthetic organization and versioned policy corpus, D1 and R2 seeding, Access-shaped JWT authentication, the authorization matrix, permission-aware retrieval, the API, the six MCP tools at `/mcp`, the approval checkpoint, four LLM providers, the chat agent, the React UI, the 200-case eval harness, and the production seeding and verification scripts |
+| **Works today** | Every P0 item of [SPEC.md](SPEC.md) section 1, including a first recorded local eval run: the deterministic synthetic organization and versioned policy corpus, D1 and R2 seeding, Access-shaped JWT authentication, the authorization matrix, permission-aware retrieval, the API, the six MCP tools at `/mcp`, the approval checkpoint, four LLM providers, the chat agent, the React UI, the 200-case eval harness, and the production seeding and verification scripts |
 | **Tests** | 407 tests in 52 files across five Vitest projects, all passing (`npm test`, 2026-10-08) |
-| **Not done yet** | The first local eval run with Qwen3-1.7B (so the Results section below is empty), and the P1 items: home page, manager onboarding view, dark theme, ticket status filter, policy diff view, the R2 S3 seeding fallback |
+| **Not done yet** | A production eval run (needs a Cloudflare deployment), and the P1 items listed in SPEC.md section 1 |
 | **Deployed** | No. Nothing runs on Cloudflare yet; the deploy steps below need `npx wrangler login` |
 | **CI** | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs typecheck, dataset determinism, tests, build, an offline deploy dry run and a generated-types check. All six pass locally at this commit (2026-10-08) |
 
@@ -167,8 +167,38 @@ npm run eval:readme -- evals/results/local-qwen3-1.7b-<date>/summary.json
 ## Results
 
 <!-- results:start -->
-No eval run recorded yet.
+Run `local-qwen3-1.7b-2026-10-08`, finished 2026-10-08, produced by `npm run eval -- --base-url http://localhost:8782 --run-id local-qwen3-1.7b-2026-10-08 --concurrency 1`.
+Server: provider `openai-compatible`, model `qwen3-1.7b-q4_0`, retriever `d1-fts`, auth dev, business date 2026-10-01, git `464103ba6691`.
+
+| Metric | Value |
+|---|---|
+| groundedAnswerAccuracy | 90.5% (86/95), 95% CI 83.0% to 94.9% |
+| overallPassRate | 61.5% (123/200), 95% CI 54.6% to 68.0% |
+| policy_answerable | 90.0% (63/70) |
+| outdated_document | 92.0% (23/25) |
+| ambiguous | 45.0% (9/20) |
+| unauthorized | 30.0% (9/30) |
+| action_request | 34.5% (19/55) |
+| Citation precision (answer turns) | 98.9% (86/87); 0 fabricated labels dropped by the validator |
+| Action tool selection / arguments | 52.7% / 45.5% of 55 |
+| Safety: unauthorized leaks | 0 |
+| Safety: writes without approval | 0 |
+| Safety: pending actions for forbidden targets | 0 |
+| Infrastructure errors | 0 error turns, 0 HTTP errors (error rate 0.0%) |
+| Zero-passage answerable cases | 0 |
+| Turn latency (client) | p50 2614 ms, p95 3540 ms, max 4365 ms |
+| Router / retrieval / composer latency | p50 1407 ms, p95 2355 ms, max 3463 ms / p50 6 ms, p95 15 ms, max 58 ms / p50 1262 ms, p95 1765 ms, max 2221 ms |
+| Tokens | 405436 in, 11289 out (2027.2 / 56.4 per case) |
+| Cost | $0.1442 for 347 model calls; source `trace-tokens-x-list-price`: Estimate: this run's token volume (as reported by the model server) at the Workers AI list price of @cf/meta/llama-3.3-70b-instruct-fp8-fast. Not a cost incurred. |
+
+- **groundedAnswerAccuracy**: Share of the 95 policy_answerable and outdated_document cases answered with kind answer, containing every expected value, citing the current version of the right document, citing no superseded or scheduled version, with at least one cited passage that contains every expected value, and not a number dump.
+- **overallPassRate**: Passed cases over all 200 cases. It includes 55 action cases and 30 unauthorized cases whose pass depends largely on deterministic server checks, so it is not a grounding metric.
+- The design target is 90% groundedAnswerAccuracy. The number above is what this run measured.
+
+Full report: `evals/results/local-qwen3-1.7b-2026-10-08/summary.md`; raw numbers: `evals/results/local-qwen3-1.7b-2026-10-08/summary.json`.
 <!-- results:end -->
+
+How to read this local run: it used Qwen3-1.7B (Q4_0) on `llama-server` and the SQLite FTS5 retriever, not the production model or AI Search. Most unauthorized-case failures are the small model answering from a different document the persona may read instead of refusing; the leak and forbidden-target gates above are what show that no restricted value, document or action got through. Most action-case failures are routing mistakes by the small model (for example, onboarding-progress questions routed as policy questions). The server-side checks themselves are covered by the test suite, including a model that deliberately reaches for other people's data (`test/worker-adversarial`).
 
 ## MCP
 
