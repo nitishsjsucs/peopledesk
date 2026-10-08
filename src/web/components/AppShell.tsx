@@ -22,7 +22,7 @@ export function AppShell() {
   return (
     <div className="shell">
       <header className="topbar">
-        <a className="brand" href="/chat">
+        <a className="brand" href="/">
           People<span>Desk</span>
         </a>
         <nav className="nav" aria-label="Main">

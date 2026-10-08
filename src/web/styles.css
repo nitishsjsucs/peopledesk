@@ -789,3 +789,26 @@ label {
     padding: 16px 12px;
   }
 }
+
+/* Home */
+.quick-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.quick-action {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-decoration: none;
+  color: var(--text);
+}
+
+.quick-action:hover {
+  border-color: var(--primary);
+}
+
+.quick-action + .quick-action {
+  margin-top: 0;
+}

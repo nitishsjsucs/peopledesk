@@ -1,8 +1,9 @@
-import { createBrowserRouter, Navigate } from "react-router";
+import { createBrowserRouter } from "react-router";
 import type { RouteObject } from "react-router";
 import { AppShell } from "./components/AppShell.tsx";
 import { ActionsPage } from "./pages/ActionsPage.tsx";
 import { ChatPage } from "./pages/ChatPage.tsx";
+import { HomePage } from "./pages/HomePage.tsx";
 import { NewTicketPage } from "./pages/NewTicketPage.tsx";
 import { NotFoundPage } from "./pages/NotFoundPage.tsx";
 import { OnboardingPage } from "./pages/OnboardingPage.tsx";
@@ -16,8 +17,7 @@ export const routes: RouteObject[] = [
     path: "/",
     element: <AppShell />,
     children: [
-      // P0: "/" redirects to /chat (HomePage is P1).
-      { index: true, element: <Navigate to="/chat" replace /> },
+      { index: true, element: <HomePage /> },
       { path: "chat", element: <ChatPage /> },
       { path: "chat/:conversationId", element: <ChatPage /> },
       { path: "policies", element: <PoliciesPage /> },
