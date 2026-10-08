@@ -4,8 +4,8 @@ This file is the hand-off log for whoever continues the build. SPEC.md (revision
 
 ## Commit plan position
 
-- Done: commits 1 to 18 (scaffold; five Vitest projects; CI; D1 migrations; synth org; archetypes, blueprints and versioned corpus; disjointness, rendering, chunking; seed statements, seed.sql and the committed asof-2026-10-01 dataset; local seeding and batch-based worker test setup; auth with local and remote JWKS, principal resolution and the dev issuer; authz capability matrix; PolicyStore, D1 FTS5 retriever and permission gate; AI Search adapter and chunk alignment; read routes for policies, tickets, onboarding, orientation and team; MCP server with cached tool definitions, the four read tools, /mcp and the in-process client; ActionService with the single-batch approval, the two write tools and the approval endpoints; LLM providers and the binding gateway-log reader; ConversationAgent, turn lock, router and composer orchestration, citation validator, conversation routes).
-- Next: commit 19 (safety tests: adversarial project, service-token approval denial).
+- Done: commits 1 to 19 (scaffold; five Vitest projects; CI; D1 migrations; synth org; archetypes, blueprints and versioned corpus; disjointness, rendering, chunking; seed statements, seed.sql and the committed asof-2026-10-01 dataset; local seeding and batch-based worker test setup; auth with local and remote JWKS, principal resolution and the dev issuer; authz capability matrix; PolicyStore, D1 FTS5 retriever and permission gate; AI Search adapter and chunk alignment; read routes for policies, tickets, onboarding, orientation and team; MCP server with cached tool definitions, the four read tools, /mcp and the in-process client; ActionService with the single-batch approval, the two write tools and the approval endpoints; LLM providers and the binding gateway-log reader; ConversationAgent, turn lock, router and composer orchestration, citation validator, conversation routes; safety tests with the adversarial model and service tokens).
+- Next: commit 20 (web: app shell, chat with citations, source drawer, approval cards).
 
 ## Status at the last commit
 
@@ -39,6 +39,8 @@ This file is the hand-off log for whoever continues the build. SPEC.md (revision
 
 15. Chat: `ConversationAgent.sendMessage` returns `{ ok: true, result } | { ok: false, code: "turn_in_progress" }` instead of throwing, because an exception thrown across Durable Object RPC is logged by workerd as an uncaught error on every 409; the route still answers 409 `turn_in_progress`. The agent exposes `turnLock` (for the `runInDurableObject` test) and a `providerOverride` field that only tests can set through `runInDurableObject`. `trace.gatewayLogIdHints` entries are `"<purpose>:<logId>"`, so the binding reader knows which call each hint belongs to. Approve and reject record the outcome in the originating conversation through `recordActionOutcome`. Tool errors map to fixed texts in `render.ts` (for example `not_in_onboarding` and `already_booked` refuse, `session_full` clarifies). `people.ts` types its D1 parameter structurally so the name resolution is testable under Node; slice-per-role and turn-level person refusals are tested in the worker project (`test/worker/chat.people.test.ts`) in addition to `test/node/chat.people.test.ts`. The worker-access project pins `APP_HOSTNAME=peopledesk.test` (the MCP handler checks Host against it).
 16. `wrangler types` reads `.dev.vars`: the committed `worker-configuration.d.ts` is generated with `.dev.vars` moved aside, so `wrangler types --check` passes in CI (no `.dev.vars`) and fails locally while a `.dev.vars` exists (SPEC risk 8, confirmed). Move `.dev.vars` aside before `npm run types`.
+
+17. `evals/lib/leak.ts` landed in commit 19 (not 23) because the adversarial safety test uses it; `test/node/eval.leak.test.ts` came with it. `chat.no-approval-via-chat.test.ts` landed in commit 18.
 
 ## Local machine notes for builders
 
