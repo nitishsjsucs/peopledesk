@@ -160,6 +160,7 @@ a {
   display: flex;
   gap: 4px;
   flex: 1;
+  min-width: 0;
   overflow-x: auto;
 }
 
@@ -880,6 +881,34 @@ label {
 .theme-toggle {
   font-size: 13px;
   padding: 4px 10px;
+  white-space: nowrap;
+}
+
+/* The seven nav links need about 600px. Below this width they get their own full-width row, which
+   scrolls sideways if it must, instead of being squeezed to nothing between the brand and the badge. */
+@media (max-width: 1080px) {
+  .topbar {
+    flex-wrap: wrap;
+    height: auto;
+    row-gap: 4px;
+    padding-top: 8px;
+    padding-bottom: 4px;
+  }
+  .topbar .theme-toggle {
+    margin-left: auto;
+  }
+  .topbar .nav {
+    order: 10;
+    flex: 1 0 100%;
+    padding-bottom: 4px;
+  }
+}
+
+/* On a phone the badge shows the role only; the full name stays in its accessible label and tooltip. */
+@media (max-width: 480px) {
+  .user-badge-name {
+    display: none;
+  }
 }
 
 /* Version diff */
