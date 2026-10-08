@@ -1,9 +1,11 @@
 import { Hono } from "hono";
+import type { MiddlewareHandler } from "hono";
 import { devRoutes } from "./auth/dev-routes.ts";
 import { isLocalHostname, requireAuth, requireSameOrigin } from "./auth/middleware.ts";
 import { clockFor } from "./clock.ts";
 import { buildServices } from "./container.ts";
 import { getConfig } from "./env.ts";
+import { mcpRoutes } from "./mcp/route.ts";
 import { AppError, errorResponse } from "./errors.ts";
 import type { AppEnv } from "./hono-env.ts";
 import { healthRoutes } from "./routes/health.ts";
@@ -50,12 +52,18 @@ export function buildApp(): Hono<AppEnv> {
   });
   app.route("/dev", devRoutes);
 
-  app.use("/api/*", requireAuth);
-  app.use("/api/*", requireSameOrigin);
-  app.use("/api/*", async (c, next) => {
+  const withServices: MiddlewareHandler<AppEnv> = async (c, next) => {
     c.set("services", buildServices(c.env, c.get("config"), c.get("clock")));
     await next();
-  });
+  };
+
+  app.use("/mcp", requireAuth);
+  app.use("/mcp", withServices);
+  app.route("/", mcpRoutes);
+
+  app.use("/api/*", requireAuth);
+  app.use("/api/*", requireSameOrigin);
+  app.use("/api/*", withServices);
   app.route("/api", healthRoutes);
   app.route("/api", meRoutes);
   app.route("/api", policyRoutes);

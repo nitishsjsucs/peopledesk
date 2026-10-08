@@ -88,6 +88,8 @@ export const TOOL_ERROR_CODES = [
   "session_full",
   "already_booked",
   "session_in_past",
+  // Not in the SPEC list: a retriever failure must surface as an error turn, never as a refusal.
+  "retrieval_unavailable",
 ] as const;
 export type ToolErrorCode = (typeof TOOL_ERROR_CODES)[number];
 
