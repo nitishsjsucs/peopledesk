@@ -3,7 +3,7 @@ import { MemoryRouter, Route, Routes } from "react-router";
 import { describe, expect, it } from "vitest";
 import { MeContext } from "../../src/web/lib/session.tsx";
 import { ChatPage } from "../../src/web/pages/ChatPage.tsx";
-import { installFetch, me, ptoCitation, turn } from "./fixtures.ts";
+import { installFetch, me, pendingTicket, ptoCitation, turn } from "./fixtures.ts";
 
 const transcript = [
   { id: 1, turnId: "t1", role: "user", kind: "user", text: "How fast does PTO accrue?", createdAt: "2026-10-08T10:00:00Z" },
@@ -127,5 +127,56 @@ describe("ChatPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
     await screen.findByText(/I can help with company policies/);
     expect(container.querySelector(".message-list")?.getAttribute("aria-live")).toBe("polite");
+  });
+
+  describe("approval cards in a reloaded transcript", () => {
+    // The transcript stores each turn as it was: this card was awaiting approval when it was proposed.
+    const proposedThen = pendingTicket();
+    const withCard = [
+      { id: 1, turnId: "t1", role: "user", kind: "user", text: "Open an IT ticket, my laptop will not boot", createdAt: "2026-10-08T10:00:00Z" },
+      {
+        id: 2,
+        turnId: "t1",
+        role: "assistant",
+        kind: "approval_required",
+        text: "I prepared this request: New support ticket.",
+        payload: turn({ kind: "approval_required", text: "I prepared this request: New support ticket.", pendingAction: proposedThen }),
+        createdAt: "2026-10-08T10:00:01Z",
+      },
+    ];
+    const routes = [
+      { path: "/api/conversations", body: { conversations: [] } },
+      { path: "/api/conversations/c1", body: { id: "c1", title: "t", messages: withCard } },
+    ];
+
+    it("shows the request's current state, not the stored one, once it has been decided", async () => {
+      const calls = installFetch([
+        ...routes,
+        { path: "/api/actions", body: { actions: [{ ...proposedThen, status: "rejected" }] } },
+      ]);
+      const { container } = renderChat();
+      await screen.findByText("Rejected. Nothing was submitted.");
+      const card = container.querySelector('[data-testid="approval-card"]') as HTMLElement;
+      expect((within(card).getByRole("button", { name: "Approve" }) as HTMLButtonElement).disabled).toBe(true);
+      expect(within(card).queryByText(/Expires in/)).toBeNull();
+      expect(calls.filter((c) => c.path === "/api/actions")).toHaveLength(1);
+    });
+
+    it("keeps the stored card when the current state cannot be loaded", async () => {
+      installFetch([...routes, { path: "/api/actions", status: 500, body: { error: { code: "internal", message: "x", requestId: "r" } } }]);
+      const { container } = renderChat();
+      await screen.findByText("I prepared this request: New support ticket.");
+      const card = (await waitFor(() => container.querySelector('[data-testid="approval-card"]'))) as HTMLElement;
+      expect((within(card).getByRole("button", { name: "Approve" }) as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    it("does not ask for actions when no stored card is awaiting approval", async () => {
+      const calls = installFetch([
+        { path: "/api/conversations", body: { conversations: [] } },
+        { path: "/api/conversations/c1", body: { id: "c1", title: "t", messages: transcript } },
+      ]);
+      await (renderChat(), screen.findByText("Which stipend do you mean: wellness, home office or internet?"));
+      expect(calls.filter((c) => c.path === "/api/actions")).toHaveLength(0);
+    });
   });
 });

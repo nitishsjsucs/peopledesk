@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import type { Citation, TranscriptMessage, TurnResult } from "../../shared/api-types.ts";
+import type { Citation, PendingActionView, TranscriptMessage, TurnResult } from "../../shared/api-types.ts";
 import { ChatComposer } from "../components/ChatComposer.tsx";
 import { ConversationList } from "../components/ConversationList.tsx";
 import { EmptyState } from "../components/EmptyState.tsx";
@@ -29,6 +29,28 @@ function toEntries(messages: TranscriptMessage[]): ChatEntry[] {
     }
   }
   return out;
+}
+
+/**
+ * The transcript stores each turn as it was. A request proposed in chat may since have been approved,
+ * rejected, replaced by an edit or expired (here, on /actions, or by its expiry), so cards that were
+ * awaiting approval are shown with the request's current state. Best effort: if the actions cannot be
+ * loaded, the stored cards are shown and the server still refuses a stale approval.
+ */
+async function withCurrentActions(entries: ChatEntry[]): Promise<ChatEntry[]> {
+  const stale = entries.some((e) => e.role === "assistant" && e.result.pendingAction?.status === "awaiting_approval");
+  if (!stale) return entries;
+  let current: Map<string, PendingActionView>;
+  try {
+    current = new Map((await api.actions()).actions.map((a) => [a.actionId, a]));
+  } catch {
+    return entries;
+  }
+  return entries.map((e) => {
+    if (e.role !== "assistant" || !e.result.pendingAction) return e;
+    const now = current.get(e.result.pendingAction.actionId);
+    return now ? { ...e, result: { ...e.result, pendingAction: now } } : e;
+  });
 }
 
 const SUGGESTIONS = [
@@ -75,9 +97,11 @@ export function ChatPage() {
     }
     let cancelled = false;
     api.conversation(conversationId).then(
-      (c) => {
+      async (c) => {
+        // Cards take their decided state from the first render, so the current state is merged first.
+        const shown = await withCurrentActions(toEntries(c.messages));
         if (cancelled) return;
-        setEntries(toEntries(c.messages));
+        setEntries(shown);
         const q = queued.current;
         queued.current = null;
         if (q) void sendTo(conversationId, q);

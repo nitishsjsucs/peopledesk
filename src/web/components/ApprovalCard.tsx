@@ -27,7 +27,12 @@ function initialDecision(a: PendingActionView): Decided | null {
   if (a.status === "awaiting_approval") return null;
   if (a.status === "executed") {
     const r = (a.result ?? {}) as Record<string, unknown>;
-    return { status: "executed", message: r["ticketId"] ? `Done: ticket ${String(r["ticketId"])}.` : r["bookingId"] ? "Done: booked." : "Done." };
+    const message = r["ticketId"]
+      ? `Done: ticket ${String(r["ticketId"])}.`
+      : r["bookingId"]
+        ? `Done: booked into ${String(r["sessionId"] ?? "the session")}.`
+        : "Done.";
+    return { status: "executed", message };
   }
   if (a.status === "failed") return { status: "failed", message: `Could not be completed (${(a.errorCode ?? "error").replace(/_/g, " ")}).` };
   if (a.status === "rejected") return { status: "rejected", message: a.supersededBy ? "Replaced by an edited request." : "Rejected. Nothing was submitted." };
