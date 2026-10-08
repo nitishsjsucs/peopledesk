@@ -28,12 +28,26 @@ describe("fail-closed configuration", () => {
       { AUTH_MODE: "access", ACCESS_TEAM_DOMAIN: "https://team.test", ACCESS_AUD: "x", LLM_PROVIDER: "adversarial-stub" },
     ],
     ["an empty DEV_ACCESS_JWKS", { DEV_ACCESS_JWKS: "" }],
-  ])("returns 500 misconfigured for %s", async (_label, overrides) => {
-    const res = await worker.fetch(
-      new Request("http://localhost/api/health"),
-      { ...env, ...overrides } as Env,
-      createExecutionContext(),
-    );
-    expect(await errorCode(res)).toEqual([500, "misconfigured"]);
+  ])("returns 500 misconfigured on every route for %s", async (_label, overrides) => {
+    const token = await tokenFor("tenured_employee");
+    for (const [method, path] of [
+      ["GET", "/api/health"],
+      ["GET", "/api/me"],
+      ["POST", "/api/conversations"],
+      ["POST", "/mcp"],
+      ["GET", "/dev/login"],
+      ["GET", "/api/does-not-exist"],
+    ] as const) {
+      const res = await worker.fetch(
+        new Request(`http://localhost${path}`, {
+          method,
+          headers: { "Cf-Access-Jwt-Assertion": token, Origin: "http://localhost", "Content-Type": "application/json" },
+          ...(method === "POST" ? { body: "{}" } : {}),
+        }),
+        { ...env, ...overrides } as Env,
+        createExecutionContext(),
+      );
+      expect(await errorCode(res), `${method} ${path}`).toEqual([500, "misconfigured"]);
+    }
   });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { CONFIG_KEYS } from "../../src/worker/config-keys.ts";
-import { parseConfig, readConfigVars } from "../../src/worker/env.ts";
+import { verifierFor } from "../../src/worker/auth/identity.ts";
+import { getConfig, parseConfig, readConfigVars } from "../../src/worker/env.ts";
 import { BASE_TEST_VARS } from "../pool-vars.ts";
 
 const JWKS = JSON.stringify({ keys: [{ kty: "RSA", n: "x", e: "AQAB", kid: "k" }] });
@@ -73,5 +74,33 @@ describe("parseConfig", () => {
   it("requires the D1, R2 and Durable Object bindings", () => {
     const { DB: _db, ...noDb } = dev;
     expect(parseConfig(noDb).ok).toBe(false);
+  });
+});
+
+describe("module-scope caches (CPU budget, SPEC sections 5 and 10)", () => {
+  it("getConfig parses once per distinct config, and only CONFIG_KEYS and binding presence count", () => {
+    const first = getConfig(dev);
+    expect(getConfig({ ...dev })).toBe(first);
+    // A key outside CONFIG_KEYS, or a different binding object, does not change the config.
+    expect(getConfig({ ...dev, SOMETHING_ELSE: "x", DB: { other: true } })).toBe(first);
+    // A changed config var or a newly present binding is parsed afresh, never served stale.
+    const ttl = getConfig({ ...dev, ACTION_TTL_SECONDS: "60" });
+    expect(ttl).not.toBe(first);
+    expect(ttl.ok && ttl.config.actionTtlSeconds).toBe(60);
+    const wai = { ...access, LLM_PROVIDER: "workers-ai", WORKERS_AI_MODEL: "@cf/m", AI_GATEWAY_ID: "g" };
+    expect(getConfig(wai).ok).toBe(false);
+    expect(getConfig({ ...wai, AI: {} }).ok).toBe(true);
+  });
+
+  it("verifierFor returns one verifier per auth config", () => {
+    const d = getConfig(dev);
+    const a = getConfig(access);
+    if (!d.ok || !a.ok) throw new Error("test configs must parse");
+    expect(verifierFor(d.config.auth)).toBe(verifierFor({ ...d.config.auth }));
+    expect(verifierFor(a.config.auth)).toBe(verifierFor({ ...a.config.auth }));
+    expect(verifierFor(a.config.auth)).not.toBe(verifierFor(d.config.auth));
+    const otherAud = getConfig({ ...access, ACCESS_AUD: "other-aud" });
+    if (!otherAud.ok) throw new Error("test config must parse");
+    expect(verifierFor(otherAud.config.auth)).not.toBe(verifierFor(a.config.auth));
   });
 });
