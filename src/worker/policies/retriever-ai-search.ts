@@ -5,42 +5,13 @@
 // metadata that never reached the index, returns an empty list, and every policy question would turn
 // into the deliberate not-found refusal (the unauthorized-retrieval eval cases would pass for the wrong
 // reason). With false, failures throw and the turn returns kind "error" (retrieval_unavailable).
-import { toUnixSeconds } from "../../shared/synth/dates.ts";
+import { buildAiSearchRequest, parsePolicyKey } from "./ai-search-request.ts";
 import type { PolicyRetriever, RetrievalRequest, RetrievedPassage } from "./retriever.ts";
 import { RetrievalError } from "./retriever.ts";
 
 export type AiSearchLike = Pick<AiSearchInstance, "search">;
 
-const KEY_RE = /^policies\/r([123])-(all|managers|hr)\/(POL-\d{3})\/v(\d{2,})\.md$/;
-
-export function parsePolicyKey(key: string): { docId: string; version: number; rank: number } | null {
-  const m = KEY_RE.exec(key);
-  if (!m) return null;
-  return { docId: m[3] as string, version: Number(m[4]), rank: Number(m[1]) };
-}
-
-export function buildAiSearchRequest(req: RetrievalRequest): AiSearchSearchRequest {
-  const asOfTs = toUnixSeconds(req.asOf);
-  return {
-    query: req.query,
-    ai_search_options: {
-      retrieval: {
-        retrieval_type: "hybrid",
-        max_num_results: Math.min(req.topK * 3, 50),
-        match_threshold: 0.3,
-        return_on_failure: false,
-        filters: {
-          audience_rank: { $lte: req.clearance },
-          effective_from_ts: { $lte: asOfTs },
-          effective_to_ts: { $gt: asOfTs },
-        },
-      },
-      query_rewrite: { enabled: false },
-      reranking: { enabled: true },
-      cache: { enabled: false },
-    },
-  };
-}
+export { buildAiSearchRequest, parsePolicyKey };
 
 export class AiSearchRetriever implements PolicyRetriever {
   readonly kind = "ai-search" as const;
@@ -55,7 +26,7 @@ export class AiSearchRetriever implements PolicyRetriever {
   async search(req: RetrievalRequest): Promise<RetrievedPassage[]> {
     let response: AiSearchSearchResponse;
     try {
-      response = await this.instance.search(buildAiSearchRequest(req));
+      response = await this.instance.search(buildAiSearchRequest(req) as AiSearchSearchRequest);
     } catch (err) {
       throw new RetrievalError("AI Search request failed", { cause: err });
     }
