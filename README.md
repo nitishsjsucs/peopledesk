@@ -226,6 +226,21 @@ Every input schema is strict (`additionalProperties: false`), every tool has an 
 - Test-only model providers are rejected in access mode, and no header, cookie or query parameter can change the auth mode, model provider or retriever.
 - Known limit: authorization is re-checked in code just before the approval batch, so a role change landing in the milliseconds between the two is not seen.
 
+## Design decisions
+
+The domain vocabulary is in [CONTEXT.md](CONTEXT.md). The decisions a reader would most likely question are recorded as ADRs in [`docs/adr/`](docs/adr/):
+
+1. [Approvals are a D1 state machine executed in one batch](docs/adr/0001-approval-in-one-d1-batch.md)
+2. [The router never sees documents, and the composer cannot call tools](docs/adr/0002-router-never-sees-documents.md)
+3. [The Worker verifies the Access JWT itself, with one verifier for every environment](docs/adr/0003-worker-verifies-access-jwt.md)
+4. [D1 decides what a reader may see, whatever the retriever returns](docs/adr/0004-d1-decides-what-a-reader-may-see.md)
+5. [Only an Access user identity can approve; service tokens exist for an eval window](docs/adr/0005-only-a-human-user-approves.md)
+6. [The corpus is generated from fact archetypes with dates relative to the business date](docs/adr/0006-generated-corpus-with-relative-dates.md)
+7. [Grading is deterministic, and the README quotes only summary.json](docs/adr/0007-deterministic-grading.md)
+8. [Tests pin every config key, and the Worker reads a closed list](docs/adr/0008-tests-pin-every-config-key.md)
+9. [The chat agent calls tools through a real MCP client, in process](docs/adr/0009-chat-uses-a-real-mcp-client.md)
+10. [One Durable Object per conversation, reached over RPC only](docs/adr/0010-one-durable-object-per-conversation.md)
+
 ## Deploy (production)
 
 These steps need a Cloudflare account and have not been run for this repository yet.
