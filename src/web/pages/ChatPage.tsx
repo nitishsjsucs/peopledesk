@@ -1,0 +1,130 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router";
+import type { Citation, TranscriptMessage, TurnResult } from "../../shared/api-types.ts";
+import { ChatComposer } from "../components/ChatComposer.tsx";
+import { ConversationList } from "../components/ConversationList.tsx";
+import { EmptyState } from "../components/EmptyState.tsx";
+import { ErrorBanner, errorMessage } from "../components/ErrorBanner.tsx";
+import { MessageList } from "../components/MessageList.tsx";
+import type { ChatEntry } from "../components/MessageList.tsx";
+import { SourceDrawer } from "../components/SourceDrawer.tsx";
+import { api } from "../lib/api.ts";
+import { useMe } from "../lib/session.tsx";
+import { useAsync } from "../lib/use-async.ts";
+
+let counter = 0;
+const key = () => `local-${++counter}`;
+
+function toEntries(messages: TranscriptMessage[]): ChatEntry[] {
+  const out: ChatEntry[] = [];
+  let lastUser = "";
+  for (const m of messages) {
+    if (m.role === "user") {
+      lastUser = m.text;
+      out.push({ key: `m${m.id}`, role: "user", text: m.text });
+    } else if (m.role === "assistant" && m.payload) {
+      out.push({ key: `m${m.id}`, role: "assistant", result: m.payload as TurnResult, retryText: lastUser });
+    } else {
+      out.push({ key: `m${m.id}`, role: "system", text: m.text });
+    }
+  }
+  return out;
+}
+
+const SUGGESTIONS = [
+  "How fast does paid time off accrue?",
+  "What is the maximum annual wellness stipend?",
+  "Show my tickets",
+  "How is my onboarding progress?",
+  "List upcoming orientation sessions",
+];
+
+export function ChatPage() {
+  const { conversationId } = useParams();
+  const navigate = useNavigate();
+  const me = useMe();
+  const conversations = useAsync(() => api.conversations(), []);
+  const [entries, setEntries] = useState<ChatEntry[]>([]);
+  const [sending, setSending] = useState(false);
+  const [loadError, setLoadError] = useState<unknown>(null);
+  const [citation, setCitation] = useState<Citation | null>(null);
+  const queued = useRef<string | null>(null);
+
+  const sendTo = useCallback(
+    async (id: string, text: string) => {
+      setSending(true);
+      setEntries((e) => [...e, { key: key(), role: "user", text }]);
+      try {
+        const result = await api.sendMessage(id, text);
+        setEntries((e) => [...e, { key: key(), role: "assistant", result, retryText: text }]);
+        conversations.reload();
+      } catch (err) {
+        setEntries((e) => [...e, { key: key(), role: "failure", message: errorMessage(err), retryText: text }]);
+      } finally {
+        setSending(false);
+      }
+    },
+    [conversations],
+  );
+
+  useEffect(() => {
+    setLoadError(null);
+    if (!conversationId) {
+      setEntries([]);
+      return;
+    }
+    let cancelled = false;
+    api.conversation(conversationId).then(
+      (c) => {
+        if (cancelled) return;
+        setEntries(toEntries(c.messages));
+        const q = queued.current;
+        queued.current = null;
+        if (q) void sendTo(conversationId, q);
+      },
+      (err: unknown) => {
+        if (!cancelled) setLoadError(err);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId]);
+
+  async function onSend(text: string) {
+    if (conversationId) return sendTo(conversationId, text);
+    try {
+      const { id } = await api.createConversation();
+      queued.current = text;
+      navigate(`/chat/${id}`);
+    } catch (err) {
+      setLoadError(err);
+    }
+  }
+
+  return (
+    <div className="chat-layout">
+      <ConversationList conversations={conversations.data?.conversations ?? []} onNew={() => navigate("/chat")} />
+      <section className="chat-main" aria-label="Chat">
+        {loadError ? <ErrorBanner error={loadError} /> : null}
+        {entries.length === 0 && !sending ? (
+          <EmptyState title={`Hi ${me.fullName.split(" ")[0]}, how can I help?`}>
+            <p>Answers cite the policy version they come from. Actions wait for your approval.</p>
+            <div className="citations" style={{ justifyContent: "center" }}>
+              {SUGGESTIONS.map((s) => (
+                <button key={s} type="button" className="btn" onClick={() => void onSend(s)}>
+                  {s}
+                </button>
+              ))}
+            </div>
+          </EmptyState>
+        ) : (
+          <MessageList entries={entries} sending={sending} onOpenCitation={setCitation} onRetry={(t) => void onSend(t)} />
+        )}
+        <ChatComposer onSend={(t) => void onSend(t)} disabled={sending} />
+      </section>
+      {citation ? <SourceDrawer citation={citation} onClose={() => setCitation(null)} /> : null}
+    </div>
+  );
+}
