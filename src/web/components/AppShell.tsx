@@ -1,10 +1,15 @@
+import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router";
 import { api, ApiClientError } from "../lib/api.ts";
 import { MeContext } from "../lib/session.tsx";
+import { applyTheme, nextTheme, readTheme } from "../lib/theme.ts";
+import type { ThemeChoice } from "../lib/theme.ts";
 import { useAsync } from "../lib/use-async.ts";
 import { EmptyState } from "./EmptyState.tsx";
 import { ErrorBanner } from "./ErrorBanner.tsx";
 import { UserBadge } from "./UserBadge.tsx";
+
+const THEME_LABEL: Record<ThemeChoice, string> = { system: "Theme: system", dark: "Theme: dark", light: "Theme: light" };
 
 const NAV: Array<[string, string]> = [
   ["/chat", "Chat"],
@@ -18,6 +23,8 @@ const NAV: Array<[string, string]> = [
 
 export function AppShell() {
   const me = useAsync(() => api.me(), []);
+  const [theme, setTheme] = useState<ThemeChoice>(() => readTheme());
+  useEffect(() => applyTheme(theme), [theme]);
   const unauthenticated = me.error instanceof ApiClientError && (me.error.status === 401 || me.error.status === 403);
   return (
     <div className="shell">
@@ -32,6 +39,9 @@ export function AppShell() {
             </NavLink>
           ))}
         </nav>
+        <button type="button" className="btn theme-toggle" onClick={() => setTheme(nextTheme(theme))} aria-label={`${THEME_LABEL[theme]}. Change theme`}>
+          {THEME_LABEL[theme]}
+        </button>
         {me.data ? <UserBadge me={me.data} /> : null}
       </header>
       <main className="content">
