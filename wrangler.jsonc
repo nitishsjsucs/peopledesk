@@ -1,0 +1,70 @@
+{
+  // The top-level environment is the local one: it holds no account-only bindings, so `vite dev`,
+  // `vite preview`, getPlatformProxy and the Vitest pool never try to reach Cloudflare.
+  // `env.production` redeclares every non-inheritable key (selected with CLOUDFLARE_ENV=production).
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "peopledesk",
+  "main": "./src/worker/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/mcp", "/dev/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "peopledesk",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [{ "binding": "POLICY_BUCKET", "bucket_name": "peopledesk-policies" }],
+  "durable_objects": { "bindings": [{ "name": "CONVERSATION_AGENT", "class_name": "ConversationAgent" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ConversationAgent"] }],
+  "vars": {
+    "AUTH_MODE": "dev",
+    "DEV_ACCESS_ISSUER": "https://dev-access.peopledesk.test",
+    "DEV_ACCESS_AUD": "peopledesk-local",
+    "DEV_ACCESS_JWKS": "",
+    "DEV_ACCESS_PRIVATE_JWK": "",
+    "LLM_PROVIDER": "stub",
+    "LLM_BASE_URL": "http://127.0.0.1:8080/v1",
+    "LLM_MODEL": "qwen3-1.7b-q4_0",
+    "RETRIEVER": "d1-fts",
+    "AS_OF_OVERRIDE": "2026-10-01",
+    "APP_HOSTNAME": "localhost",
+    "ACTION_TTL_SECONDS": "900",
+    "ALLOW_SERVICE_TOKENS": "false"
+  },
+  "env": {
+    "production": {
+      "assets": { "not_found_handling": "single-page-application", "run_worker_first": ["/api/*", "/mcp"] },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "peopledesk",
+          "database_id": "<set after wrangler d1 create>",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "r2_buckets": [{ "binding": "POLICY_BUCKET", "bucket_name": "peopledesk-policies" }],
+      "durable_objects": { "bindings": [{ "name": "CONVERSATION_AGENT", "class_name": "ConversationAgent" }] },
+      "ai": { "binding": "AI" },
+      "ai_search": [{ "binding": "POLICY_SEARCH", "instance_name": "peopledesk-policies" }],
+      "vars": {
+        "AUTH_MODE": "access",
+        "ACCESS_TEAM_DOMAIN": "https://<team>.cloudflareaccess.com",
+        "ACCESS_AUD": "<Access application AUD tag>",
+        "LLM_PROVIDER": "workers-ai",
+        "WORKERS_AI_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+        "AI_GATEWAY_ID": "peopledesk",
+        "RETRIEVER": "ai-search",
+        "APP_HOSTNAME": "<production hostname>",
+        "ACTION_TTL_SECONDS": "900",
+        // true only during an eval window: npm run deploy:eval-window (README, deploy steps)
+        "ALLOW_SERVICE_TOKENS": "false"
+      }
+    }
+  }
+}

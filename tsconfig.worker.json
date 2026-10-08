@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["es2024"],
+    "types": ["@cloudflare/vitest-plugin/types"]
+  },
+  "include": [
+    "worker-configuration.d.ts",
+    "src/worker",
+    "src/shared",
+    "evals/lib",
+    "test/worker",
+    "test/worker-access",
+    "test/worker-adversarial",
+    "test/helpers",
+    "test/types.d.ts",
+    "test/worker-setup.ts",
+    "test/pool-vars.ts"
+  ]
+}

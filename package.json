@@ -1,0 +1,62 @@
+{
+  "name": "peopledesk",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Employee self-service and action agent on Cloudflare Workers: cited policy answers, six typed MCP tools, approval checkpoints and a 200-case eval harness.",
+  "license": "MIT",
+  "author": "Nitish Chowdary",
+  "type": "module",
+  "engines": {
+    "node": ">=25.9.0"
+  },
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite build && vite preview",
+    "typecheck": "tsc -p tsconfig.worker.json && tsc -p tsconfig.web.json && tsc -p tsconfig.node.json",
+    "test": "vitest run",
+    "types": "wrangler types --strict-vars false",
+    "generate": "node scripts/generate.ts",
+    "dev:keys": "node scripts/dev-keys.ts",
+    "seed:local": "node scripts/seed-local.ts",
+    "db:reset:local": "node scripts/reset-local.ts",
+    "llm:serve": "node scripts/llm-serve.ts",
+    "eval": "node evals/run.ts",
+    "eval:readme": "node evals/update-readme.ts",
+    "deploy:check": "CLOUDFLARE_ENV=production vite build && wrangler deploy --dry-run",
+    "deploy": "CLOUDFLARE_ENV=production vite build && wrangler deploy",
+    "deploy:eval-window": "CLOUDFLARE_ENV=production vite build && wrangler deploy --var ALLOW_SERVICE_TOKENS:true",
+    "seed:remote": "node scripts/seed-remote.ts",
+    "link-identity": "node scripts/link-identity.ts",
+    "verify:ai-search": "node scripts/verify-ai-search.ts",
+    "verify:gateway": "node scripts/verify-gateway.ts"
+  },
+  "dependencies": {
+    "@hono/zod-validator": "0.9.1",
+    "@modelcontextprotocol/client": "2.0.0",
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "@modelcontextprotocol/server": "2.0.0",
+    "agents": "0.27.0",
+    "hono": "4.13.13",
+    "jose": "6.2.12",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-router": "8.4.0",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "1.63.1",
+    "@cloudflare/vitest-plugin": "1.3.7",
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/react": "16.3.3",
+    "@types/node": "25.9.9",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "happy-dom": "20.14.5",
+    "typescript": "7.0.2",
+    "vite": "8.3.4",
+    "vitest": "4.1.11",
+    "wrangler": "4.149.0"
+  }
+}
