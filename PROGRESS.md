@@ -7,15 +7,26 @@ This file is the hand-off log for whoever continues the build. SPEC.md (revision
 - Done: every commit in the plan. P0 commits 1 to 25, one extra commit (production scripts, between 23 and 24), and P1 commits 26 to 28.
   1 scaffold; 2 five Vitest projects; 3 CI; 4 D1 migrations; 5 synth PRNG, dates and org; 6 archetypes, blueprints, versioned corpus; 7 disjointness, rendering, chunking; 8 seed statements, seed.sql and the committed dataset; 9 local seeding and batch test setup; 10 auth; 11 authz matrix; 12 PolicyStore, D1 FTS5 retriever, permission gate; 13 AI Search adapter and chunk alignment; 14 read routes; 15 MCP server, read tools, `/mcp`, in-process client; 16 ActionService, write tools, approval endpoints; 17 LLM providers and gateway log reader; 18 ConversationAgent and orchestration; 19 safety tests; 20 web shell and chat; 21 web pages and forms; 22 eval dataset; 23 eval runner, scorer, report; extra: remote seeding, identity linking, verification and llama-server scripts; 24 README; 25 first local eval run and README results.
   26 home page, manager onboarding view, ticket status filter; 27 dark theme and policy viewer tests; 28 R2 S3 API fallback (SigV4 signer tested against AWS's documented example) and link-identity `--list`/`--remove`.
-- After the plan: a best-effort fix for recording approval outcomes in the transcript, and the last P1 extras from SPEC section 1 (a change list between policy versions on the viewer, and an empty-state illustration).
-- Next: everything that needs Nitish (SPEC section 17): `wrangler login`, deploy, `verify:ai-search`, `verify:gateway`, the production eval in the eval window, the resume wording choices, and pushing to GitHub.
+- After the plan (builder 1): a best-effort fix for recording approval outcomes in the transcript, and the last P1 extras from SPEC section 1 (a change list between policy versions on the viewer, and an empty-state illustration).
+- After the plan (builder 2, an audit against SPEC.md plus a manual UI pass), in commit order:
+  - `test/node/canonical-json.test.ts`, the one test file in SPEC section 14 that was missing. It pins the arguments digest (checked independently with `shasum`) and compares the hand-written `sha256Hex` with `node:crypto`. It found that `canonicalJson` ignored `toJSON` (a Date became `{}`); fixed, and the committed dataset regenerates byte for byte.
+  - `api.contract.test.ts` now covers every route (policy, conversation, action and dev routes were missing; `RejectResponseSchema` was checked nowhere), the error envelope on 400, 401, 403, 404, 409, 410 and 429, the 200 path of the gateway-logs route under a Workers AI env with a fake `AI` binding, and a route inventory from `buildApp().routes` that fails when a route has no contract case.
+  - `chat.model-retry.test.ts`: the orchestrator's one retry on schema-invalid model output (SPEC section 7, step 2), and the fallbacks (generic clarify for the router, the not-found refusal for the composer). Breaking the retry loop fails 4 of its 5 cases.
+  - Config tests: `getConfig` and `verifierFor` module-scope caches, and 500 `misconfigured` on every route (not only `/api/health`).
+  - Docs: the Access application needs a Service Auth policy for service tokens, and a service token's `common_name` is its Client ID (both checked in the Cloudflare docs on 2026-10-08); README and `link-identity` usage updated.
+  - Fixed: the orientation form proposed a booking for the manager or HR admin themself while showing a report as the attendee.
+  - Fixed: Edit on the review step of `/requests/ticket` and `/requests/orientation` left the review card on screen instead of the prefilled form.
+  - Fixed: at phone width the main navigation collapsed to zero width (no way to navigate), and between about 800px and 1080px the last links were cut off.
+  - Fixed: after a reload, approval cards in chat showed their stored state (enabled Approve after a rejection); they now show the request's current state.
+  - New web tests for `OrientationForm`, `ScheduleOrientationPage`, `ActionsPage`, the ticket edit round trip and reloaded chat cards (P1 web tests in SPEC section 1).
+- Next: everything that needs Nitish (SPEC section 17): `wrangler login`, deploy, `verify:ai-search`, `verify:gateway`, the production eval in the eval window, the resume wording choices, and pushing to GitHub. A later builder could re-run the local eval, but no server-side code that the eval exercises changed in builder 2's round (only `canonicalJson`'s `toJSON` handling, which no request path hits), so the recorded run still describes the current server.
 
 ## Status at the last commit
 
 All checks run on 2026-10-08 on this Mac.
 
 - `npm run typecheck`: pass (worker, web and node tsconfigs, TypeScript 7.0.2)
-- `npm test`: pass, 419 tests in 57 files across the five projects (`worker`, `worker-access`, `worker-adversarial`, `node`, `web`)
+- `npm test`: pass, 460 tests in 61 files across the five projects (`worker`, `worker-access`, `worker-adversarial`, `node`, `web`)
 - `npm run build`: pass
 - `npm run deploy:check`: pass (offline dry run lists `CONVERSATION_AGENT`, `DB`, `POLICY_SEARCH`, `POLICY_BUCKET`, `AI`)
 - `npm run generate && git diff --exit-code -- data/generated evals/dataset`: no diff
@@ -57,11 +68,16 @@ Command: `npm run eval -- --base-url http://localhost:8782 --run-id local-qwen3-
 22. The first local eval used port 8782 (preview), llama-server on port 8120 with `-np 1`, and `--concurrency 1`, instead of the spec's 4173, 8080, `-np 2` and concurrency 2, because ports and the GPU are shared with other builds on this Mac. With one llama-server slot, concurrency 2 would only queue requests.
 23. P1 commit 26 and 27 both touched `styles.css` and `AppShell.tsx`; commit 26 was made from an intermediate copy of those two files (home styles and the brand link only) so each commit stays self-contained. `seed:remote --r2 s3` (and the automatic fallback) needs an R2 API token (`R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`) and `CLOUDFLARE_ACCOUNT_ID`; it has not been run against R2.
 
+24. `api.contract.test.ts` calls the Worker's exported `fetch` with a spread env (`LLM_PROVIDER=workers-ai`, a fake `AI` binding) on a path that reaches the Durable Object. SPEC section 14 uses spread envs only for paths that never reach a Durable Object; this one works because the gateway-logs route only reads the turn trace, which does not depend on the Agent's own env. The stored trace's `gatewayLogIdHints` are set through `runInDurableObject`, because the stub provider records none.
+25. Small UI changes beyond SPEC section 15, all from the manual pass: below 1080px the top bar wraps and the nav gets its own row; below 480px the user badge shows the role only (the full name stays in its accessible label and tooltip); an executed booking's card names its session.
+
 ## Coordination notes
 
 - Another agent works in this same checkout concurrently. It committed `ac700fa` (a README status rewrite) and `e474ae3` (the CI pathspec fix). My commit `cffaf55` (commit 16) accidentally swept that agent's uncommitted README draft in through `git add -A`. Since then: stage explicit paths only, and check `git status` and `git log` before committing.
 - Commit 24 merged the README: the spec's section 20 outline plus a current Status table and the other agent's "Why" section.
 - Manual UI check on 2026-10-08 with `vite dev` on port 8782: dev login, a cited answer, a chat-proposed ticket approved from its card, the policy viewer and the orientation form all worked against locally seeded data; after the P1 commits, the home page, the manager onboarding view and the dark theme were checked the same way.
+- Builder 2's manual pass (2026-10-08, `vite dev` on port 8782, inspector 9232, after `npm run db:reset:local`) as the manager, the tenured employee, the unbooked new hire and HR: form booking for a report, Edit and Update with supersede, a chat booking approved from its card, "approve it" in chat answered with the button instruction, a second approval for an already booked person ending as failed `already_booked`, a report's onboarding by full name and an unknown name refused, a manager-only and a nonexistent policy both "Policy not found", the policy change list, HR's onboarding overview, the dark theme, and phone (375px), tablet (768px) and desktop (1280px) widths. The four UI bugs listed above were found this way and fixed test-first. Local state was reset afterwards.
+- The stub router only treats person-referential onboarding phrasings ("Olivia Morgan's onboarding progress", "onboarding for X") as onboarding lookups; "How is X doing with her onboarding?" goes to policy search. That is the deterministic test double working as designed, not a bug; real models route by the prompt.
 - The README's Status table and test counts are maintained by hand; refresh them when the test count changes.
 
 ## Local machine notes for builders
@@ -69,3 +85,5 @@ Command: `npm run eval -- --base-url http://localhost:8782 --run-id local-qwen3-
 - Shared ports on this Mac: use `--port 8782 --strictPort` and `INSPECTOR_PORT=9232` for dev or preview servers. For llama-server use port 8120 with `-np 1 -c 8192 -ngl 99` against `~/Developer/projects/_models/Qwen3-1.7B-Q4_0-rtn.gguf` (`node scripts/llm-serve.ts --port 8120 --parallel 1 --ngl 99`), and kill it afterwards.
 - `.dev.vars` currently has `LLM_PROVIDER=stub`. To run against the local model: `npm run dev:keys -- --llm-provider openai-compatible --llm-base-url http://127.0.0.1:8120/v1`.
 - Do not push; pushing happens after verification.
+- Under heavy load from the other builds (load average around 20), one run had a single workerd test time out at Vitest's 5 s per-test limit on its first request (`actions.forms-and-csrf.test.ts`, 47 s). The file passed alone in 3.4 s and the full suite passed on the rerun (220 s instead of the usual 30 to 50 s). No timeout was raised and no test was changed; if it recurs, rerun before assuming a regression.
+- The Browser pane's `preview_start` reads `.claude/launch.json` from the session's primary directory, which is not this repo; builder 2 ran `INSPECTOR_PORT=9232 npx vite dev --port 8782 --strictPort` in the background instead and stopped it afterwards.

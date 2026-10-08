@@ -11,7 +11,7 @@ All people, policies, tickets and numbers are synthetic, generated deterministic
 | | |
 |---|---|
 | **Works today** | Every P0 item of [SPEC.md](SPEC.md) section 1, including a first recorded local eval run: the deterministic synthetic organization and versioned policy corpus, D1 and R2 seeding, Access-shaped JWT authentication, the authorization matrix, permission-aware retrieval, the API, the six MCP tools at `/mcp`, the approval checkpoint, four LLM providers, the chat agent, the React UI, the 200-case eval harness, and the production seeding and verification scripts. Also the P1 home page, manager onboarding view, ticket status filter, dark theme, policy version change list and R2 S3 seeding fallback |
-| **Tests** | 419 tests in 57 files across five Vitest projects, all passing (`npm test`, 2026-10-08) |
+| **Tests** | 460 tests in 61 files across five Vitest projects, all passing (`npm test`, 2026-10-08) |
 | **Not done yet** | A production deployment and a production eval run, both of which need a Cloudflare account |
 | **Deployed** | No. Nothing runs on Cloudflare yet; the deploy steps below need `npx wrangler login` |
 | **CI** | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs typecheck, dataset determinism, tests, build, an offline deploy dry run and a generated-types check. All six pass locally at this commit (2026-10-08) |
@@ -134,11 +134,11 @@ Tests run in the Workers Vitest integration (`@cloudflare/vitest-plugin`, the re
 
 | Project | Runtime | What it covers |
 |---|---|---|
-| `worker` | workerd, dev auth, stub model | Seeded D1 and R2, JWT verification, retrieval and the permission gate, the AI Search adapter (fake), policy and other routes, the six MCP tools over `/mcp`, the approval state machine (concurrency, replay, expiry, tampering, re-authorization, crash after commit), the providers (fakes), chat turns end to end, the turn lock, citations, and a 20-case eval smoke run |
+| `worker` | workerd, dev auth, stub model | Seeded D1 and R2, JWT verification, retrieval and the permission gate, the AI Search adapter (fake), policy and other routes, the six MCP tools over `/mcp`, the approval state machine (concurrency, replay, expiry, tampering, re-authorization, crash after commit), the providers (fakes), chat turns end to end, the turn lock, citations, one retry on invalid model output, a response-schema contract for every route, and a 20-case eval smoke run |
 | `worker-access` | workerd, `AUTH_MODE=access` | The production remote-JWKS path offline (served by `outboundService`), service tokens that can propose but never approve, and provider failure handling |
 | `worker-adversarial` | workerd, adversarial model | A model that always reaches for other people's data and fabricates citations; server checks keep every turn safe |
 | `node` | Node | Generator determinism and exact counts, the seed file round trip through `wrangler d1 execute`, the authorization matrix, the eval dataset invariants, scorer, leak check and report |
-| `web` | happy-dom | Chat page, approval card, ticket form, restricted markdown renderer, policy viewer, home, tickets and onboarding pages |
+| `web` | happy-dom | Chat page (including approval cards in a reloaded transcript), approval card, ticket and orientation forms with their edit round trip, restricted markdown renderer, policy viewer, home, tickets, onboarding and requests pages |
 
 Every workerd test file starts from the same seeded dataset, applied with `DB.batch` (never `exec`, which splits multi-line text).
 
