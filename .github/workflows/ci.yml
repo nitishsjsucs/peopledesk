@@ -20,7 +20,7 @@ jobs:
       - name: Typecheck (worker, web and node tsconfigs)
         run: npm run typecheck
       - name: Generated dataset is deterministic (committed asof-2026-10-01)
-        run: npm run generate && git diff --exit-code data/generated evals/dataset
+        run: npm run generate && git diff --exit-code -- data/generated evals/dataset
       - name: Test (all five Vitest projects)
         run: npm test
       - name: Build
