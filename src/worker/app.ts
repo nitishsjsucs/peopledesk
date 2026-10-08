@@ -2,11 +2,17 @@ import { Hono } from "hono";
 import { devRoutes } from "./auth/dev-routes.ts";
 import { isLocalHostname, requireAuth, requireSameOrigin } from "./auth/middleware.ts";
 import { clockFor } from "./clock.ts";
+import { buildServices } from "./container.ts";
 import { getConfig } from "./env.ts";
 import { AppError, errorResponse } from "./errors.ts";
 import type { AppEnv } from "./hono-env.ts";
 import { healthRoutes } from "./routes/health.ts";
 import { meRoutes } from "./routes/me.ts";
+import { onboardingRoutes } from "./routes/onboarding.ts";
+import { orientationRoutes } from "./routes/orientation.ts";
+import { policyRoutes } from "./routes/policies.ts";
+import { teamRoutes } from "./routes/team.ts";
+import { ticketRoutes } from "./routes/tickets.ts";
 
 export function buildApp(): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
@@ -46,8 +52,17 @@ export function buildApp(): Hono<AppEnv> {
 
   app.use("/api/*", requireAuth);
   app.use("/api/*", requireSameOrigin);
+  app.use("/api/*", async (c, next) => {
+    c.set("services", buildServices(c.env, c.get("config"), c.get("clock")));
+    await next();
+  });
   app.route("/api", healthRoutes);
   app.route("/api", meRoutes);
+  app.route("/api", policyRoutes);
+  app.route("/api", ticketRoutes);
+  app.route("/api", onboardingRoutes);
+  app.route("/api", orientationRoutes);
+  app.route("/api", teamRoutes);
 
   app.notFound((c) => errorResponse(404, "not_found", "Not found.", c.get("requestId") ?? "none"));
 

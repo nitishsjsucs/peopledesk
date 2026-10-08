@@ -5,6 +5,15 @@ import {
   API_ERROR_CODES,
   AUDIENCES,
   AUTH_MODES,
+  ONBOARDING_OWNER_ROLES,
+  ONBOARDING_TASK_CATEGORIES,
+  ONBOARDING_TASK_STATUSES,
+  SESSION_FORMATS,
+  SESSION_REGIONS,
+  TICKET_CATEGORIES,
+  TICKET_PRIORITIES,
+  TICKET_SOURCES,
+  TICKET_STATUSES,
   IDENTITY_KINDS,
   LLM_PROVIDER_IDS,
   PERSONA_KEYS,
@@ -103,3 +112,77 @@ export type VersionMeta = z.infer<typeof VersionMetaSchema>;
 
 export const PolicyVersionSchema = z.object({ meta: VersionMetaSchema, markdown: z.string(), r2Key: z.string() });
 export type PolicyVersionView = z.infer<typeof PolicyVersionSchema>;
+
+export const PolicyListQuerySchema = z.object({
+  category: z.enum(POLICY_CATEGORIES).optional(),
+  q: z.string().max(100).optional(),
+});
+
+// Tickets
+
+export const TicketSchema = z.object({
+  id: z.string(),
+  requesterId: z.string(),
+  category: z.enum(TICKET_CATEGORIES),
+  subject: z.string(),
+  description: z.string(),
+  priority: z.enum(TICKET_PRIORITIES),
+  status: z.enum(TICKET_STATUSES),
+  relatedPolicyId: z.string().nullable(),
+  createdVia: z.enum(TICKET_SOURCES),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type Ticket = z.infer<typeof TicketSchema>;
+export const TicketListSchema = z.object({ tickets: z.array(TicketSchema) });
+export const TicketListQuerySchema = z.object({ status: z.enum(TICKET_STATUSES).optional() });
+
+// Onboarding
+
+export const OnboardingTaskSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  category: z.enum(ONBOARDING_TASK_CATEGORIES),
+  ownerRole: z.enum(ONBOARDING_OWNER_ROLES),
+  dueDate: z.string(),
+  status: z.enum(ONBOARDING_TASK_STATUSES),
+});
+export const OnboardingProgressSchema = z.object({
+  employeeId: z.string(),
+  fullName: z.string(),
+  startDate: z.string(),
+  targetCompletionDate: z.string(),
+  percentComplete: z.number().int().min(0).max(100),
+  counts: z.object({ done: z.number().int(), inProgress: z.number().int(), pending: z.number().int(), blocked: z.number().int() }),
+  tasks: z.array(OnboardingTaskSchema),
+});
+export type OnboardingProgress = z.infer<typeof OnboardingProgressSchema>;
+
+// Team (the same directory slice the chat router sees)
+
+export const TeamSchema = z.object({
+  members: z.array(z.object({ employeeId: z.string(), fullName: z.string(), inOnboarding: z.boolean(), booked: z.boolean() })),
+});
+export type Team = z.infer<typeof TeamSchema>;
+
+// Orientation sessions
+
+export const SessionSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  startsAt: z.string(),
+  durationMin: z.number().int(),
+  format: z.enum(SESSION_FORMATS),
+  region: z.enum(SESSION_REGIONS),
+  location: z.string(),
+  capacity: z.number().int(),
+  seatsRemaining: z.number().int(),
+});
+export type Session = z.infer<typeof SessionSchema>;
+export const SessionListSchema = z.object({ sessions: z.array(SessionSchema) });
+export const SessionListQuerySchema = z.object({
+  from: z.iso.date().optional(),
+  to: z.iso.date().optional(),
+  format: z.enum(SESSION_FORMATS).optional(),
+  region: z.enum(SESSION_REGIONS).optional(),
+});

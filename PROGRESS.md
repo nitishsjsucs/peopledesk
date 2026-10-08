@@ -4,8 +4,8 @@ This file is the hand-off log for whoever continues the build. SPEC.md (revision
 
 ## Commit plan position
 
-- Done: commits 1 to 13 (scaffold; five Vitest projects; CI; D1 migrations; synth org; archetypes, blueprints and versioned corpus; disjointness, rendering, chunking; seed statements, seed.sql and the committed asof-2026-10-01 dataset; local seeding and batch-based worker test setup; auth with local and remote JWKS, principal resolution and the dev issuer; authz capability matrix; PolicyStore, D1 FTS5 retriever and permission gate; AI Search adapter and chunk alignment).
-- Next: commit 14 (policy, ticket, onboarding, orientation and minimal team routes).
+- Done: commits 1 to 14 (scaffold; five Vitest projects; CI; D1 migrations; synth org; archetypes, blueprints and versioned corpus; disjointness, rendering, chunking; seed statements, seed.sql and the committed asof-2026-10-01 dataset; local seeding and batch-based worker test setup; auth with local and remote JWKS, principal resolution and the dev issuer; authz capability matrix; PolicyStore, D1 FTS5 retriever and permission gate; AI Search adapter and chunk alignment; read routes for policies, tickets, onboarding, orientation and team).
+- Next: commit 15 (MCP server with cached tool definitions, read tools, authenticated /mcp route).
 - Open item carried forward: `retrieval.ai-search-adapter.test.ts` still needs the case "a throwing fake makes the chat turn return kind error with retrieval_unavailable"; it needs the orchestrator (commit 18).
 
 ## Status at the last commit
@@ -29,6 +29,8 @@ This file is the hand-off log for whoever continues the build. SPEC.md (revision
 5. Small helper modules not named in the SPEC file tree: `src/worker/errors.ts` (AppError and the error envelope), `src/worker/hono-env.ts` (Hono context typing), `test/web/setup.ts` (testing-library cleanup).
 
 10. Auth details the spec leaves open: `/dev/token` also runs `requireSameOrigin` (it is a state-changing POST outside `/api/*`); a service-token JWT while `ALLOW_SERVICE_TOKENS=false`, or one with no `identity_links` row, gets 403 `forbidden`; `/api/me` additionally returns `identityKind`; `/dev/personas` derives personas from the org generator (persona ids are identical for every business date, which `synth.org.test.ts` asserts) and lists only those present in D1. `scripts/dev-keys.ts` keeps existing keys unless `--rotate`, and also accepts `--llm-base-url` and `--llm-model`.
+
+11. `src/worker/validation.ts` (zod validation with the error envelope) is an extra helper module. `GET /api/onboarding/:employeeId` writes an `authz_denied` audit row when it answers 404 for a person outside the caller's scope.
 
 ## Local machine notes for builders
 
