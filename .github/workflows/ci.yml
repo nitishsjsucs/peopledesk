@@ -1,0 +1,29 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      TZ: UTC
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Typecheck (worker, web and node tsconfigs)
+        run: npm run typecheck
+      - name: Test (all five Vitest projects)
+        run: npm test
+      - name: Build
+        run: npm run build
+      - name: Deploy dry run (production environment, offline)
+        run: npm run deploy:check
+      - name: Generated runtime types are current
+        run: npx wrangler types --strict-vars false --check
