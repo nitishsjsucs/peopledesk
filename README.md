@@ -10,9 +10,9 @@ All people, policies, tickets and numbers are synthetic, generated deterministic
 
 | | |
 |---|---|
-| **Works today** | Every P0 item of [SPEC.md](SPEC.md) section 1, including a first recorded local eval run: the deterministic synthetic organization and versioned policy corpus, D1 and R2 seeding, Access-shaped JWT authentication, the authorization matrix, permission-aware retrieval, the API, the six MCP tools at `/mcp`, the approval checkpoint, four LLM providers, the chat agent, the React UI, the 200-case eval harness, and the production seeding and verification scripts. Also the P1 home page, manager onboarding view, ticket status filter, dark theme and R2 S3 seeding fallback |
-| **Tests** | 416 tests in 57 files across five Vitest projects, all passing (`npm test`, 2026-10-08) |
-| **Not done yet** | A production deployment and production eval run (both need a Cloudflare account), and two P1 extras: a policy version diff view and empty-state illustrations |
+| **Works today** | Every P0 item of [SPEC.md](SPEC.md) section 1, including a first recorded local eval run: the deterministic synthetic organization and versioned policy corpus, D1 and R2 seeding, Access-shaped JWT authentication, the authorization matrix, permission-aware retrieval, the API, the six MCP tools at `/mcp`, the approval checkpoint, four LLM providers, the chat agent, the React UI, the 200-case eval harness, and the production seeding and verification scripts. Also the P1 home page, manager onboarding view, ticket status filter, dark theme, policy version change list and R2 S3 seeding fallback |
+| **Tests** | 419 tests in 57 files across five Vitest projects, all passing (`npm test`, 2026-10-08) |
+| **Not done yet** | A production deployment and a production eval run, both of which need a Cloudflare account |
 | **Deployed** | No. Nothing runs on Cloudflare yet; the deploy steps below need `npx wrangler login` |
 | **CI** | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs typecheck, dataset determinism, tests, build, an offline deploy dry run and a generated-types check. All six pass locally at this commit (2026-10-08) |
 

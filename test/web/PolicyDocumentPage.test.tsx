@@ -15,9 +15,12 @@ const doc = {
     { version: 3, effectiveFrom: "2027-03-01", effectiveTo: null, status: "scheduled", changeSummary: "Maximum annual wellness stipend changed from $275 to $1,400." },
   ],
 };
+const STIPEND = { 1: "$1,500", 2: "$275", 3: "$1,400" } as const;
 const versionBody = (v: (typeof doc.versions)[number]) => ({
   meta: { ...v, docId: doc.docId, title: doc.title, category: doc.category, audience: doc.audience },
-  markdown: `---\ndoc_id: POL-014\n---\n# Wellness Stipend\n## Policy\n- Version ${v.version} text.\n`,
+  markdown:
+    `---\ndoc_id: POL-014\n---\n# Wellness Stipend\nEffective from ${v.effectiveFrom}. Applies to: all employees.\n` +
+    `## Policy\n- Version ${v.version} text.\n- The maximum annual wellness stipend is ${STIPEND[v.version as 1 | 2 | 3]}.\n- Unchanged line.\n`,
   r2Key: `policies/r1-all/POL-014/v0${v.version}.md`,
 });
 
@@ -39,7 +42,7 @@ function renderAt(path: string) {
 describe("PolicyDocumentPage", () => {
   it("shows the current version by default with timeline badges and effective dates", async () => {
     const { container } = renderAt("/policies/POL-014");
-    await screen.findByText("Version 2 text.");
+    await screen.findByText("Version 2 text.", { selector: ".markdown li" });
     const timeline = screen.getByRole("list", { name: "Version history" });
     const items = within(timeline).getAllByRole("listitem");
     expect(items.map((li) => li.getAttribute("data-status"))).toEqual(["scheduled", "current", "superseded"]);
@@ -48,9 +51,27 @@ describe("PolicyDocumentPage", () => {
     expect(container.querySelector(".superseded-note")).toBeNull();
   });
 
+  it("lists what changed from the previous version", async () => {
+    renderAt("/policies/POL-014/v/2");
+    const diff = await screen.findByTestId("version-diff");
+    expect(diff.querySelector("summary")?.textContent).toBe("Changes from version 1");
+    const removed = [...diff.querySelectorAll(".diff-removed")].map((li) => li.textContent);
+    const added = [...diff.querySelectorAll(".diff-added")].map((li) => li.textContent);
+    expect(removed).toEqual(["Removed: - Version 1 text.", "Removed: - The maximum annual wellness stipend is $1,500."]);
+    expect(added).toEqual(["Added: + Version 2 text.", "Added: + The maximum annual wellness stipend is $275."]);
+    expect(diff.textContent).not.toContain("Unchanged line");
+    expect(diff.textContent).not.toContain("Effective from");
+  });
+
+  it("shows no change list for the first version", async () => {
+    renderAt("/policies/POL-014/v/1");
+    await screen.findByText("Version 1 text.", { selector: ".markdown li" });
+    expect(screen.queryByTestId("version-diff")).toBeNull();
+  });
+
   it("marks a superseded version visibly and links to the current one", async () => {
     renderAt("/policies/POL-014/v/1");
-    await screen.findByText("Version 1 text.");
+    await screen.findByText("Version 1 text.", { selector: ".markdown li" });
     const note = screen.getByRole("note");
     expect(note.textContent).toContain("superseded on Jun 1, 2026");
     expect(within(note).getByRole("link").getAttribute("href")).toBe("/policies/POL-014/v/2");
@@ -58,7 +79,7 @@ describe("PolicyDocumentPage", () => {
 
   it("marks a scheduled version as not yet in effect", async () => {
     renderAt("/policies/POL-014/v/3");
-    await screen.findByText("Version 3 text.");
+    await screen.findByText("Version 3 text.", { selector: ".markdown li" });
     expect(screen.getByRole("note").textContent).toContain("takes effect on Mar 1, 2027");
   });
 });

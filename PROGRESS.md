@@ -7,14 +7,15 @@ This file is the hand-off log for whoever continues the build. SPEC.md (revision
 - Done: every commit in the plan. P0 commits 1 to 25, one extra commit (production scripts, between 23 and 24), and P1 commits 26 to 28.
   1 scaffold; 2 five Vitest projects; 3 CI; 4 D1 migrations; 5 synth PRNG, dates and org; 6 archetypes, blueprints, versioned corpus; 7 disjointness, rendering, chunking; 8 seed statements, seed.sql and the committed dataset; 9 local seeding and batch test setup; 10 auth; 11 authz matrix; 12 PolicyStore, D1 FTS5 retriever, permission gate; 13 AI Search adapter and chunk alignment; 14 read routes; 15 MCP server, read tools, `/mcp`, in-process client; 16 ActionService, write tools, approval endpoints; 17 LLM providers and gateway log reader; 18 ConversationAgent and orchestration; 19 safety tests; 20 web shell and chat; 21 web pages and forms; 22 eval dataset; 23 eval runner, scorer, report; extra: remote seeding, identity linking, verification and llama-server scripts; 24 README; 25 first local eval run and README results.
   26 home page, manager onboarding view, ticket status filter; 27 dark theme and policy viewer tests; 28 R2 S3 API fallback (SigV4 signer tested against AWS's documented example) and link-identity `--list`/`--remove`.
-- Next (outside the commit plan): the remaining P1 extras (a policy version diff view, empty-state illustrations); everything that needs Nitish (SPEC section 17): `wrangler login`, deploy, `verify:ai-search`, `verify:gateway`, the production eval in the eval window, the resume wording choices, and pushing to GitHub.
+- After the plan: a best-effort fix for recording approval outcomes in the transcript, and the last P1 extras from SPEC section 1 (a change list between policy versions on the viewer, and an empty-state illustration).
+- Next: everything that needs Nitish (SPEC section 17): `wrangler login`, deploy, `verify:ai-search`, `verify:gateway`, the production eval in the eval window, the resume wording choices, and pushing to GitHub.
 
 ## Status at the last commit
 
 All checks run on 2026-10-08 on this Mac.
 
 - `npm run typecheck`: pass (worker, web and node tsconfigs, TypeScript 7.0.2)
-- `npm test`: pass, 416 tests in 57 files across the five projects (`worker`, `worker-access`, `worker-adversarial`, `node`, `web`)
+- `npm test`: pass, 419 tests in 57 files across the five projects (`worker`, `worker-access`, `worker-adversarial`, `node`, `web`)
 - `npm run build`: pass
 - `npm run deploy:check`: pass (offline dry run lists `CONVERSATION_AGENT`, `DB`, `POLICY_SEARCH`, `POLICY_BUCKET`, `AI`)
 - `npm run generate && git diff --exit-code -- data/generated evals/dataset`: no diff

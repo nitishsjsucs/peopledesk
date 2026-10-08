@@ -881,3 +881,39 @@ label {
   font-size: 13px;
   padding: 4px 10px;
 }
+
+/* Version diff */
+.diff {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+.diff summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.diff ul {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+}
+
+.diff-added {
+  color: var(--success);
+}
+
+.diff-removed {
+  color: var(--danger);
+  text-decoration: line-through;
+}
+
+.empty-illustration {
+  width: 64px;
+  height: 64px;
+  color: var(--border-strong);
+  margin-bottom: 8px;
+}

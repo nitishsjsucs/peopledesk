@@ -4,6 +4,7 @@ import { EmptyState } from "../components/EmptyState.tsx";
 import { ErrorBanner } from "../components/ErrorBanner.tsx";
 import { VersionTimeline } from "../components/VersionTimeline.tsx";
 import { api, ApiClientError } from "../lib/api.ts";
+import { lineChanges } from "../lib/diff.ts";
 import { formatDate } from "../lib/format.ts";
 import { Markdown } from "../lib/markdown.tsx";
 import { useAsync } from "../lib/use-async.ts";
@@ -17,6 +18,11 @@ export function PolicyDocumentPage() {
     () => (selected ? api.policyVersion(docId, selected) : Promise.resolve(null)),
     [docId, selected],
   );
+  const previous = useAsync(
+    () => (selected && selected > 1 ? api.policyVersion(docId, selected - 1) : Promise.resolve(null)),
+    [docId, selected],
+  );
+  const changes = body.data && previous.data ? lineChanges(previous.data.markdown, body.data.markdown) : [];
 
   if (doc.error instanceof ApiClientError && doc.error.status === 404) {
     return (
@@ -48,6 +54,20 @@ export function PolicyDocumentPage() {
               <div className="message-meta">
                 {meta.docId} v{meta.version} · <EffectiveDateBadge effectiveFrom={meta.effectiveFrom} effectiveTo={meta.effectiveTo} status={meta.status} />
               </div>
+              {changes.length > 0 ? (
+                <details className="diff" open data-testid="version-diff">
+                  <summary>Changes from version {(selected ?? 1) - 1}</summary>
+                  <ul>
+                    {changes.map((c, i) => (
+                      <li key={i} className={`diff-${c.kind}`}>
+                        <span className="visually-hidden">{c.kind === "added" ? "Added: " : "Removed: "}</span>
+                        <span aria-hidden="true">{c.kind === "added" ? "+ " : "- "}</span>
+                        {c.text.replace(/^[-*]\s+/, "")}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              ) : null}
               <Markdown source={body.data?.markdown ?? ""} />
             </>
           ) : body.error ? (
