@@ -4,8 +4,8 @@ This file is the hand-off log for whoever continues the build. SPEC.md (revision
 
 ## Commit plan position
 
-- Done: commits 1 to 15 (scaffold; five Vitest projects; CI; D1 migrations; synth org; archetypes, blueprints and versioned corpus; disjointness, rendering, chunking; seed statements, seed.sql and the committed asof-2026-10-01 dataset; local seeding and batch-based worker test setup; auth with local and remote JWKS, principal resolution and the dev issuer; authz capability matrix; PolicyStore, D1 FTS5 retriever and permission gate; AI Search adapter and chunk alignment; read routes for policies, tickets, onboarding, orientation and team; MCP server with cached tool definitions, the four read tools, /mcp and the in-process client).
-- Next: commit 16 (ActionService single-batch approval, atomic rate limit, the two write tools, approval endpoints, crash-after-commit test).
+- Done: commits 1 to 16 (scaffold; five Vitest projects; CI; D1 migrations; synth org; archetypes, blueprints and versioned corpus; disjointness, rendering, chunking; seed statements, seed.sql and the committed asof-2026-10-01 dataset; local seeding and batch-based worker test setup; auth with local and remote JWKS, principal resolution and the dev issuer; authz capability matrix; PolicyStore, D1 FTS5 retriever and permission gate; AI Search adapter and chunk alignment; read routes for policies, tickets, onboarding, orientation and team; MCP server with cached tool definitions, the four read tools, /mcp and the in-process client; ActionService with the single-batch approval, the two write tools and the approval endpoints).
+- Next: commit 17 (LLM providers: Workers AI, OpenAI-compatible, stub, adversarial stub, gateway log readers).
 - Open item carried forward: `retrieval.ai-search-adapter.test.ts` still needs the case "a throwing fake makes the chat turn return kind error with retrieval_unavailable"; it needs the orchestrator (commit 18).
 
 ## Status at the last commit
@@ -33,6 +33,8 @@ This file is the hand-off log for whoever continues the build. SPEC.md (revision
 11. `src/worker/validation.ts` (zod validation with the error envelope) is an extra helper module. `GET /api/onboarding/:employeeId` writes an `authz_denied` audit row when it answers 404 for a person outside the caller's scope.
 
 12. MCP: `ToolErrorCode` gains `retrieval_unavailable` (a retriever failure inside `search_policies` must reach the orchestrator as an error, never as an empty result or refusal). The SDK's own input-validation failures return `isError` with "Input validation error" text and no `structuredContent`; they never reach the tool callback, so they write no audit row (every call that reaches a tool writes `tool_call` or `authz_denied`). For a nonexistent employee id, `get_onboarding_progress` answers `forbidden` to non-HR callers (same as an out-of-scope person) and `not_found` only to HR. `search_policies` reports retrieval counts in the result's `_meta["peopledesk/retrieval"]` for the turn trace. Tests that call `/mcp` through `SELF.fetch` set the Host header, which real HTTP requests always carry.
+
+13. Actions: `PendingActionView` also carries `source`, `conversationId` and `supersededBy`. Business-rule failures on `POST /api/actions` map to 409 `conflict` with `details.reason` (`not_in_onboarding`, `session_full`, `already_booked`, `session_in_past`), and `rate_limited` to 429. Editing (`supersedes`) is one batch: the new row is inserted under the rate limit (the row being replaced does not count), then the old row is marked `rejected` with `superseded_by`. Reconciliation of a row seen in `executing` reports the stored outcome with `replayed: true`. Re-authorization at approval also re-checks that a ticket's related policy is still readable and that the session has not started.
 
 ## Local machine notes for builders
 

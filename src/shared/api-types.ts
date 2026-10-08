@@ -2,6 +2,8 @@
 // (parsing responses), so both sides agree on one contract.
 import { z } from "zod";
 import {
+  ACTION_SOURCES,
+  ACTION_STATUSES,
   API_ERROR_CODES,
   AUDIENCES,
   AUTH_MODES,
@@ -22,6 +24,7 @@ import {
   RETRIEVER_KINDS,
   ROLES,
   VERSION_STATUSES,
+  WRITE_TOOLS,
 } from "./domain.ts";
 
 export const ApiErrorSchema = z.object({
@@ -186,3 +189,39 @@ export const SessionListQuerySchema = z.object({
   format: z.enum(SESSION_FORMATS).optional(),
   region: z.enum(SESSION_REGIONS).optional(),
 });
+
+// Pending actions (approval checkpoints)
+
+export const PendingActionViewSchema = z.object({
+  actionId: z.string(),
+  tool: z.enum(WRITE_TOOLS),
+  status: z.enum(ACTION_STATUSES),
+  preview: z.object({ title: z.string(), fields: z.array(z.object({ label: z.string(), value: z.string() })) }),
+  arguments: z.unknown(),
+  createdAt: z.string(),
+  expiresAt: z.string(),
+  source: z.enum(ACTION_SOURCES),
+  conversationId: z.string().nullable(),
+  result: z.unknown().optional(),
+  errorCode: z.string().optional(),
+  supersededBy: z.string().optional(),
+});
+export type PendingActionView = z.infer<typeof PendingActionViewSchema>;
+export const ActionListSchema = z.object({ actions: z.array(PendingActionViewSchema) });
+export const ActionListQuerySchema = z.object({ status: z.enum(ACTION_STATUSES).optional() });
+
+export const ProposeActionRequestSchema = z.strictObject({
+  tool: z.enum(WRITE_TOOLS),
+  arguments: z.unknown(),
+  supersedes: z.uuid().optional(),
+});
+
+export const ApproveRequestSchema = z.strictObject({});
+export const ApproveResponseSchema = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("executed"), result: z.record(z.string(), z.unknown()), replayed: z.boolean() }),
+  z.object({ status: z.literal("failed"), errorCode: z.string(), replayed: z.boolean() }),
+]);
+export type ApproveResponse = z.infer<typeof ApproveResponseSchema>;
+
+export const RejectRequestSchema = z.strictObject({ reason: z.string().max(200).optional() });
+export const RejectResponseSchema = z.object({ status: z.literal("rejected") });

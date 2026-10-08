@@ -3,12 +3,14 @@ import { describe, expect, it } from "vitest";
 import { mcpClient } from "../helpers/mcp.ts";
 
 const READ_TOOLS = ["get_onboarding_progress", "list_my_tickets", "list_orientation_sessions", "search_policies"];
+const ALL_TOOLS = [...READ_TOOLS, "create_support_ticket", "schedule_orientation_session"].sort();
 
 describe("MCP tools/list over /mcp", () => {
-  it("lists the read tools with strict input schemas, output schemas and annotations", async () => {
+  it("lists exactly the six tools with strict input schemas, output schemas and annotations", async () => {
     const client = await mcpClient("tenured_employee");
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(expect.arrayContaining(READ_TOOLS));
+    expect(tools).toHaveLength(6);
+    expect(tools.map((t) => t.name).sort()).toEqual(ALL_TOOLS);
     for (const t of tools) {
       expect(t.inputSchema.additionalProperties, t.name).toBe(false);
       expect(t.outputSchema, t.name).toBeDefined();
@@ -18,6 +20,15 @@ describe("MCP tools/list over /mcp", () => {
     const search = tools.find((t) => t.name === "search_policies");
     expect(search?.annotations).toMatchObject({ readOnlyHint: true, openWorldHint: false });
     expect(search?.inputSchema.required).toEqual(["query"]);
+    for (const name of ["create_support_ticket", "schedule_orientation_session"]) {
+      expect(tools.find((t) => t.name === name)?.annotations).toMatchObject({
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+      });
+    }
+    // There is deliberately no approve tool.
+    expect(tools.some((t) => /approve/i.test(t.name))).toBe(false);
   });
 
   it("returns 401 without a JWT", async () => {
@@ -41,7 +52,7 @@ describe("in-process MCP client", () => {
       source: "chat",
     });
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name)).toEqual(expect.arrayContaining(READ_TOOLS));
+    expect(tools.map((t) => t.name).sort()).toEqual(ALL_TOOLS);
     const bad = await client.callTool({ name: "list_my_tickets", arguments: { requesterId: "E0001" } });
     expect(bad.isError).toBe(true);
     const ok = await client.callTool({ name: "get_onboarding_progress", arguments: {} });

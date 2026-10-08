@@ -9,9 +9,11 @@ import type { Principal } from "../auth/principal.ts";
 import type { Services } from "../container.ts";
 import { toolErrorResult, ToolError } from "./errors.ts";
 import { TOOL_DEFS } from "./tool-defs.ts";
+import { createSupportTicket } from "./tools/create-support-ticket.ts";
 import { getOnboardingProgress } from "./tools/get-onboarding-progress.ts";
 import { listMyTickets } from "./tools/list-my-tickets.ts";
 import { listOrientationSessions } from "./tools/list-orientation-sessions.ts";
+import { scheduleOrientationSession } from "./tools/schedule-orientation-session.ts";
 import { searchPolicies } from "./tools/search-policies.ts";
 
 export type ToolContext = {
@@ -86,6 +88,15 @@ export function buildMcpServer(ctx: ToolContext): McpServer {
     wrap("search_policies", searchPolicies, ctx),
   );
   server.registerTool(
+    "create_support_ticket",
+    {
+      ...reg("create_support_ticket"),
+      inputSchema: TOOL_DEFS.create_support_ticket.input,
+      outputSchema: TOOL_DEFS.create_support_ticket.output,
+    },
+    wrap("create_support_ticket", createSupportTicket, ctx),
+  );
+  server.registerTool(
     "list_my_tickets",
     { ...reg("list_my_tickets"), inputSchema: TOOL_DEFS.list_my_tickets.input, outputSchema: TOOL_DEFS.list_my_tickets.output },
     wrap("list_my_tickets", listMyTickets, ctx),
@@ -107,6 +118,15 @@ export function buildMcpServer(ctx: ToolContext): McpServer {
       outputSchema: TOOL_DEFS.list_orientation_sessions.output,
     },
     wrap("list_orientation_sessions", listOrientationSessions, ctx),
+  );
+  server.registerTool(
+    "schedule_orientation_session",
+    {
+      ...reg("schedule_orientation_session"),
+      inputSchema: TOOL_DEFS.schedule_orientation_session.input,
+      outputSchema: TOOL_DEFS.schedule_orientation_session.output,
+    },
+    wrap("schedule_orientation_session", scheduleOrientationSession, ctx),
   );
   return server;
 }

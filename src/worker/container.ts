@@ -7,6 +7,7 @@ import { AiSearchRetriever } from "./policies/retriever-ai-search.ts";
 import { D1Fts5Retriever } from "./policies/retriever-d1-fts.ts";
 import type { PolicyRetriever } from "./policies/retriever.ts";
 import { PolicyStore } from "./policies/store.ts";
+import { ActionService } from "./services/actions.ts";
 import { AuditService } from "./services/audit.ts";
 import { EmployeeService } from "./services/employees.ts";
 import { OnboardingService } from "./services/onboarding.ts";
@@ -25,6 +26,7 @@ export type Services = {
   policies: PolicyStore;
   retriever: PolicyRetriever;
   gate: PermissionGate;
+  actions: ActionService;
 };
 
 export function retrieverFor(cfg: AppConfig, env: Env): PolicyRetriever {
@@ -37,17 +39,23 @@ export function retrieverFor(cfg: AppConfig, env: Env): PolicyRetriever {
 
 export function buildServices(env: Env, cfg: AppConfig, clock: Clock): Services {
   const now = () => clock.nowIso();
+  const audit = new AuditService(env.DB, now);
+  const employees = new EmployeeService(env.DB);
+  const onboarding = new OnboardingService(env.DB);
+  const orientation = new OrientationService(env.DB);
   return {
     config: cfg,
     clock,
     db: env.DB,
-    audit: new AuditService(env.DB, now),
-    employees: new EmployeeService(env.DB),
+    audit,
+    employees,
     tickets: new TicketService(env.DB),
-    onboarding: new OnboardingService(env.DB),
-    orientation: new OrientationService(env.DB),
+    onboarding,
+    orientation,
     policies: new PolicyStore(env.DB, env.POLICY_BUCKET),
     retriever: retrieverFor(cfg, env),
     gate: new PermissionGate(env.DB),
+    // No hooks: only the crash-injection test constructs ActionService with afterCommit.
+    actions: new ActionService({ db: env.DB, clock, audit, employees, onboarding, orientation, ttlSeconds: cfg.actionTtlSeconds }),
   };
 }

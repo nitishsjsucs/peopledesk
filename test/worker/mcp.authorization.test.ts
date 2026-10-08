@@ -85,3 +85,59 @@ describe("search_policies scoping", () => {
     expect(r.structuredContent?.["asOf"]).toBe("2026-10-01");
   });
 });
+
+describe("schedule_orientation_session authorization", () => {
+  const unbookedReport = reportsOf(mgr.employeeId).find((e) => planned.has(e.id) && !org.bookings.some((b) => b.employeeId === e.id))!;
+  const session = "ORI-010";
+
+  it("lets a new hire propose for self and refuses another employee", async () => {
+    const p = persona("new_hire_unbooked");
+    const client = await mcpClient(p.key);
+    expect((await call(client, "schedule_orientation_session", { sessionId: session })).structuredContent).toMatchObject({
+      status: "approval_required",
+    });
+    const before = await deniedRows(p.employeeId);
+    expect(errorCode(await call(client, "schedule_orientation_session", { sessionId: session, employeeId: unbookedReport.id }))).toBe(
+      "forbidden",
+    );
+    expect(await deniedRows(p.employeeId)).toBe(before + 1);
+  });
+
+  it("refuses self-scheduling outside onboarding, and an already booked hire", async () => {
+    expect(errorCode(await call(await mcpClient("tenured_employee"), "schedule_orientation_session", { sessionId: session }))).toBe(
+      "not_in_onboarding",
+    );
+    expect(errorCode(await call(await mcpClient("new_hire_booked"), "schedule_orientation_session", { sessionId: session }))).toBe(
+      "already_booked",
+    );
+  });
+
+  it("lets a manager propose for an unbooked report in onboarding and refuses a non-report", async () => {
+    const client = await mcpClient(mgr.key);
+    expect(
+      (await call(client, "schedule_orientation_session", { sessionId: session, employeeId: unbookedReport.id })).structuredContent,
+    ).toMatchObject({ status: "approval_required" });
+    expect(errorCode(await call(client, "schedule_orientation_session", { sessionId: session, employeeId: nonReport }))).toBe("forbidden");
+  });
+
+  it("lets hr_admin propose for anyone in onboarding, but not for someone outside onboarding", async () => {
+    const client = await mcpClient("hr_admin");
+    const unbookedStranger = org.onboardingPlans.find(
+      (p) => !org.bookings.some((b) => b.employeeId === p.employeeId) && p.employeeId !== persona("new_hire_unbooked").employeeId,
+    )!.employeeId;
+    expect(
+      (await call(client, "schedule_orientation_session", { sessionId: "ORI-011", employeeId: unbookedStranger })).structuredContent,
+    ).toMatchObject({ status: "approval_required" });
+    expect(
+      errorCode(await call(client, "schedule_orientation_session", { sessionId: "ORI-011", employeeId: persona("tenured_employee").employeeId })),
+    ).toBe("not_in_onboarding");
+  });
+
+  it("refuses full sessions and unknown sessions at proposal time", async () => {
+    const full = org.sessions.find((s) => s.capacity === 6)!.id;
+    const client = await mcpClient("hr_admin");
+    const target = unbookedReport.id;
+    expect(errorCode(await call(client, "schedule_orientation_session", { sessionId: full, employeeId: target }))).toBe("session_full");
+    expect(errorCode(await call(client, "schedule_orientation_session", { sessionId: "ORI-999", employeeId: target }))).toBe("not_found");
+  });
+});

@@ -21,6 +21,16 @@ const CASES: Array<[string, Record<string, unknown>]> = [
   ["list_orientation_sessions", { fromDate: "next week" }],
   ["list_orientation_sessions", { format: "hybrid" }],
   ["list_orientation_sessions", { region: "FR" }],
+  ["create_support_ticket", { category: "it", subject: "hi", description: "My laptop will not boot at all." }],
+  ["create_support_ticket", { category: "snacks", subject: "Laptop broken", description: "My laptop will not boot at all." }],
+  ["create_support_ticket", { category: "it", subject: "Laptop broken", description: "short" }],
+  ["create_support_ticket", { category: "it", subject: "Laptop broken", description: "x".repeat(2001) }],
+  ["create_support_ticket", { category: "it", subject: "Laptop broken", description: "My laptop will not boot.", priority: "urgent" }],
+  ["create_support_ticket", { category: "it", subject: "Laptop broken", description: "My laptop will not boot.", relatedPolicyId: "POL-1" }],
+  ["create_support_ticket", { category: "it", subject: "Laptop broken", description: "My laptop will not boot.", requesterId: "E0001" }],
+  ["schedule_orientation_session", { sessionId: "ORI-1" }],
+  ["schedule_orientation_session", { sessionId: "ORI-001", employeeId: "someone" }],
+  ["schedule_orientation_session", { sessionId: "ORI-001", approve: true }],
 ];
 
 function isValidationFailure(r: ToolResult): boolean {
@@ -31,11 +41,16 @@ function isValidationFailure(r: ToolResult): boolean {
 describe("MCP input validation", () => {
   it.each(CASES)("%s rejects %j", async (tool, args) => {
     const client = await mcpClient("tenured_employee");
-    const before = await env.DB.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE event = 'tool_call' AND outcome = 'ok'").first<{ n: number }>();
+    const count = async () =>
+      env.DB.prepare(
+        `SELECT (SELECT COUNT(*) FROM audit_log WHERE event = 'tool_call' AND outcome = 'ok')
+              + (SELECT COUNT(*) FROM pending_actions) + (SELECT COUNT(*) FROM tickets)
+              + (SELECT COUNT(*) FROM orientation_bookings) AS n`,
+      ).first<{ n: number }>();
+    const before = await count();
     const r = await call(client, tool, args);
     expect(isValidationFailure(r), JSON.stringify(r)).toBe(true);
-    const after = await env.DB.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE event = 'tool_call' AND outcome = 'ok'").first<{ n: number }>();
-    expect(after?.n).toBe(before?.n);
+    expect((await count())?.n).toBe(before?.n);
   });
 
   it("accepts valid arguments and applies defaults", async () => {
