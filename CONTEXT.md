@@ -89,7 +89,7 @@ One message from the employee and the single result the desk returns for it.
 The outcome of a turn, of exactly one kind: answer, clarify, refuse, tool result, approval required, or error.
 
 **Refusal**:
-A fixed reply that does not reveal why; "not found" and "not permitted" read the same, so the existence of restricted documents or people is never disclosed.
+A fixed reply that does not reveal why; "not found" and "not permitted" read the same, so a refusal never says whether a restricted document or person exists, and the titles and content of restricted documents are never disclosed. (Policy ids are sequential, so the gaps in the ids a person can list are visible.)
 
 **Router**:
 The model role that decides what a message is (a policy question, a tool request, unclear, out of scope) without ever seeing policy text.

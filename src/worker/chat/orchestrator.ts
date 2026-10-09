@@ -330,7 +330,6 @@ async function policyTurn(
     trace.retrieval = {
       query: meta.query,
       returned: meta.returned,
-      droppedForClearance: meta.droppedForClearance,
       droppedNotEffective: meta.droppedNotEffective,
       passageIds: meta.passageIds,
       ...(meta.aiSearchChunkIds ? { aiSearchChunkIds: meta.aiSearchChunkIds } : {}),

@@ -262,7 +262,6 @@ export const TurnTraceSchema = z.object({
     .object({
       query: z.string(),
       returned: z.number(),
-      droppedForClearance: z.number(),
       droppedNotEffective: z.number(),
       passageIds: z.array(z.string()),
       aiSearchChunkIds: z.array(z.string()).optional(),

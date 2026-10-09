@@ -5,11 +5,15 @@ import { RetrievalError } from "../../policies/retriever.ts";
 import { ToolError } from "../errors.ts";
 import type { ToolContext, ToolOutcome } from "../server.ts";
 
+/**
+ * Retrieval counts for the trace. The number of passages dropped for clearance is deliberately absent:
+ * sent to the caller, it would reveal that restricted documents on the topic exist. It is logged
+ * server-side instead, where a non-zero value means the retriever's own filter is broken.
+ */
 export type RetrievalMeta = {
   retriever: "ai-search" | "d1-fts";
   query: string;
   returned: number;
-  droppedForClearance: number;
   droppedNotEffective: number;
   passageIds: string[];
   aiSearchChunkIds?: string[];
@@ -43,6 +47,16 @@ export async function searchPolicies(
     if (err instanceof RetrievalError) throw new ToolError("retrieval_unavailable", "Policy search is temporarily unavailable.");
     throw err;
   }
+  if (gateResult.droppedForClearance > 0) {
+    console.warn(
+      JSON.stringify({
+        msg: "retrieval_filter_leak",
+        retriever: s.retriever.kind,
+        droppedForClearance: gateResult.droppedForClearance,
+        conversationId: ctx.conversationId ?? null,
+      }),
+    );
+  }
   const passages = (
     s.retriever.kind === "ai-search" ? alignPassages(gateResult.passages, gateResult.chunksByVersion) : gateResult.passages
   ).slice(0, args.topK);
@@ -50,7 +64,6 @@ export async function searchPolicies(
     retriever: s.retriever.kind,
     query: args.query,
     returned: passages.length,
-    droppedForClearance: gateResult.droppedForClearance,
     droppedNotEffective: gateResult.droppedNotEffective,
     passageIds: passages.map((p) => p.passageId),
     ...(s.retriever.kind === "ai-search"

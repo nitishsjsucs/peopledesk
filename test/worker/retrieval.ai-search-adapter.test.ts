@@ -1,7 +1,7 @@
 // AI Search has no local emulation, so the adapter is tested against a fake AiSearchInstance that
 // records the request and returns chunks shaped like AiSearchSearchResponse.
 import { env } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { POLICY_CATEGORIES } from "../../src/shared/domain.ts";
 import { toUnixSeconds } from "../../src/shared/synth/dates.ts";
 import { alignChunk, alignPassages, EXCERPT_SECTION, jaccard } from "../../src/worker/policies/chunk-align.ts";
@@ -136,6 +136,32 @@ describe("chunk alignment", () => {
     const gate = await new PermissionGate(env.DB).filter(passages, 1, "2026-10-01", { withChunks: true });
     expect(gate.passages.map((p) => p.docId)).toEqual([doc.docId]);
     expect(gate.droppedForClearance).toBe(1);
+  });
+});
+
+describe("a leaky AI Search filter", () => {
+  it("is dropped by the gate and logged server-side, but the count never reaches the caller", async () => {
+    const { searchPolicies, RETRIEVAL_META_KEY } = await import("../../src/worker/mcp/tools/search-policies.ts");
+    const { principalFor, testServices } = await import("../helpers/services.ts");
+    const restricted = manifest.documents.find((d) => d.rank === 3)!.versions.find((x) => x.status === "current")!;
+    const services = testServices();
+    services.retriever = new AiSearchRetriever(
+      new FakeAiSearch([aisChunk("r", restricted.r2Key, restricted.chunks[2]!.text), aisChunk("ok", v.r2Key, policyChunk.text)]),
+    );
+    const ctx = { principal: await principalFor("tenured_employee"), services, approvalOrigin: "http://localhost", source: "mcp" as const };
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const out = await searchPolicies({ query: "paid time off", topK: 6 }, ctx);
+      expect(out.structured.passages.map((p) => p.docId)).toEqual([doc.docId]);
+      const meta = out.meta?.[RETRIEVAL_META_KEY] as Record<string, unknown>;
+      expect(meta).toMatchObject({ retriever: "ai-search", returned: 1 });
+      expect(meta).not.toHaveProperty("droppedForClearance");
+      expect(JSON.stringify(out)).not.toContain(restricted.r2Key);
+      const logged = warn.mock.calls.map((c) => String(c[0])).find((line) => line.includes("retrieval_filter_leak"));
+      expect(JSON.parse(logged ?? "{}")).toMatchObject({ msg: "retrieval_filter_leak", retriever: "ai-search", droppedForClearance: 1 });
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
 

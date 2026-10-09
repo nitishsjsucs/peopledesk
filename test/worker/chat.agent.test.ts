@@ -19,7 +19,10 @@ describe("chat turns (stub provider)", () => {
     expect(c.quote.length).toBeLessThanOrEqual(300);
     expect(r.text).toContain(`Source: ${doc.title} (${doc.docId} v${version.version}, effective ${version.effectiveFrom}).`);
     expect(r.trace).toMatchObject({ llmProvider: "stub", asOf: "2026-10-01", router: { intent: "policy_question" } });
-    expect(r.trace.retrieval).toMatchObject({ retriever: "d1-fts", droppedForClearance: 0, droppedNotEffective: 0 });
+    expect(r.trace.retrieval).toMatchObject({ retriever: "d1-fts", droppedNotEffective: 0 });
+    // How many restricted passages matched is never sent to the caller (it would reveal that
+    // restricted documents on the topic exist); the gate logs it server-side instead.
+    expect(r.trace.retrieval).not.toHaveProperty("droppedForClearance");
     expect(r.trace.composer?.invalidCitationsDropped).toBe(0);
   });
 
