@@ -5,10 +5,10 @@ import { SELF } from "cloudflare:test";
 import type { PersonaKey } from "../../src/shared/domain.ts";
 import { BASE_URL, tokenFor } from "./http.ts";
 
-export async function mcpClient(who: PersonaKey | string, opts: { token?: string } = {}): Promise<Client> {
+export async function mcpClient(who: PersonaKey | string, opts: { token?: string; baseUrl?: string } = {}): Promise<Client> {
   const token = opts.token ?? (await tokenFor(who));
   const client = new Client({ name: "peopledesk-test", version: "0.0.0" });
-  const transport = new StreamableHTTPClientTransport(new URL(`${BASE_URL}/mcp`), {
+  const transport = new StreamableHTTPClientTransport(new URL(`${opts.baseUrl ?? BASE_URL}/mcp`), {
     fetch: async (url: string | URL | Request, init?: RequestInit) => {
       const request = new Request(url, init);
       const headers = new Headers(request.headers);

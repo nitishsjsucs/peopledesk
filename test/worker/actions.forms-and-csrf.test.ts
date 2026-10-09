@@ -3,7 +3,7 @@ import { ActionListSchema, PendingActionViewSchema } from "../../src/shared/api-
 import { proposeTicket, ticketArgs } from "../helpers/actions.ts";
 import { planned, spareEmployees } from "../helpers/fixtures.ts";
 import { api, expectError, expectJson } from "../helpers/http.ts";
-import { newConversation } from "../helpers/chat.ts";
+import { newConversation, send } from "../helpers/chat.ts";
 import { call, mcpClient } from "../helpers/mcp.ts";
 
 const spares = spareEmployees(6, (e) => !planned.has(e.id)).map((e) => e.email);
@@ -109,5 +109,17 @@ describe("approvalUrl", () => {
     const url = String(r.structuredContent?.["approvalUrl"]);
     expect(url).toMatch(/^http:\/\/localhost\/actions\?focus=[0-9a-f-]{36}$/);
     expect(url.endsWith(String(r.structuredContent?.["actionId"]))).toBe(true);
+  });
+
+  it("keeps the dev server's port, for MCP and for chat (vite dev on 5173)", async () => {
+    const base = "http://localhost:5173";
+    const r = await call(await mcpClient(spares[5]!, { baseUrl: base }), "create_support_ticket", ticketArgs(1));
+    expect(r.structuredContent?.["approvalUrl"]).toBe(`${base}/actions?focus=${String(r.structuredContent?.["actionId"])}`);
+
+    const conversation = await newConversation(spares[5]!, base);
+    const turn = await send(spares[5]!, conversation, "Please open an IT ticket, my laptop will not boot after the update", undefined, base);
+    expect(turn.kind).toBe("approval_required");
+    const approval = turn.toolResult as { approvalUrl?: string; actionId?: string };
+    expect(approval.approvalUrl).toBe(`${base}/actions?focus=${approval.actionId}`);
   });
 });

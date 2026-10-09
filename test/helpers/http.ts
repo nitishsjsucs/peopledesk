@@ -33,18 +33,22 @@ export type ApiOptions = {
   origin?: string | null;
   contentType?: string | null;
   headers?: Record<string, string>;
+  /** Scheme, host and port to call instead of BASE_URL (for example a vite dev origin with a port). */
+  baseUrl?: string;
 };
 
 export async function api(path: string, opts: ApiOptions = {}): Promise<Response> {
   const method = opts.method ?? (opts.body !== undefined ? "POST" : "GET");
   const headers = new Headers(opts.headers);
   const token = opts.token ?? (opts.as ? await tokenFor(opts.as) : undefined);
+  const base = opts.baseUrl ?? BASE_URL;
   if (token) headers.set("Cf-Access-Jwt-Assertion", token);
+  if (opts.baseUrl) headers.set("host", new URL(base).host);
   if (method !== "GET") {
-    if (opts.origin !== null) headers.set("Origin", opts.origin ?? BASE_URL);
+    if (opts.origin !== null) headers.set("Origin", opts.origin ?? base);
     if (opts.contentType !== null) headers.set("Content-Type", opts.contentType ?? "application/json");
   }
-  return SELF.fetch(`${BASE_URL}${path}`, {
+  return SELF.fetch(`${base}${path}`, {
     method,
     headers,
     body: opts.body === undefined ? (method === "GET" ? undefined : "{}") : JSON.stringify(opts.body),

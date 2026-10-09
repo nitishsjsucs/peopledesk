@@ -2,13 +2,24 @@ import { ConversationCreatedSchema, TurnResultSchema } from "../../src/shared/ap
 import type { TurnResult } from "../../src/shared/api-types.ts";
 import { api, expectJson } from "./http.ts";
 
-export async function newConversation(as: string): Promise<string> {
-  return (await expectJson(await api("/api/conversations", { as, body: {} }), ConversationCreatedSchema, 201)).id;
+export async function newConversation(as: string, baseUrl?: string): Promise<string> {
+  return (await expectJson(await api("/api/conversations", { as, body: {}, ...(baseUrl ? { baseUrl } : {}) }), ConversationCreatedSchema, 201)).id;
 }
 
-export async function send(as: string, conversationId: string, text: string, headers?: Record<string, string>): Promise<TurnResult> {
+export async function send(
+  as: string,
+  conversationId: string,
+  text: string,
+  headers?: Record<string, string>,
+  baseUrl?: string,
+): Promise<TurnResult> {
   return expectJson(
-    await api(`/api/conversations/${conversationId}/messages`, { as, body: { text }, ...(headers ? { headers } : {}) }),
+    await api(`/api/conversations/${conversationId}/messages`, {
+      as,
+      body: { text },
+      ...(headers ? { headers } : {}),
+      ...(baseUrl ? { baseUrl } : {}),
+    }),
     TurnResultSchema,
   );
 }
