@@ -110,7 +110,7 @@ npm run dev             # vite dev server with the Worker in workerd
 
 Open `http://localhost:5173/dev/login` and pick a persona. Each persona is a synthetic employee: a new hire with or without an orientation booking, a tenured employee, a manager with new hires, a manager without, and an HR administrator. `npm run db:reset:local` wipes local D1, R2 and Durable Object state and reseeds.
 
-`/dev/*` exists only in dev mode, and dev mode refuses any hostname other than `localhost`, `127.0.0.1` or `[::1]`.
+`/dev/*` exists only in dev mode, and dev mode refuses any hostname other than `localhost`, `127.0.0.1` or `[::1]`, so a deploy left in dev mode fails closed. That check reads the request's Host header, which a client on the network could set itself, so the dev and preview servers also refuse every connection that does not come from this machine's loopback address (`scripts/lib/loopback-only.ts`); `--host` does not make them reachable from other machines.
 
 ## Running with the local model
 
