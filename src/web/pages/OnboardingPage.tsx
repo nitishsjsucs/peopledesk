@@ -73,7 +73,8 @@ export function OnboardingPage() {
       <p className="page-subtitle">
         Checklists and progress. <Link to="/requests/orientation">Book orientation</Link>
       </p>
-      <OwnChecklist />
+      {/* /api/me already says whether the caller has a plan; asking for a missing one is a known 404. */}
+      {me.inOnboarding ? <OwnChecklist /> : null}
       {me.role === "employee" && !me.inOnboarding ? <EmptyState title="You don't have an onboarding plan" /> : null}
       {me.role !== "employee" ? <TeamOnboarding /> : null}
     </>

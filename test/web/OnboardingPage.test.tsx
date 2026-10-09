@@ -20,7 +20,6 @@ describe("OnboardingPage manager view", () => {
   it("lists direct reports in onboarding and shows the selected person's checklist", async () => {
     const manager = { ...me, employeeId: "E0007", fullName: "Deepa Foster", role: "manager" as const, directReportIds: ["E0031", "E0032"] };
     installFetch([
-      { path: "/api/onboarding", status: 404, body: { error: { code: "not_found", message: "No onboarding plan found.", requestId: "r" } } },
       {
         path: "/api/team",
         body: {
@@ -47,5 +46,43 @@ describe("OnboardingPage manager view", () => {
     fireEvent.click(screen.getByRole("button", { name: "Rahul Mehta" }));
     expect(await screen.findByText(/75% complete/)).toBeTruthy();
     expect(screen.queryByText("My checklist")).toBeNull();
+  });
+});
+
+describe("OnboardingPage own checklist", () => {
+  const renderAs = (who: typeof me) =>
+    render(
+      <MemoryRouter>
+        <MeContext.Provider value={who}>
+          <OnboardingPage />
+        </MeContext.Provider>
+      </MemoryRouter>,
+    );
+
+  it("shows the checklist of an employee in onboarding", async () => {
+    const newHire = { ...me, employeeId: "E0025", fullName: "Nadia Fernandes", inOnboarding: true };
+    const calls = installFetch([{ path: "/api/onboarding", body: progress("E0025", "Nadia Fernandes", 40) }]);
+    renderAs(newHire);
+    expect(await screen.findByText(/40% complete/)).toBeTruthy();
+    expect(screen.getByText("My checklist")).toBeTruthy();
+    expect(calls.map((c) => c.path)).toEqual(["/api/onboarding"]);
+  });
+
+  // /api/me already says whether the caller has a plan, so the page does not ask for one it knows
+  // would be a 404 (a manager or HR admin opening the page used to log a failed request every time).
+  it("does not request the checklist of a manager whom /api/me reports without a plan", async () => {
+    const manager = { ...me, employeeId: "E0014", fullName: "Chen Varma", role: "manager" as const, inOnboarding: false };
+    const calls = installFetch([{ path: "/api/team", body: { members: [] } }]);
+    renderAs(manager);
+    expect(await screen.findByText("No one you support is in onboarding")).toBeTruthy();
+    expect(calls.map((c) => c.path)).toEqual(["/api/team"]);
+  });
+
+  it("does not request the checklist of an employee whom /api/me reports without a plan", async () => {
+    const calls = installFetch([]);
+    renderAs(me);
+    expect(screen.getByText("You don't have an onboarding plan")).toBeTruthy();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(calls).toEqual([]);
   });
 });
