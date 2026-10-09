@@ -110,7 +110,7 @@ _Avoid_: draft, request (alone), job
 Creating a pending action, from chat, a request form or an MCP client; all three use the same checks.
 
 **Approval**:
-The requesting person's explicit confirmation, given as a user identity in the desk's own UI, that executes a pending action exactly once.
+The requesting person's explicit confirmation, given as a signed-in user identity (never a service token), that executes a pending action exactly once. The desk's own UI is where it is meant to be given, but any client holding that person's identity token can give it.
 _Avoid_: confirmation, sign-off
 
 **Rejection**:

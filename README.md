@@ -1,8 +1,8 @@
 # PeopleDesk
 
-PeopleDesk is an employee self-service and action agent for a synthetic company. It answers policy questions with citations that name the document, version, section and effective dates, and it completes approved tasks: creating support tickets, checking onboarding progress and scheduling orientation sessions. A chat interface and structured request forms share one set of zod schemas with the server. Six typed MCP tools serve both the chat agent (through an in-process MCP client) and external MCP clients, with server-side authorization from Cloudflare Access identities, user-scoped data access, permission-aware retrieval and an approval checkpoint that only the requesting human can complete. A 200-case evaluation harness measures grounded answer accuracy, safety invariants, latency and cost.
+PeopleDesk is an employee self-service and action agent for a synthetic company. It answers policy questions with citations that name the document, version, section and effective dates, and it completes approved tasks: creating support tickets, checking onboarding progress and scheduling orientation sessions. A chat interface and structured request forms share one set of zod schemas with the server. Six typed MCP tools serve both the chat agent (through an in-process MCP client) and external MCP clients, with server-side authorization from Cloudflare Access identities, user-scoped data access, permission-aware retrieval and an approval checkpoint that only the requesting user's identity can complete. A 200-case evaluation harness measures grounded answer accuracy, safety invariants, latency and token cost (a list-price estimate locally).
 
-Everything in this repository runs and is tested offline on a laptop. The Cloudflare production services (Workers AI, AI Search, AI Gateway, Access) are implemented behind interfaces, tested against fakes or a locally served JWKS, and validated with `wrangler deploy --dry-run`; they have not served real traffic yet (see [What runs where](#what-runs-where)).
+The app, tests and evals run offline on a laptop; the production scripts need a Cloudflare account and have not been run. The Cloudflare services (Workers AI, AI Search, AI Gateway, Access) are implemented behind interfaces and tested against fakes or a locally served JWKS, and the production bundle and its bindings pass `wrangler deploy --dry-run`. They have not served real traffic yet (see [What runs where](#what-runs-where)).
 
 All people, policies, tickets and numbers are synthetic, generated deterministically by `npm run generate`.
 
@@ -10,8 +10,9 @@ All people, policies, tickets and numbers are synthetic, generated deterministic
 
 | | |
 |---|---|
-| **Works today** | Every P0 item of [SPEC.md](SPEC.md) section 1, including two recorded local eval runs with identical results: the deterministic synthetic organization and versioned policy corpus, D1 and R2 seeding, Access-shaped JWT authentication, the authorization matrix, permission-aware retrieval, the API, the six MCP tools at `/mcp`, the approval checkpoint, four LLM providers, the chat agent, the React UI, the 200-case eval harness, and the production seeding and verification scripts. Also the P1 home page, manager onboarding view, ticket status filter, dark theme, policy version change list and R2 S3 seeding fallback |
-| **Tests** | 460 tests in 61 files across five Vitest projects, all passing (`npm test`, 2026-10-08) |
+| **Works today** | Every P0 item of [SPEC.md](SPEC.md) section 1, including two recorded local eval runs with identical results: the deterministic synthetic organization and versioned policy corpus, D1 and R2 seeding, Access-shaped JWT authentication, the authorization matrix, permission-aware retrieval, the API, the six MCP tools at `/mcp`, the approval checkpoint, four LLM providers, the chat agent, the React UI and the 200-case eval harness. Also the P1 home page, manager onboarding view, ticket status filter, dark theme and policy version change list |
+| **Written, not yet run** | `seed:remote` (including the R2 S3 API fallback; its SigV4 signer is tested against AWS's documented example), `verify:ai-search`, `verify:gateway` and `link-identity --remote`. All need a Cloudflare account |
+| **Tests** | 482 tests in 65 files across five Vitest projects, all passing (`npm test`, 2026-10-08) |
 | **Not done yet** | A production deployment and a production eval run, both of which need a Cloudflare account |
 | **Deployed** | No. Nothing runs on Cloudflare yet; the deploy steps below need `npx wrangler login` |
 | **CI** | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs typecheck, dataset determinism, tests, build, an offline deploy dry run and a generated-types check. All six pass locally at this commit (2026-10-08) |
@@ -25,7 +26,7 @@ People and Places teams answer the same questions all day: how much leave carrie
 1. **The right answer depends on who is asking and when.** Some policies are for managers or HR only, and policies change: a version can be superseded, or approved but not yet in effect. An assistant that quotes last year's number, or a manager-only threshold to an individual contributor, is worse than no assistant.
 2. **The useful follow-ups change records.** Opening a ticket or booking someone into a session is a write. A language model should be able to propose it, never perform it.
 
-PeopleDesk is designed around those two constraints. Retrieval is filtered by the caller's clearance and the business date, then re-checked against the database, and every passage carries its document version and effective dates. Anything that changes a record waits for an approval that only the requesting human can give. Both mechanisms are built and tested, and the chat agent and forms sit on top of them.
+PeopleDesk is designed around those two constraints. Retrieval is filtered by the caller's clearance and the business date, then re-checked against the database, and every passage carries its document version and effective dates. Anything that changes a record waits for an approval that only the requesting person can give, signed in as a user (never a service token). Both mechanisms are built and tested, and the chat agent and forms sit on top of them.
 
 ## Architecture
 
@@ -75,7 +76,7 @@ flowchart LR
 
 A chat turn: the Worker verifies the Access JWT and loads the principal from D1, checks that the conversation belongs to them, and calls the conversation's Durable Object over RPC. The router model call sees the message, the caller's profile, the people the caller may ask about and the upcoming sessions, but never document text. A policy question goes to `search_policies` through the in-process MCP client; the retriever filters by clearance and effective date and the permission gate re-checks every passage against D1. The composer answers from labeled passages, and the citation validator keeps only labels returned in this turn. An answer with no valid citation is never shown.
 
-An information-changing request (a ticket, a booking) never writes. The tool creates a pending action; only an authenticated, same-origin `POST /api/actions/:id/approve` by the requesting person, as an Access user identity, executes it, in one D1 transaction that claims the row, writes, finalizes and audits.
+An information-changing request (a ticket, a booking) never writes. The tool creates a pending action; only an authenticated, same-origin `POST /api/actions/:id/approve` by the requesting person, as an Access user identity, executes it, in one D1 transaction that claims the row, writes, finalizes and audits. The checkpoint proves the requester's user identity, not that a human clicked: any client holding that user's Access JWT, including an MCP client the user handed it to, can call the approve endpoint (see [Limitations](#limitations)).
 
 ## What runs where
 
@@ -134,7 +135,7 @@ Tests run in the Workers Vitest integration (`@cloudflare/vitest-plugin`, the re
 
 | Project | Runtime | What it covers |
 |---|---|---|
-| `worker` | workerd, dev auth, stub model | Seeded D1 and R2, JWT verification, retrieval and the permission gate, the AI Search adapter (fake), policy and other routes, the six MCP tools over `/mcp`, the approval state machine (concurrency, replay, expiry, tampering, re-authorization, crash after commit), the providers (fakes), chat turns end to end, the turn lock, citations, one retry on invalid model output, a response-schema contract for every route, and a 20-case eval smoke run |
+| `worker` | workerd, dev auth, stub model | Seeded D1 and R2, JWT verification, retrieval and the permission gate, the AI Search adapter (fake), policy and other routes, the six MCP tools over `/mcp`, the approval state machine (approval races held at a barrier before the batch, edits, replay, expiry, tampering, re-authorization, crash after commit), the providers (fakes), chat turns end to end, the turn lock, citations, one retry on invalid model output, a response-schema contract for every route, and a 20-case eval smoke run |
 | `worker-access` | workerd, `AUTH_MODE=access` | The production remote-JWKS path offline (served by `outboundService`), service tokens that can propose but never approve, and provider failure handling |
 | `worker-adversarial` | workerd, adversarial model | A model that always reaches for other people's data and fabricates citations; server checks keep every turn safe |
 | `node` | Node | Generator determinism and exact counts, the seed file round trip through `wrangler d1 execute`, the authorization matrix, the eval dataset invariants, scorer, leak check and report |
@@ -198,7 +199,9 @@ Server: provider `openai-compatible`, model `qwen3-1.7b-q4_0`, retriever `d1-fts
 Full report: `evals/results/local-qwen3-1.7b-2026-10-08-r2/summary.md`; raw numbers: `evals/results/local-qwen3-1.7b-2026-10-08-r2/summary.json`.
 <!-- results:end -->
 
-How to read this local run: it used Qwen3-1.7B (Q4_0) on `llama-server` and the SQLite FTS5 retriever, not the production model or AI Search. It is the second local run on 2026-10-08 (Pacific time; the date above is UTC). The first, at git `464103b` (`evals/results/local-qwen3-1.7b-2026-10-08/`), produced a `summary.json` identical to this one except for the run id, timestamps, command, git SHA and latency, including the same list of failed cases: with temperature 0 and a fixed seed, the local model's outputs, and so the grades, repeated exactly. Latency differs because this run was on battery power while other builds were using the machine. Most unauthorized-case failures are the small model answering from a different document the persona may read instead of refusing; the leak and forbidden-target gates above are what show that no restricted value, document or action got through. Most action-case failures are routing mistakes by the small model (for example, onboarding-progress questions routed as policy questions). The server-side checks themselves are covered by the test suite, including a model that deliberately reaches for other people's data (`test/worker-adversarial`).
+How to read this local run: it used Qwen3-1.7B (Q4_0) on `llama-server` and the SQLite FTS5 retriever, not the production model or AI Search. It is the second local run on 2026-10-08 (Pacific time; the date above is UTC). The first, at git `464103b` (`evals/results/local-qwen3-1.7b-2026-10-08/`), produced a `summary.json` identical to this one except for the run id, timestamps, command, git SHA and latency, including the same list of failed cases: with temperature 0 and a fixed seed, the local model's outputs, and so the grades, repeated exactly. Latency differs between the runs (p95 3540 ms vs 4825 ms). The second ran on battery with other builds using the machine, so local latency is not a stable measurement. Most unauthorized-case failures are the small model answering from a different document the persona may read instead of refusing; the leak and forbidden-target gates above are what show that no restricted value, document or action got through. Most action-case failures are routing mistakes by the small model (for example, onboarding-progress questions routed as policy questions). The server-side checks themselves are covered by the test suite, including a model that deliberately reaches for other people's data (`test/worker-adversarial`).
+
+The git SHAs above (and in each run's `summary.json`) are from the working history this repository was built in. The commits published on GitHub have the same trees but drop a trailer line from each message, so their SHAs differ: `7517b30` is `2fa4cc5` on GitHub, and `464103b` is `f93c880`.
 
 ## MCP
 
@@ -221,7 +224,9 @@ Every input schema is strict (`additionalProperties: false`), every tool has an 
 - Authorization is one pure function, `can(principal, capability, resource)`, whose full matrix is tested, including that a service-token identity can never approve.
 - Retrieval is permission-aware twice: the retriever filters by clearance and effective date, and the permission gate re-checks every passage against D1. Not found and not permitted produce the same refusal, and the document API answers 404 for documents above the caller's clearance.
 - The router model call happens before any document text is seen and the composer has no tool path, so retrieved content cannot trigger actions. Typing "approve" in chat executes nothing.
-- Approval requires an authenticated same-origin POST by the requesting person as an Access user identity, re-checks authorization against current D1 state, and executes in a single D1 batch gated on a per-request claim id. Retries replay the stored outcome. Same-origin checking is CSRF protection only, not proof of a human.
+- Approval requires an authenticated same-origin POST by the requesting person as an Access user identity, re-checks authorization against current D1 state, and executes in a single D1 batch gated on a per-request claim id. Retries replay the stored outcome. Same-origin checking is CSRF protection only, not proof of a human: a non-browser client sets its own Origin header, so any client holding the requester's Access user JWT can approve.
+- The SPA and every Worker response send `X-Frame-Options: DENY` and `Content-Security-Policy: frame-ancestors 'none'`, so the approval page cannot be framed by another site.
+- A turn's error message is always a fixed text for its code; provider and tool exception details go to the Worker logs only. How many restricted passages a retriever returned is logged, never sent to the caller.
 - `arguments_sha256` is an integrity check (it detects serialization drift or a partial write between propose and approve). It is not a security control: anyone who can rewrite the row can rewrite the digest too.
 - Test-only model providers are rejected in access mode, and no header, cookie or query parameter can change the auth mode, model provider or retriever.
 - Known limit: authorization is re-checked in code just before the approval batch, so a role change landing in the milliseconds between the two is not seen.
@@ -256,7 +261,8 @@ npm run seed:remote -- --as-of <deploy date>      # D1 migrations + seed, and 15
 #   vector + keyword, reranking on, AI Gateway "peopledesk", custom metadata: doc_id text, version number,
 #   audience_rank number, effective_from_ts number, effective_to_ts number
 npm run verify:ai-search -- --as-of <deploy date> # sync, then filter, exclusion and strict-failure checks
-# Zero Trust > Access > Applications: self-hosted app for the hostname; set ACCESS_TEAM_DOMAIN and ACCESS_AUD
+# Zero Trust > Access > Applications: self-hosted app for the hostname; set ACCESS_TEAM_DOMAIN and ACCESS_AUD;
+#   in the app's cookie settings set SameSite to Lax or Strict
 npm run deploy                                    # service tokens off
 npm run verify:gateway                            # which AI Gateway log reader works, and whether cost is numeric
 npm run link-identity -- --remote --email <your Access email> --employee <persona id>
@@ -284,6 +290,8 @@ Reseeding (local or remote) clears conversations and pending actions; employees 
 - AI Search, Workers AI, AI Gateway and Cloudflare Access are tested against fakes or a locally served JWKS. Whether AI Search receives the R2 custom metadata, and whether AI Gateway logs for a new gateway are readable and carry a cost, is checked only by the verification scripts after deploy.
 - Local eval numbers come from a 1.7B model and SQLite FTS5 and say little about the production model.
 - One tool call per chat turn, no streaming, no real HR system integrations (tickets and bookings live in D1), no notifications.
+- Approval proves the requester's Access user identity, not a human click: an MCP client holding the user's Access JWT can call the approve endpoint. Putting `/mcp` behind its own Access application with its own audience, verified separately, would stop a token handed to an MCP client from approving; that is not built.
+- There is no per-user rate limit on chat turns or new conversations, so one signed-in employee can run up Workers AI usage. (Only the eval runner's service tokens, or local dev mode, may set the eval header that turns off the AI Gateway cache.)
 - The Workers Free plan's 10 ms CPU limit per request is likely too tight for a chat turn (JWT verification, zod, MCP JSON-RPC in-process); Workers Paid is likely required. Module-scope caching reduces but does not remove this, and it cannot be measured locally.
 
 ## License

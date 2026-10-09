@@ -1,5 +1,7 @@
 # PeopleDesk v1: Employee Self-Service and Action Agent
 
+Historical design spec (revision 2, written before the build). Current status is in README.md and PROGRESS.md, and deviations from this spec are listed in PROGRESS.md; the scratchpad probes cited in the review log are not part of this repository.
+
 Status: design spec, revision 2 (2026-10-08). Revision 2 resolves the review findings listed in section 24 (Review log). Nothing in this repository exists yet except this file.
 Repo: `~/Developer/projects/peopledesk`, to be pushed as `github.com/nitishsjsucs/peopledesk`.
 Author of record: Nitish Chowdary (MS SE, SJSU). Built from scratch; no code from any earlier implementation is reused.
