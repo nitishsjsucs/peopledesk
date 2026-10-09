@@ -4,6 +4,15 @@ on:
   push:
   pull_request:
 
+# The workflow only reads the repository; no step needs a secret or a write token.
+permissions:
+  contents: read
+
+# A newer push to the same branch or pull request supersedes a run still in progress.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-latest
