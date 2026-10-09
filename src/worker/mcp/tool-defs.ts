@@ -67,7 +67,7 @@ export const TOOL_DEFS = {
     title: "Create support ticket",
     description:
       "Propose a support ticket with you as the requester. Nothing is created yet: the result is a pending action that " +
-      "a human must approve in PeopleDesk (open approvalUrl).",
+      "the requesting user must approve in PeopleDesk (open approvalUrl); a service token cannot approve.",
     input: cachedSchema(CreateSupportTicketInput),
     output: cachedSchema(ApprovalRequiredOutput),
     annotations: proposes,
@@ -99,7 +99,8 @@ export const TOOL_DEFS = {
     title: "Schedule orientation session",
     description:
       "Propose booking an orientation session for yourself, a direct report in onboarding (managers) or anyone in " +
-      "onboarding (HR administrators). Nothing is booked until a human approves the pending action in PeopleDesk.",
+      "onboarding (HR administrators). Nothing is booked until the requesting user approves the pending action in " +
+      "PeopleDesk (open approvalUrl); a service token cannot approve.",
     input: cachedSchema(ScheduleOrientationSessionInput),
     output: cachedSchema(ApprovalRequiredOutput),
     annotations: proposes,

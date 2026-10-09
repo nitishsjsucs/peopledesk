@@ -216,7 +216,7 @@ Every git SHA above, and in each run's `summary.json` and `summary.md`, names a 
 | `create_support_ticket` | proposes | Requester is always the caller; nothing is created until approved |
 | `schedule_orientation_session` | proposes | Self in onboarding, a manager's report in onboarding, or anyone in onboarding for HR; nothing is booked until approved |
 
-Every input schema is strict (`additionalProperties: false`), every tool has an output schema and annotations, and every call that reaches a tool writes an audit row. The write tools return an `approvalUrl` (`/actions?focus=<id>`) that a person must open and approve in PeopleDesk. There is deliberately no approve tool.
+Every input schema is strict (`additionalProperties: false`), every tool has an output schema and annotations, and every call that reaches a tool writes an audit row. The write tools return an `approvalUrl` (`/actions?focus=<id>`); the requesting user must approve the request as their Access user identity, and the PeopleDesk page at `approvalUrl` is the intended path. A service token cannot approve, and there is deliberately no approve tool. As the security model below says, this proves the user's identity, not that a person clicked.
 
 ## Security model
 
