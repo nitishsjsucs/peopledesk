@@ -55,6 +55,21 @@ describe("seeded D1 and R2 (batch path)", () => {
         ["audience_rank", "doc_id", "effective_from_ts", "effective_to_ts", "version"],
       );
     }
+    // The values, not only the keys: production AI Search filters on audience_rank and the two
+    // timestamps. Expected values are computed here from the manifest, independently of r2-objects.ts.
+    const unix = (date: string) => String(Date.parse(`${date}T00:00:00Z`) / 1000);
+    const byKey = new Map(objects.map((o) => [o.key, o.customMetadata]));
+    for (const d of manifest.documents) {
+      for (const v of d.versions) {
+        expect(byKey.get(v.r2Key), v.r2Key).toEqual({
+          doc_id: d.docId,
+          version: String(v.version),
+          audience_rank: String(d.rank),
+          effective_from_ts: unix(v.effectiveFrom),
+          effective_to_ts: v.effectiveTo ? unix(v.effectiveTo) : "4102444800",
+        });
+      }
+    }
     const v = manifest.documents[0]?.versions[0];
     const body = await env.POLICY_BUCKET.get(v?.r2Key ?? "");
     expect(await body?.text()).toContain(`doc_id: ${manifest.documents[0]?.docId}`);
