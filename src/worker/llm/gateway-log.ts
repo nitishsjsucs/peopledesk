@@ -29,7 +29,10 @@ export class BindingGatewayLogReader {
       try {
         log = await this.gateway.getLog(hint.logId);
       } catch (err) {
-        out.missing.push({ logId: hint.logId, reason: `getLog failed: ${String(err)}` });
+        // The binding's exception text can describe the account, the gateway or an internal error: it
+        // goes to the Worker logs only, and the caller gets a fixed reason.
+        console.warn(JSON.stringify({ msg: "gateway_getlog_failed", turnId, logId: hint.logId, error: String(err) }));
+        out.missing.push({ logId: hint.logId, reason: "unavailable" });
         continue;
       }
       if (log.metadata?.["turnId"] !== turnId) {

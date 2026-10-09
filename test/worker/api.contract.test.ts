@@ -222,7 +222,9 @@ describe("gateway-logs route with Workers AI (fake AI binding)", () => {
     const ai = {
       gateway: (gatewayId: string) => {
         gatewayIds.push(gatewayId);
-        return { getLog: async (logId: string) => logs[logId] ?? Promise.reject(new Error("log not found")) };
+        return {
+          getLog: async (logId: string) => logs[logId] ?? Promise.reject(new Error("log not found for account 9f8e7d6c (token cfat_0123)")),
+        };
       },
       run: async () => {
         throw new Error("no model calls on this route");
@@ -248,6 +250,8 @@ describe("gateway-logs route with Workers AI (fake AI binding)", () => {
       { logId: "log-r", purpose: "router", model: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", tokensIn: 900, tokensOut: 60, durationMs: 640, cost: 0.00042, cached: false },
     ]);
     expect(body.missing.map((m) => m.logId)).toEqual(["log-c", "log-gone"]);
+    expect(body.missing.find((m) => m.logId === "log-gone")?.reason).toBe("unavailable");
+    expect(JSON.stringify(body)).not.toMatch(/account|cfat_/);
     await expectError(await get(`/api/conversations/${id}/turns/${crypto.randomUUID()}/gateway-logs`), 404, "not_found");
     await expectError(await get(`/api/conversations/${id}/turns/${turn.turnId}/gateway-logs`, spare(4)), 404, "not_found");
   });

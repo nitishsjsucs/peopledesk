@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ComposerOutputSchema, RouterOutputSchema } from "../../src/worker/chat/prompts.ts";
 import { BindingGatewayLogReader } from "../../src/worker/llm/gateway-log.ts";
 import { LlmInvalidOutputError, LlmUnavailableError } from "../../src/worker/llm/provider.ts";
@@ -127,5 +127,19 @@ describe("BindingGatewayLogReader", () => {
     ]);
     expect(out.found).toEqual([{ logId: "a", purpose: "router", model: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", tokensIn: 150, tokensOut: 40, durationMs: 812, cost: 0.0001, cached: false }]);
     expect(out.missing.map((m) => m.logId)).toEqual(["b", "c"]);
+  });
+
+  it("reports a failed getLog with a fixed reason, never the exception text", async () => {
+    const secret = "Authentication error: API token cfat_0123456789abcdef rejected for account 9f8e7d6c";
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const reader = new BindingGatewayLogReader({ getLog: async () => Promise.reject(new Error(secret)) });
+      const out = await reader.readTurn("t1", [{ logId: "a", purpose: "router" }]);
+      expect(out).toEqual({ found: [], missing: [{ logId: "a", reason: "unavailable" }] });
+      expect(JSON.stringify(out)).not.toContain("cfat_");
+      expect(warn.mock.calls.map((c) => String(c[0])).join("\n")).toContain("gateway_getlog_failed");
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
