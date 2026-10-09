@@ -56,26 +56,21 @@ export class WorkersAiProvider implements LlmProvider {
       ...(req.signal ? { signal: req.signal } : {}),
     };
 
-    let retries = 0;
-    for (;;) {
-      let out: RunOutput;
-      try {
-        out = (await raceAbort(this.ai.run(this.model, inputs, options), req.signal)) as RunOutput;
-      } catch (err) {
-        if (err instanceof LlmUnavailableError) throw err;
-        if (JSON_MODE_FAILURE.test(String((err as Error)?.message ?? err))) {
-          if (retries === 0) {
-            retries++;
-            continue;
-          }
-          throw new LlmInvalidOutputError("", "JSON Mode couldn't be met (after one retry)", { inputTokens: 0, outputTokens: 0 });
-        }
-        throw new LlmUnavailableError("provider_unavailable", `Workers AI call failed: ${String(err)}`, { cause: err });
+    let out: RunOutput;
+    try {
+      out = (await raceAbort(this.ai.run(this.model, inputs, options), req.signal)) as RunOutput;
+    } catch (err) {
+      if (err instanceof LlmUnavailableError) throw err;
+      // "JSON Mode couldn't be met" is invalid output, not an outage. The orchestrator gives it the
+      // turn's single retry and counts that retry in the trace, so there is no second retry layer here.
+      if (JSON_MODE_FAILURE.test(String((err as Error)?.message ?? err))) {
+        throw new LlmInvalidOutputError("", "JSON Mode couldn't be met", { inputTokens: 0, outputTokens: 0 });
       }
-      const usage = { inputTokens: out.usage?.prompt_tokens ?? 0, outputTokens: out.usage?.completion_tokens ?? 0 };
-      // In JSON mode `response` may already be an object.
-      const { value, rawText } = parseModelJson(out.response, req.zod, usage);
-      return { value, rawText, usage, latencyMs: Date.now() - started, gatewayLogId: this.ai.aiGatewayLogId ?? null, retries };
+      throw new LlmUnavailableError("provider_unavailable", `Workers AI call failed: ${String(err)}`, { cause: err });
     }
+    const usage = { inputTokens: out.usage?.prompt_tokens ?? 0, outputTokens: out.usage?.completion_tokens ?? 0 };
+    // In JSON mode `response` may already be an object.
+    const { value, rawText } = parseModelJson(out.response, req.zod, usage);
+    return { value, rawText, usage, latencyMs: Date.now() - started, gatewayLogId: this.ai.aiGatewayLogId ?? null, retries: 0 };
   }
 }

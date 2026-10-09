@@ -7,6 +7,7 @@ import { runTurn } from "../../src/worker/chat/orchestrator.ts";
 import { TEXT } from "../../src/worker/chat/render.ts";
 import type { LlmMessage, LlmProvider, LlmRequest, LlmResult } from "../../src/worker/llm/provider.ts";
 import { LlmUnavailableError, parseModelJson } from "../../src/worker/llm/provider.ts";
+import { WorkersAiProvider } from "../../src/worker/llm/workers-ai.ts";
 import { principalFor, testServices } from "../helpers/services.ts";
 
 type Reply = unknown | Error;
@@ -115,5 +116,49 @@ describe("invalid model output", () => {
     const r = await turn(provider);
     expect(r).toMatchObject({ kind: "error", error: { code: "provider_unavailable" } });
     expect(provider.calls("router")).toHaveLength(1);
+  });
+});
+
+/** A fake AI binding: each run() takes the next scripted reply or error. */
+class FakeAi {
+  aiGatewayLogId: string | null = null;
+  readonly calls: Array<{ purpose: unknown }> = [];
+  private readonly replies: Array<unknown | Error>;
+  constructor(replies: Array<unknown | Error>) {
+    this.replies = replies;
+  }
+  async run(_model: string, _inputs: Record<string, unknown>, options: Record<string, unknown>): Promise<unknown> {
+    this.calls.push({ purpose: (options["gateway"] as { metadata: { purpose: string } }).metadata.purpose });
+    this.aiGatewayLogId = `log-${this.calls.length}`;
+    const next = this.replies.shift();
+    if (next === undefined) throw new Error("no scripted reply left");
+    if (next instanceof Error) throw next;
+    return { response: next, usage: { prompt_tokens: 100, completion_tokens: 10 } };
+  }
+}
+
+const jsonModeFailure = () => new Error("AiError: JSON Mode couldn't be met");
+const workersAi = (ai: FakeAi) => new WorkersAiProvider({ ai, model: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", gatewayId: "gw" });
+/** What the eval runner derives from a trace (evals/lib/runner.ts). */
+const tracedCalls = (r: Awaited<ReturnType<typeof turn>>) =>
+  1 + r.trace.router.retries + (r.trace.composer ? 1 + r.trace.composer.retries : 0);
+
+describe("Workers AI JSON mode failures", () => {
+  it("get exactly one retry per stage, and the trace counts every call", async () => {
+    const ai = new FakeAi([jsonModeFailure(), POLICY_ROUTE, ANSWER]);
+    const r = await turn(workersAi(ai));
+    expect(r.kind).toBe("answer");
+    expect(ai.calls.map((c) => c.purpose)).toEqual(["router", "router", "composer"]);
+    expect(r.trace.router.retries).toBe(1);
+    expect(tracedCalls(r)).toBe(ai.calls.length);
+  });
+
+  it("fall back to a generic clarify after two failed calls, not four", async () => {
+    const ai = new FakeAi([jsonModeFailure(), jsonModeFailure(), jsonModeFailure(), jsonModeFailure()]);
+    const r = await turn(workersAi(ai));
+    expect(r).toMatchObject({ kind: "clarify", text: TEXT.genericClarify });
+    expect(ai.calls).toHaveLength(2);
+    expect(r.trace.router).toMatchObject({ intent: "invalid", retries: 1 });
+    expect(tracedCalls(r)).toBe(ai.calls.length);
   });
 });

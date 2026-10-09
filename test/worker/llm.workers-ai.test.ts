@@ -80,14 +80,13 @@ describe("WorkersAiProvider", () => {
     expect(b.gatewayLogId).toBe("log-2");
   });
 
-  it("retries once on 'JSON Mode couldn't be met', then gives up with invalid output", async () => {
-    const ok = new FakeAi([new Error("AiError: JSON Mode couldn't be met"), { response: { intent: "clarify" } }]);
-    const out = await provider(ok).completeJson(routerReq());
-    expect(out.retries).toBe(1);
-    expect(ok.calls).toHaveLength(2);
-    const bad = new FakeAi([new Error("JSON Mode couldn't be met"), new Error("JSON Mode couldn't be met")]);
+  it("reports 'JSON Mode couldn't be met' as invalid output after one call (the turn's single retry is the orchestrator's)", async () => {
+    // The one retry SPEC section 7 asks for happens in the orchestrator, which also counts it in the
+    // trace; see "Workers AI JSON mode failures" in chat.model-retry.test.ts. A second retry layer
+    // here made one stage cost four calls, two of them invisible to the trace.
+    const bad = new FakeAi([new Error("AiError: JSON Mode couldn't be met"), { response: { intent: "clarify" } }]);
     await expect(provider(bad).completeJson(routerReq())).rejects.toBeInstanceOf(LlmInvalidOutputError);
-    expect(bad.calls).toHaveLength(2);
+    expect(bad.calls).toHaveLength(1);
   });
 
   it("maps other failures to provider_unavailable", async () => {
