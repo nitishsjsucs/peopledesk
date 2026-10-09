@@ -56,11 +56,34 @@ This file is the hand-off log for whoever continues the build. SPEC.md (revision
   - Fresh clone gate at `dcb2924` (a clone in the session scratch directory, no `.dev.vars`, no `.wrangler` state, `TZ=UTC`), all seven CI steps in order: `npm ci` pass (292 packages; npm audit still reports 7 high severity advisories, the same ones as the 2026-10-08 gate), typecheck pass, determinism no diff, `npm test` pass (487 tests in 65 files, 51 s), build pass, `deploy:check` pass, types check up to date. The clone was deleted afterwards.
   - GitHub Actions (read only, `gh run list`): the run for the published copy of `9fc4d13`, the newest published commit at the time, passed, as did every run after the first two.
   - A docs commit: the README note under the Results block paired each local SHA with its published SHA, and the publishing step now rewrites local SHAs inside files, so GitHub showed pairs like "`4d8ae5b` is `4d8ae5b` on GitHub". The note now says what holds in both copies, without SHA pairs; PROGRESS's coordination notes no longer pair SHAs either and record the rewrite (see "Coordination notes").
-- Next: everything that needs Nitish (SPEC section 17): `wrangler login`, deploy, `verify:ai-search`, `verify:gateway`, the production eval in the eval window and the resume wording choices. Also his decision on the public history (see "Coordination notes": the repo is already public, published by his mirror script, which strips the Co-Authored-By trailers and rewrites the SHAs cited in files). Nothing else in the commit plan or the orchestrator's list (evals, README, ADRs, CI) is open.
+- After the plan (review round 2 fixer, 2026-10-09): fixes for three independent reviews of `15d6e56` (correctness, security, honesty), in commit order. Each finding and its outcome is under "Review findings" below; none was rejected.
+  - `64cc011` fix(evals): an abort decision sticks when cases run concurrently.
+  - `5d91699` fix(actions): reconciliation reports a booking with its session, like the approval batch.
+  - `6c71de6` fix(auth): access mode answers only on `APP_HOSTNAME`, and production has no preview URLs (deviation 46).
+  - `28d04cd` fix(dev): the dev and preview servers serve this machine only (deviation 47).
+  - `05cb4ca` feat(audit): audit rows name the verified identity that acted (deviation 48).
+  - `3392e35` fix(llm): a failed gateway log lookup returns a fixed reason (deviation 49).
+  - `d331f4d` fix(mcp): the write tools say the requesting user approves, not "a human" (deviation 50).
+  - `b3b5e5d` test(evals): the AI Gateway REST reader and binding-route reader against fakes.
+  - `8768e05` docs: README Status and opening claim only what ran; Evals notes on the recorded setup and the `amb-003` prompt overlap; ADR 0004; SPEC.md header and PROGRESS "Resume claims" with interim wording; deviations 44 and 45.
+  - `e5663e4` eval: a fifth local run at `8768e05`, identical grades, README Results from it (see "Fifth local eval run").
+  - A docs commit updating this file.
+- Next: everything that needs Nitish (SPEC section 17): `wrangler login`, deploy (with `workers_dev: false` if `APP_HOSTNAME` is a custom domain), `verify:ai-search`, `verify:gateway`, the production eval in the eval window and the resume wording choices (interim wording under "Resume claims"). Also his decision on the public history (see "Coordination notes": the repo is already public, published by his mirror script, which strips the Co-Authored-By trailers and rewrites the SHAs cited in files). Nothing else in the commit plan or the orchestrator's list (evals, README, ADRs, CI) is open.
 
 ## Status at the last commit
 
-Round 2 builder 3, 2026-10-09, at `050a784` (the docs commit; the commit after it changes only this file). No code has changed since `9fc4d13`.
+Review round 2 fixer, 2026-10-09, at `e5663e4` (the eval commit; the commit after it changes only this file). The last code commit is `b3b5e5d` (test only); the eval ran at `8768e05`, whose code is the same.
+
+- In this checkout at `e5663e4`: `npm run typecheck` pass, `npm test` pass (508 tests in 66 files, 41 s), `npm run build` pass. At `8768e05`, before the eval: the same three plus `npm run deploy:check` pass, `TZ=UTC npm run generate` with `git diff --exit-code -- data/generated evals/dataset` no diff, and `npx wrangler types --strict-vars false --check` (with `.dev.vars` moved aside) up to date.
+- Fresh clone of `e5663e4` in the session scratch directory (no `.dev.vars`, no `.wrangler` state, `TZ=UTC`), the seven CI steps in order: `npm ci` pass (292 packages, the same 7 high severity advisories as under "Final verification gate"), `npm run typecheck` pass, determinism no diff, `npm test` pass (508 tests in 66 files, 39 s), `npm run build` pass, `npm run deploy:check` pass, `npx wrangler types --strict-vars false --check` up to date. The clone was deleted afterwards.
+- Every new test was checked against the unfixed code and fails there: the runner abort test, the reconciled-booking test, the access-mode hostname test, both audit identity tests and both gateway-log reason tests.
+- On AC power, not in Low Power Mode; load average 3 to 10 during the round, from other builds.
+- Processes: the round started `vite dev --host` twice on port 8782 (to reproduce the Host spoofing and to check the fix), `vite preview --host` once (the fix on preview), and for the eval `llama-server` on 8120 and `vite preview` on 8782 with inspector 9232. All were stopped; ports 8120 and 8782 are free and no wrangler, workerd, vite or llama-server process from this repo is running. `.dev.vars` is back to `LLM_PROVIDER=stub` with `LLM_BASE_URL=http://127.0.0.1:8080/v1`, and local D1, R2 and Durable Object state was reset to the seed.
+- Nothing was pushed. The owner's mirror loop (see "Coordination notes") publishes local commits on its own schedule.
+
+Earlier, round 2 builder 3, 2026-10-09:
+
+At `050a784` (the docs commit; the commit after it changes only this file). No code had changed since `9fc4d13`.
 
 - In this checkout: `npm run typecheck` pass, `npm test` pass (487 tests in 65 files, 47 s), `npm run build` pass.
 - Fresh clone of `050a784` in the session scratch directory (no `.dev.vars`, no `.wrangler` state, `TZ=UTC`), the seven CI steps in order: `npm ci` pass (292 packages, 7 high severity advisories as listed under "Final verification gate"), `npm run typecheck` pass, `npm run generate` plus `git diff --exit-code -- data/generated evals/dataset` no diff, `npm test` pass (487 tests in 65 files, 54 s), `npm run build` pass, `npm run deploy:check` pass, `npx wrangler types --strict-vars false --check` up to date. The clone was deleted afterwards.
