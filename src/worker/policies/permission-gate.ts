@@ -1,7 +1,8 @@
 // Re-checks every retrieved passage against D1, whatever the retriever returned: drops anything above
-// the caller's clearance or not effective at asOf, and overwrites effective dates and the source key
-// with D1's values. This makes both retrievers equally safe even if a retriever filter is wrong.
-import type { Clearance } from "../../shared/domain.ts";
+// the caller's clearance or not effective at asOf (and, when a category was requested, anything of
+// another category, which AI Search cannot filter on), and overwrites effective dates and the source
+// key with D1's values. This makes both retrievers equally safe even if a retriever filter is wrong.
+import type { Clearance, PolicyCategory } from "../../shared/domain.ts";
 import { isEffective } from "../../shared/dates.ts";
 import type { RetrievedPassage } from "./retriever.ts";
 
@@ -12,6 +13,8 @@ export type GateResult = {
   droppedForClearance: number;
   /** Includes passages whose (doc, version) does not exist in D1 at all. */
   droppedNotEffective: number;
+  /** Passages of a category other than the requested one. */
+  droppedOtherCategory: number;
   /** D1 chunks of the surviving versions, keyed "docId@version" (only when requested; used by chunk-align). */
   chunksByVersion: Map<string, D1Chunk[]>;
 };
@@ -24,6 +27,7 @@ type VersionRow = {
   r2_key: string;
   title: string;
   audience_rank: Clearance;
+  category: PolicyCategory;
 };
 
 export const versionKey = (docId: string, version: number) => `${docId}@${version}`;
@@ -38,15 +42,21 @@ export class PermissionGate {
     passages: readonly RetrievedPassage[],
     clearance: Clearance,
     asOf: string,
-    opts: { withChunks?: boolean } = {},
+    opts: { withChunks?: boolean; category?: PolicyCategory } = {},
   ): Promise<GateResult> {
     const keys = [...new Set(passages.map((p) => versionKey(p.docId, p.version)))];
-    const result: GateResult = { passages: [], droppedForClearance: 0, droppedNotEffective: 0, chunksByVersion: new Map() };
+    const result: GateResult = {
+      passages: [],
+      droppedForClearance: 0,
+      droppedNotEffective: 0,
+      droppedOtherCategory: 0,
+      chunksByVersion: new Map(),
+    };
     if (keys.length === 0) return result;
     const placeholders = keys.map(() => "?").join(",");
     const versionsStmt = this.db
       .prepare(
-        `SELECT v.doc_id, v.version, v.effective_from, v.effective_to, v.r2_key, d.title, d.audience_rank
+        `SELECT v.doc_id, v.version, v.effective_from, v.effective_to, v.r2_key, d.title, d.audience_rank, d.category
            FROM policy_versions v JOIN policy_documents d ON d.doc_id = v.doc_id
           WHERE v.doc_id || '@' || v.version IN (${placeholders})`,
       )
@@ -81,6 +91,10 @@ export class PermissionGate {
       }
       if (!isEffective({ effectiveFrom: v.effective_from, effectiveTo: v.effective_to }, asOf)) {
         result.droppedNotEffective++;
+        continue;
+      }
+      if (opts.category && v.category !== opts.category) {
+        result.droppedOtherCategory++;
         continue;
       }
       surviving.add(key);

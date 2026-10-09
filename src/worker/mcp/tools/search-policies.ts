@@ -35,7 +35,10 @@ export async function searchPolicies(
       category: args.category,
       signal: ctx.signal,
     });
-    gateResult = await s.gate.filter(raw, principal.clearance, asOf, { withChunks: s.retriever.kind === "ai-search" });
+    gateResult = await s.gate.filter(raw, principal.clearance, asOf, {
+      withChunks: s.retriever.kind === "ai-search",
+      ...(args.category ? { category: args.category } : {}),
+    });
   } catch (err) {
     if (err instanceof RetrievalError) throw new ToolError("retrieval_unavailable", "Policy search is temporarily unavailable.");
     throw err;

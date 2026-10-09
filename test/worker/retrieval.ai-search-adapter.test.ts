@@ -2,6 +2,7 @@
 // records the request and returns chunks shaped like AiSearchSearchResponse.
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
+import { POLICY_CATEGORIES } from "../../src/shared/domain.ts";
 import { toUnixSeconds } from "../../src/shared/synth/dates.ts";
 import { alignChunk, alignPassages, EXCERPT_SECTION, jaccard } from "../../src/worker/policies/chunk-align.ts";
 import { PermissionGate } from "../../src/worker/policies/permission-gate.ts";
@@ -135,6 +136,25 @@ describe("chunk alignment", () => {
     const gate = await new PermissionGate(env.DB).filter(passages, 1, "2026-10-01", { withChunks: true });
     expect(gate.passages.map((p) => p.docId)).toEqual([doc.docId]);
     expect(gate.droppedForClearance).toBe(1);
+  });
+});
+
+describe("search_policies with a category over AI Search", () => {
+  it("returns only passages of the requested category (AI Search cannot filter on it)", async () => {
+    const { searchPolicies } = await import("../../src/worker/mcp/tools/search-policies.ts");
+    const { principalFor, testServices } = await import("../helpers/services.ts");
+    const other = POLICY_CATEGORIES.find((c) => c !== doc.category)!;
+    const services = testServices();
+    const fake = new FakeAiSearch([aisChunk("c1", v.r2Key, policyChunk.text)]);
+    services.retriever = new AiSearchRetriever(fake);
+    const ctx = { principal: await principalFor("tenured_employee"), services, approvalOrigin: "http://localhost", source: "mcp" as const };
+
+    const filtered = await searchPolicies({ query: "paid time off", category: other, topK: 6 }, ctx);
+    expect(filtered.structured.passages).toEqual([]);
+    const same = await searchPolicies({ query: "paid time off", category: doc.category, topK: 6 }, ctx);
+    expect(same.structured.passages.map((p) => p.docId)).toEqual([doc.docId]);
+    const any = await searchPolicies({ query: "paid time off", topK: 6 }, ctx);
+    expect(any.structured.passages.map((p) => p.docId)).toEqual([doc.docId]);
   });
 });
 
