@@ -60,7 +60,16 @@ This file is the hand-off log for whoever continues the build. SPEC.md (revision
 
 ## Status at the last commit
 
-Round 2 builder 2, 2026-10-09, in this checkout on this Mac (load average 15 to 30 from other builds), at `9fc4d13` (the last code commit; the eval commit after it adds only results and docs, and the three checks were rerun on it):
+Round 2 builder 3, 2026-10-09, at `050a784` (the docs commit; the commit after it changes only this file). No code has changed since `9fc4d13`.
+
+- In this checkout: `npm run typecheck` pass, `npm test` pass (487 tests in 65 files, 47 s), `npm run build` pass.
+- Fresh clone of `050a784` in the session scratch directory (no `.dev.vars`, no `.wrangler` state, `TZ=UTC`), the seven CI steps in order: `npm ci` pass (292 packages, 7 high severity advisories as listed under "Final verification gate"), `npm run typecheck` pass, `npm run generate` plus `git diff --exit-code -- data/generated evals/dataset` no diff, `npm test` pass (487 tests in 65 files, 54 s), `npm run build` pass, `npm run deploy:check` pass, `npx wrangler types --strict-vars false --check` up to date. The clone was deleted afterwards.
+- The same seven steps passed in a fresh clone of `dcb2924` at the start of the round, and in this checkout `deploy:check`, determinism and the types check (with `.dev.vars` moved aside) passed at `dcb2924`.
+- On AC power; 1-minute load average 4 to 8 when checked, from other builds.
+- Processes: this round started no dev server, preview server, llama-server or `wrangler dev`; the wrangler and workerd processes the checks start exited with them, and none from this repo was running at the end. `.dev.vars` is unchanged (`LLM_PROVIDER=stub`).
+- Published (read only): the owner's mirror loop published `050a784` at its 12:10 Pacific pass, and the published README's SHA note now reads correctly.
+
+Earlier, round 2 builder 2, 2026-10-09, in this checkout on this Mac (load average 15 to 30 from other builds), at `9fc4d13` (the last code commit; the eval commit after it adds only results and docs, and the three checks were rerun on it):
 
 - `npm run typecheck`: pass
 - `npm test`: pass, 487 tests in 65 files (about 3 minutes under load)
