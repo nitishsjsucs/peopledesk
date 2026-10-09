@@ -33,9 +33,13 @@ describe("CitationValidator", () => {
     expect(quoteFor(short, "It accrues at 1.75 days per month.")).toBe(short);
     const intro = "This policy explains who may ask for what, and when; it applies to every region. ".repeat(4);
     const long = `# Leave\n${intro}\n## Policy\n- Leave accrues at 1.75 days per month.\n- Carryover is capped at 12 days.\n## Contacts\nAsk HR.`;
+    // Whole lines from the fact on, ending before the next heading.
     expect(quoteFor(long, "Leave accrues at 1.75 days a month.")).toBe(
-      "- Leave accrues at 1.75 days per month.\n- Carryover is capped at 12 days.\n## Contacts\nAsk HR.",
+      "- Leave accrues at 1.75 days per month.\n- Carryover is capped at 12 days.",
     );
+    const fileLike = `---\nchange_summary: Accrual changed from 1.5 to 1.75 days.\n---\n${long}`;
+    expect(quoteFor(fileLike, "Leave accrues at 1.75 days per month.")).toMatch(/^- Leave accrues at 1\.75 days per month\.\n- Carryover/);
+    expect(quoteFor(fileLike, "It changed from 1.5 to 1.75 days.")).toBe("change_summary: Accrual changed from 1.5 to 1.75 days.");
     // Both stated numbers: the start that covers both wins over a later line that holds one.
     expect(quoteFor(long, "1.75 days a month, and at most 12 days carry over.")).toMatch(/^- Leave accrues at 1\.75/);
     // No stated number found in the passage: the first QUOTE_CHARS characters, as before.

@@ -15,6 +15,9 @@ export function labelPassages(passages: readonly Passage[]): LabeledPassage[] {
   return passages.map((p, i) => ({ ...p, label: `P${i + 1}` }));
 }
 
+/** A markdown heading or a front matter fence: a quote taken from inside a long passage ends before it. */
+const SECTION_BREAK = /^(?:#{1,6}\s|---\s*$)/;
+
 /** Lines of `text` (each keeps its line break); a line longer than a quote is split after sentence ends. */
 function segments(text: string): string[] {
   const out: string[] = [];
@@ -29,9 +32,9 @@ function segments(text: string): string[] {
  * The citation quote, at most QUOTE_CHARS characters of the passage. A passage that fits is quoted
  * whole (every D1 chunk does: the longest is 255 characters). A longer one, such as an AI Search chunk
  * that holds most of a policy file, is quoted from the line that states a number the answer gives:
- * whole lines from there, choosing the start whose quote covers the most of the answer's numbers, then
- * the line closest to the answer's wording, then the earliest. Without such a line, the first
- * QUOTE_CHARS characters. The quote is always a substring of the passage text.
+ * whole lines from there up to the next heading, choosing the start whose quote covers the most of the
+ * answer's numbers, then the line closest to the answer's wording, then the earliest. Without such a
+ * line, the first QUOTE_CHARS characters. The quote is always a substring of the passage text.
  */
 export function quoteFor(text: string, answer = ""): string {
   if (text.length <= QUOTE_CHARS) return text;
@@ -42,7 +45,10 @@ export function quoteFor(text: string, answer = ""): string {
     const start = segs[i] as string;
     if (!extractNumbers(start).some((n) => wanted.has(n))) continue;
     let quote = "";
-    for (let j = i; j < segs.length && quote.length + (segs[j] as string).length <= QUOTE_CHARS; j++) quote += segs[j];
+    for (let j = i; j < segs.length && quote.length + (segs[j] as string).length <= QUOTE_CHARS; j++) {
+      if (j > i && SECTION_BREAK.test(segs[j] as string)) break;
+      quote += segs[j];
+    }
     if (quote === "") quote = start.slice(0, QUOTE_CHARS);
     const found = numberSet(quote);
     const covered = [...wanted].filter((n) => found.has(n)).length;
