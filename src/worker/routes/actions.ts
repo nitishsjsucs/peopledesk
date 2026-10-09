@@ -31,6 +31,7 @@ const TOOL_TO_HTTP: Record<ToolErrorCode, [ContentfulStatusCode, ApiErrorCode]> 
   already_booked: [409, "conflict"],
   session_in_past: [409, "conflict"],
   retrieval_unavailable: [503, "internal"],
+  internal: [500, "internal"],
 };
 
 const notFound = () => new AppError(404, "not_found", "Action not found.");

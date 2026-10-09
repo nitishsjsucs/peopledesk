@@ -143,8 +143,12 @@ export async function runTurn(deps: TurnDeps, rawText: string): Promise<TurnResu
     ...r,
     trace: { ...trace, totalMs: Date.now() - started },
   });
-  const error = (code: TurnErrorCode, detail?: string) =>
-    finish({ kind: "error", text: ERROR_TEXT[code], error: { code, message: detail ?? ERROR_TEXT[code] } });
+  // The caller always gets the fixed text for the code; any detail (a provider or tool message) is
+  // logged here with the turn id and never returned or stored in the transcript.
+  const error = (code: TurnErrorCode, detail?: string) => {
+    if (detail) console.error(JSON.stringify({ msg: "turn_error", turnId: deps.turnId, code, detail }));
+    return finish({ kind: "error", text: ERROR_TEXT[code], error: { code, message: ERROR_TEXT[code] } });
+  };
 
   try {
     // 1. Guard: approval is a button, never a chat message.
@@ -294,6 +298,7 @@ async function toolTurn(
   }
 
   if (code === "retrieval_unavailable") return error("retrieval_unavailable");
+  if (code === "internal") return error("internal", errorText(result).slice(0, 300));
   if (code === "input_validation" || code === "validation_error") {
     const message = errorText(result);
     const fields = fieldsFromValidationText(message);

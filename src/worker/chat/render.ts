@@ -68,6 +68,7 @@ export function textForToolError(code: ToolErrorCode, tool: string): { kind: "re
       return { kind: "clarify", text: TEXT.genericClarify };
     case "conflict":
     case "retrieval_unavailable":
+    case "internal":
       return { kind: "refuse", text: "I couldn't complete that request. Please try again." };
   }
 }

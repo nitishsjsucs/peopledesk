@@ -90,6 +90,8 @@ export const TOOL_ERROR_CODES = [
   "session_in_past",
   // Not in the SPEC list: a retriever failure must surface as an error turn, never as a refusal.
   "retrieval_unavailable",
+  // Not in the SPEC list: an unexpected exception inside a tool, reported without its message.
+  "internal",
 ] as const;
 export type ToolErrorCode = (typeof TOOL_ERROR_CODES)[number];
 

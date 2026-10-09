@@ -50,7 +50,14 @@ function wrap<A, T extends Record<string, unknown>>(name: ToolName, impl: Impl<A
         ...(out.meta ? { _meta: out.meta } : {}),
       };
     } catch (err) {
-      if (!(err instanceof ToolError)) throw err;
+      if (!(err instanceof ToolError)) {
+        // An unexpected exception (a D1 error, a bug): log it here, and give the caller a generic
+        // internal error instead of the exception's own text.
+        console.error(
+          JSON.stringify({ msg: "tool_failed", tool: name, actorId, source: ctx.source, error: String((err as Error)?.stack ?? err) }),
+        );
+        return toolErrorResult("internal", "Internal error.");
+      }
       await ctx.services.audit.write({
         actorId,
         event: err.code === "forbidden" ? "authz_denied" : "tool_call",
