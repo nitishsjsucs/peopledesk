@@ -140,20 +140,24 @@ export const OVERALL_DEFINITION =
 
 export type GatewayLogSample = { cost?: number; tokensIn?: number; tokensOut?: number };
 
+/** The AI Gateway logs found for one turn, next to the number of model calls its trace records. */
+export type TurnLogs = { turnId: string; llmCalls: number; logs: GatewayLogSample[] };
+
 export type CostInputs = {
   llmCalls: number;
-  /** Logs fetched from AI Gateway (REST or binding), one per call found; null for local runs. */
-  logs: GatewayLogSample[] | null;
+  /** Logs fetched from AI Gateway (REST or binding), per turn; null for local runs. */
+  turnLogs: TurnLogs[] | null;
   traceTokens: { input: number; output: number };
   model: string;
   listPrice: (input: number, output: number) => number;
 };
 
 export function decideCost(i: CostInputs): Summary["cost"] {
-  const logs = i.logs ?? [];
+  const logs = (i.turnLogs ?? []).flatMap((t) => t.logs);
   const logsFetched = logs.length;
   const logsWithCost = logs.filter((l) => typeof l.cost === "number").length;
-  const allFetched = i.logs !== null && i.llmCalls > 0 && logsFetched >= i.llmCalls;
+  // Per turn, not in aggregate: extra logs in one turn must not hide a missing log in another.
+  const allFetched = i.turnLogs !== null && i.llmCalls > 0 && i.turnLogs.every((t) => t.logs.length >= t.llmCalls);
   if (allFetched && logsWithCost === logsFetched) {
     return {
       source: "ai-gateway",

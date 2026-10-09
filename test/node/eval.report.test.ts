@@ -12,7 +12,7 @@ import {
   replaceResultsBlock,
   SummarySchema,
 } from "../../evals/lib/report.ts";
-import type { CaseResult, Summary } from "../../evals/lib/report.ts";
+import type { CaseResult, GatewayLogSample, Summary } from "../../evals/lib/report.ts";
 import { percentile, wilson } from "../../evals/lib/stats.ts";
 import { collectGatewayLogs } from "../../evals/lib/gateway.ts";
 
@@ -41,9 +41,10 @@ const listPrice = (i: number, o: number) => (i * 0.293 + o * 2.253) / 1e6;
 
 describe("cost source decision", () => {
   const base = { llmCalls: 2, traceTokens: { input: 1000, output: 100 }, model: "m", listPrice };
+  const oneTurn = (logs: GatewayLogSample[]) => [{ turnId: "t1", llmCalls: 2, logs }];
 
   it("uses AI Gateway's estimate only when every call has a log with a numeric cost", () => {
-    const d = decideCost({ ...base, logs: [{ cost: 0.001 }, { cost: 0.002 }] });
+    const d = decideCost({ ...base, turnLogs: oneTurn([{ cost: 0.001 }, { cost: 0.002 }]) });
     expect(d.source).toBe("ai-gateway");
     expect(d.usd).toBeCloseTo(0.003);
     expect(d.note).toMatch(/AI Gateway's cost estimate/);
@@ -51,16 +52,29 @@ describe("cost source decision", () => {
   });
 
   it("falls back to gateway tokens times list price when a log lacks cost", () => {
-    const d = decideCost({ ...base, logs: [{ cost: 0.001, tokensIn: 500, tokensOut: 50 }, { tokensIn: 500, tokensOut: 50 }] });
+    const d = decideCost({ ...base, turnLogs: oneTurn([{ cost: 0.001, tokensIn: 500, tokensOut: 50 }, { tokensIn: 500, tokensOut: 50 }]) });
     expect(d).toMatchObject({ source: "gateway-tokens-x-list-price", logsFetched: 2, logsWithCost: 1 });
     expect(d.usd).toBeCloseTo(listPrice(1000, 100));
   });
 
   it("falls back to trace tokens when logs are missing, and for local runs", () => {
-    expect(decideCost({ ...base, logs: [{ cost: 0.001 }] }).source).toBe("trace-tokens-x-list-price");
-    const local = decideCost({ ...base, logs: null });
+    expect(decideCost({ ...base, turnLogs: oneTurn([{ cost: 0.001 }]) }).source).toBe("trace-tokens-x-list-price");
+    const local = decideCost({ ...base, turnLogs: null });
     expect(local).toMatchObject({ source: "trace-tokens-x-list-price", logsFetched: 0 });
     expect(local.note).toMatch(/Not a cost incurred/);
+  });
+
+  it("requires every turn's own calls to have logs: extra logs in one turn cannot hide a missing one in another", () => {
+    const d = decideCost({
+      ...base,
+      llmCalls: 4,
+      turnLogs: [
+        { turnId: "t1", llmCalls: 2, logs: [{ cost: 0.001 }, { cost: 0.001 }, { cost: 0.001 }] },
+        { turnId: "t2", llmCalls: 2, logs: [{ cost: 0.001 }] },
+      ],
+    });
+    expect(d.source).toBe("trace-tokens-x-list-price");
+    expect(d.logsFetched).toBe(4);
   });
 });
 
@@ -125,7 +139,7 @@ function summary(over: Partial<Summary> = {}): Summary {
     concurrency: 1,
     results,
     writesWithoutApproval: 0,
-    cost: decideCost({ llmCalls: 0, logs: null, traceTokens: { input: 0, output: 0 }, model: "m", listPrice }),
+    cost: decideCost({ llmCalls: 0, turnLogs: null, traceTokens: { input: 0, output: 0 }, model: "m", listPrice }),
   });
   return { ...s, ...over };
 }
@@ -182,7 +196,10 @@ describe("gateway log collection", () => {
       },
       { deadlineMs: 0, sleep: async () => undefined },
     );
-    expect(logs).toEqual([{ cost: 1 }, { cost: 2 }, { tokensIn: 5 }]);
+    expect(logs).toEqual([
+      { turnId: "t1", llmCalls: 2, logs: [{ cost: 1 }, { cost: 2 }] },
+      { turnId: "t2", llmCalls: 2, logs: [{ tokensIn: 5 }] },
+    ]);
     expect(await collectGatewayLogs(turns, {}, { deadlineMs: 0 })).toBeNull();
   });
 });

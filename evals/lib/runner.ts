@@ -8,7 +8,7 @@ import { HealthSchema, TurnResultSchema } from "../../src/shared/api-types.ts";
 import type { Health, TurnResult } from "../../src/shared/api-types.ts";
 import type { PersonaKey } from "../../src/shared/domain.ts";
 import type { EvalCase } from "../../src/shared/synth/eval-cases.ts";
-import type { CaseResult, GatewayLogSample, Summary } from "./report.ts";
+import type { CaseResult, Summary, TurnLogs } from "./report.ts";
 import { abortReason, buildSummary, decideCost } from "./report.ts";
 import { scoreCase } from "./scorer.ts";
 
@@ -39,7 +39,7 @@ export type RunOptions = {
   listPrice: (input: number, output: number) => number;
   listPriceModel: string;
   /** Production only: fetch AI Gateway logs for the run's turns after it finishes. */
-  gatewayLogs?: (turns: Array<{ conversationId: string; turnId: string; persona: PersonaKey; llmCalls: number }>) => Promise<GatewayLogSample[] | null>;
+  gatewayLogs?: (turns: Array<{ conversationId: string; turnId: string; persona: PersonaKey; llmCalls: number }>) => Promise<TurnLogs[] | null>;
   onProgress?: (done: number, total: number, last: CaseResult) => void;
   now?: () => Date;
 };
@@ -227,7 +227,7 @@ export async function runEval(o: RunOptions): Promise<{ summary: Summary; result
 
   // --- Cost (AI Gateway logs only in production with --gateway-report).
   const llmCalls = results.reduce((n, r) => n + (r.trace?.llmCalls ?? 0), 0);
-  const logs = o.gatewayLogs
+  const turnLogs = o.gatewayLogs
     ? await o.gatewayLogs(
         results
           .filter((r) => r.turnId && r.conversationId)
@@ -241,7 +241,7 @@ export async function runEval(o: RunOptions): Promise<{ summary: Summary; result
     : null;
   const cost = decideCost({
     llmCalls,
-    logs,
+    turnLogs,
     traceTokens: {
       input: results.reduce((n, r) => n + (r.trace?.inputTokens ?? 0), 0),
       output: results.reduce((n, r) => n + (r.trace?.outputTokens ?? 0), 0),

@@ -4,7 +4,7 @@
 //      on metadata.turnId and metadata.purpose (token permission: AI Gateway Read);
 //   2. the Worker's binding route GET /api/conversations/:id/turns/:turnId/gateway-logs.
 // Logs can lag, so the caller retries for up to 5 minutes after the run.
-import type { GatewayLogSample } from "./report.ts";
+import type { GatewayLogSample, TurnLogs } from "./report.ts";
 
 export type FetchFn = (input: string, init?: RequestInit) => Promise<Response>;
 
@@ -53,7 +53,7 @@ export function bindingRouteReader(opts: { baseUrl: string; fetch: FetchFn; head
 
 /**
  * Tries REST first, then the binding route, retrying until every turn has as many logs as it made
- * model calls, or until the deadline. Returns null when nothing could be read at all.
+ * model calls, or until the deadline. Returns the logs per turn, or null when nothing could be read.
  */
 export async function collectGatewayLogs(
   turns: Array<{ conversationId: string; turnId: string; persona: string; llmCalls: number }>,
@@ -62,7 +62,7 @@ export async function collectGatewayLogs(
     binding?: (turn: { conversationId: string; turnId: string; persona: string }) => Promise<GatewayLogSample[]>;
   },
   opts: { deadlineMs?: number; intervalMs?: number; sleep?: (ms: number) => Promise<void> } = {},
-): Promise<GatewayLogSample[] | null> {
+): Promise<TurnLogs[] | null> {
   const deadline = Date.now() + (opts.deadlineMs ?? 5 * 60_000);
   const sleep = opts.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
   const found = new Map<string, GatewayLogSample[]>();
@@ -95,5 +95,5 @@ export async function collectGatewayLogs(
     await sleep(opts.intervalMs ?? 15_000);
   }
   if (!anyReader) return null;
-  return [...found.values()].flat();
+  return turns.map((t) => ({ turnId: t.turnId, llmCalls: t.llmCalls, logs: found.get(t.turnId) ?? [] }));
 }
