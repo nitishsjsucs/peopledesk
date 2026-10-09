@@ -381,7 +381,7 @@ export function renderReadmeResults(s: Summary): string {
   if (s.aborted) throw new ReadmeRefusal(`refusing to publish an aborted run (${s.aborted.reason})`);
   if (s.cases.run !== s.cases.total) throw new ReadmeRefusal(`refusing to publish a partial run (${s.cases.run} of ${s.cases.total} cases)`);
   return [
-    `Run \`${s.runId}\`, finished ${s.finishedAt.slice(0, 10)}, produced by \`${s.command}\`.`,
+    `Run \`${s.runId}\`, finished ${s.finishedAt.slice(0, 10)} (UTC), produced by \`${s.command}\`.`,
     `Server: provider \`${s.server.llmProvider}\`, model \`${s.server.model}\`, retriever \`${s.server.retriever}\`, auth ${s.server.authMode}, business date ${s.server.asOf}, git \`${s.server.gitSha.slice(0, 12)}\`.`,
     "",
     ...metricsTable(s),

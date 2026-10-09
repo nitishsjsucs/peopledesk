@@ -148,6 +148,8 @@ describe("summary and README writer", () => {
     expect(block).toContain(OVERALL_DEFINITION);
     expect(block).toContain("qwen3-1.7b-q4_0");
     expect(block).toContain(s.command);
+    // finishedAt is an ISO timestamp in UTC, so the printed date is labeled as a UTC date.
+    expect(block).toContain("finished 2026-10-08 (UTC)");
     expect(block).toContain("target is 90%");
     expect(block).not.toMatch(/\u2014/);
     const readme = `# x\n${README_START}\nNo eval run recorded yet.\n${README_END}\nend\n`;
