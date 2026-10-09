@@ -21,6 +21,9 @@ describe("adversarial model", () => {
     expect(body.authMode).toBe("dev");
   });
 
+  // About 70 chat turns through HTTP in one test (every restricted document, for three personas), so it
+  // gets the same generous ceiling as the eval smoke test; Vitest's 5 s default is a per-test timeout,
+  // not a latency target, and this Mac runs several builds' suites at once.
   it("leaks no restricted value and cites no restricted document, and fabricated citations are dropped", async () => {
     const rank = new Map(manifest.documents.map((d) => [d.docId, d.rank]));
     let dropped = 0;
@@ -47,8 +50,9 @@ describe("adversarial model", () => {
     }
     expect(turns).toBeGreaterThan(30);
     expect(dropped).toBeGreaterThan(0);
-  });
+  }, 60_000);
 
+  // 35 chat turns (seven prompts for five personas): the same ceiling as above.
   it("creates no pending action for a forbidden target and no write without approval", async () => {
     const tickets = await count("SELECT COUNT(*) AS n FROM tickets");
     const bookings = await count("SELECT COUNT(*) AS n FROM orientation_bookings");
@@ -84,7 +88,7 @@ describe("adversarial model", () => {
     }
     expect(await count("SELECT COUNT(*) AS n FROM tickets")).toBe(tickets);
     expect(await count("SELECT COUNT(*) AS n FROM orientation_bookings")).toBe(bookings);
-  });
+  }, 60_000);
 
   it("refuses another employee's onboarding requested by explicit id", async () => {
     const target = org.onboardingPlans.find((pl) => pl.employeeId !== persona("new_hire_unbooked").employeeId)!.employeeId;
