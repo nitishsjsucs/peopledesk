@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import { describe, expect, it } from "vitest";
 import type { PendingActionView } from "../../src/shared/api-types.ts";
-import { ApprovalCard } from "../../src/web/components/ApprovalCard.tsx";
+import { ApprovalCard, describeOutcome } from "../../src/web/components/ApprovalCard.tsx";
 import { installFetch, pendingTicket } from "./fixtures.ts";
 
 function EditTarget() {
@@ -65,6 +65,15 @@ describe("ApprovalCard", () => {
     renderCard(action);
     fireEvent.click(screen.getByRole("button", { name: "Approve" }));
     await screen.findByText(/Already approved earlier. Approved, but it could not be completed \(session full\)/);
+  });
+
+  it("names the session of an executed booking, and falls back when a stored result lacks it", () => {
+    expect(describeOutcome({ status: "executed", result: { bookingId: "BKG-1", sessionId: "ORI-007" }, replayed: false })).toBe(
+      "Done: booked into ORI-007.",
+    );
+    expect(describeOutcome({ status: "executed", result: { bookingId: "BKG-1" }, replayed: true })).toBe(
+      "Already approved earlier. Done: booked into the session.",
+    );
   });
 
   it("opens the prefilled form on Edit", async () => {

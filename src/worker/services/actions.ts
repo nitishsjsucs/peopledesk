@@ -525,12 +525,23 @@ export class ActionService {
    * is resolved from the write tables, with a matching audit row marked reconciled.
    */
   private async reconcile(row: ActionRow): Promise<ActionRow> {
-    const table = row.tool === "create_support_ticket" ? "tickets" : "orientation_bookings";
-    const written = await this.db.prepare(`SELECT id FROM ${table} WHERE action_id = ?1`).bind(row.id).first<{ id: string }>();
+    // The result has the same shape the approval batch writes: { ticketId } or { bookingId, sessionId }.
+    const written =
+      row.tool === "create_support_ticket"
+        ? await this.db
+            .prepare("SELECT id, NULL AS session_id FROM tickets WHERE action_id = ?1")
+            .bind(row.id)
+            .first<{ id: string; session_id: null }>()
+        : await this.db
+            .prepare("SELECT id, session_id FROM orientation_bookings WHERE action_id = ?1")
+            .bind(row.id)
+            .first<{ id: string; session_id: string }>();
     const now = this.d.clock.nowIso();
     const status = written ? "executed" : "failed";
     const resultJson = written
-      ? JSON.stringify(row.tool === "create_support_ticket" ? { ticketId: written.id } : { bookingId: written.id })
+      ? JSON.stringify(
+          row.tool === "create_support_ticket" ? { ticketId: written.id } : { bookingId: written.id, sessionId: written.session_id },
+        )
       : null;
     const res = await this.db
       .prepare(

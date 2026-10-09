@@ -17,7 +17,7 @@ export function describeOutcome(outcome: ApproveResponse): string {
   if (outcome.status === "executed") {
     const r = outcome.result;
     if (typeof r["ticketId"] === "string") return `${prefix}Done: ticket ${r["ticketId"]} was created.`;
-    if (typeof r["bookingId"] === "string") return `${prefix}Done: booked into ${String(r["sessionId"])}.`;
+    if (typeof r["bookingId"] === "string") return `${prefix}Done: booked into ${String(r["sessionId"] ?? "the session")}.`;
     return `${prefix}Done.`;
   }
   return `${prefix}Approved, but it could not be completed (${outcome.errorCode.replace(/_/g, " ")}).`;
