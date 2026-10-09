@@ -16,7 +16,7 @@ import {
 } from "../../evals/lib/report.ts";
 import type { CaseResult, GatewayLogSample, Summary } from "../../evals/lib/report.ts";
 import { percentile, wilson } from "../../evals/lib/stats.ts";
-import { collectGatewayLogs } from "../../evals/lib/gateway.ts";
+import { bindingRouteReader, collectGatewayLogs, restReader } from "../../evals/lib/gateway.ts";
 import { runEval } from "../../evals/lib/runner.ts";
 import type { DatasetMeta } from "../../evals/lib/runner.ts";
 import { PERSONA_KEYS } from "../../src/shared/domain.ts";
@@ -304,5 +304,48 @@ describe("gateway log collection", () => {
       { turnId: "t2", llmCalls: 2, logs: [{ tokensIn: 5 }] },
     ]);
     expect(await collectGatewayLogs(turns, {}, { deadlineMs: 0 })).toBeNull();
+  });
+
+  it("reads the REST Logs API: search by turn id, then keep only logs whose metadata names the turn", async () => {
+    const seen: Array<{ url: string; auth: string | null }> = [];
+    const read = restReader({
+      accountId: "acc123",
+      gatewayId: "peopledesk",
+      apiToken: "tok",
+      fetch: async (input, init) => {
+        seen.push({ url: input, auth: new Headers(init?.headers).get("Authorization") });
+        return new Response(
+          JSON.stringify({
+            result: [
+              { id: "a", metadata: JSON.stringify({ turnId: "t1", purpose: "router" }), cost: 0.001, tokens_in: 900, tokens_out: 60 },
+              { id: "b", metadata: { turnId: "t1", purpose: "composer" }, tokens_in: 1200 },
+              { id: "c", metadata: { turnId: "t10", purpose: "router" }, cost: 5 },
+              { id: "d", metadata: "not json", cost: 7 },
+            ],
+          }),
+        );
+      },
+    });
+    expect(await read("t1")).toEqual([{ cost: 0.001, tokensIn: 900, tokensOut: 60 }, { tokensIn: 1200 }]);
+    const u = new URL(seen[0]!.url);
+    expect(u.origin + u.pathname).toBe("https://api.cloudflare.com/client/v4/accounts/acc123/ai-gateway/gateways/peopledesk/logs");
+    expect(u.searchParams.get("search")).toBe("t1");
+    expect(seen[0]!.auth).toBe("Bearer tok");
+
+    const failing = restReader({ accountId: "a", gatewayId: "g", apiToken: "t", fetch: async () => new Response("{}", { status: 403 }) });
+    await expect(failing("t1")).rejects.toThrow(/answered 403/);
+  });
+
+  it("reads the binding route with the persona's headers", async () => {
+    const read = bindingRouteReader({
+      baseUrl: "https://peopledesk.example/ignored/path",
+      headersFor: (t) => ({ "CF-Access-Client-Id": `${t.persona}-id` }),
+      fetch: async (input, init) => {
+        expect(input).toBe("https://peopledesk.example/api/conversations/c1/turns/t1/gateway-logs");
+        expect(new Headers(init?.headers).get("CF-Access-Client-Id")).toBe("hr_admin-id");
+        return new Response(JSON.stringify({ logs: [{ cost: 0.002, tokensIn: 10 }], missing: [] }));
+      },
+    });
+    expect(await read({ conversationId: "c1", turnId: "t1", persona: "hr_admin" })).toEqual([{ cost: 0.002, tokensIn: 10 }]);
   });
 });
