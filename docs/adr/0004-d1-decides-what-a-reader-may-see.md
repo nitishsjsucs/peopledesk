@@ -8,7 +8,7 @@ There are two retrievers: AI Search over R2 in production and SQLite FTS5 locall
 
 ## Decision
 
-Retriever filters are an optimization, not the guarantee. `PermissionGate` (`src/worker/policies/permission-gate.ts`) loads the distinct document versions of the returned passages from D1 in one query and drops every passage above the caller's clearance or not effective at the business date, reporting both counts in the turn trace. AI Search requests send `return_on_failure: false`, so a retrieval failure throws and the turn returns an error (`retrieval_unavailable`), never a refusal. "Not found" and "not permitted" produce the same refusal text, and the document API answers 404 for documents above the caller's clearance.
+Retriever filters are an optimization, not the guarantee. `PermissionGate` (`src/worker/policies/permission-gate.ts`) loads the distinct document versions of the returned passages from D1 in one query and drops every passage above the caller's clearance or not effective at the business date. It reports the not-effective count in the turn trace; the clearance count is logged server-side only (`retrieval_filter_leak`), so it never reaches the caller (PROGRESS.md, deviation 31). AI Search requests send `return_on_failure: false`, so a retrieval failure throws and the turn returns an error (`retrieval_unavailable`), never a refusal. "Not found" and "not permitted" produce the same refusal text, and the document API answers 404 for documents above the caller's clearance.
 
 ## Consequences
 

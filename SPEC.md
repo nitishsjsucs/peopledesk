@@ -2,6 +2,8 @@
 
 Historical design spec (revision 2, written before the build). Current status is in README.md and PROGRESS.md, and deviations from this spec are listed in PROGRESS.md; the scratchpad probes cited in the review log are not part of this repository.
 
+The resume text in section 0 is the target, not a description of what has run: Workers AI, AI Search, AI Gateway and Cloudflare Access have not run yet. Do not use it until the deploy steps in section 18 and a production eval have run; PROGRESS.md ("Resume claims") has interim wording that is true today.
+
 Status: design spec, revision 2 (2026-10-08). Revision 2 resolves the review findings listed in section 24 (Review log). Nothing in this repository exists yet except this file.
 Repo: `~/Developer/projects/peopledesk`, to be pushed as `github.com/nitishsjsucs/peopledesk`.
 Author of record: Nitish Chowdary (MS SE, SJSU). Built from scratch; no code from any earlier implementation is reused.
