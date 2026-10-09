@@ -215,7 +215,9 @@ export async function runEval(o: RunOptions): Promise<{ summary: Summary; result
       const r = await runOne(c);
       results.push(r);
       o.onProgress?.(results.length, o.cases.length, r);
-      aborted = abortReason(results);
+      // Sticky: once a rule fires, a case still in flight on another worker is recorded but cannot
+      // clear the decision (more successes would dilute the error rate below the threshold).
+      aborted = aborted ?? abortReason(results);
     }
   });
   await Promise.all(workers);

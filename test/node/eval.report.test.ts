@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   abortReason,
@@ -15,6 +17,12 @@ import {
 import type { CaseResult, GatewayLogSample, Summary } from "../../evals/lib/report.ts";
 import { percentile, wilson } from "../../evals/lib/stats.ts";
 import { collectGatewayLogs } from "../../evals/lib/gateway.ts";
+import { runEval } from "../../evals/lib/runner.ts";
+import type { DatasetMeta } from "../../evals/lib/runner.ts";
+import { PERSONA_KEYS } from "../../src/shared/domain.ts";
+import type { EvalCase } from "../../src/shared/synth/eval-cases.ts";
+
+const repo = resolve(import.meta.dirname, "../..");
 
 describe("stats", () => {
   it("computes Wilson 95% intervals", () => {
@@ -109,6 +117,96 @@ describe("abort rules", () => {
     );
     expect(abortReason(zero)).toMatch(/retrieved zero passages/);
     expect(abortReason(zero.slice(0, 5))).toBeNull();
+  });
+
+  it("stops a concurrency 2 run when the rule fires, although the other worker's case completes afterwards", async () => {
+    const meta = JSON.parse(readFileSync(join(repo, "evals/dataset/asof-2026-10-01/meta.json"), "utf8")) as DatasetMeta;
+    const template = readFileSync(join(repo, "evals/dataset/asof-2026-10-01/cases.jsonl"), "utf8")
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l) as EvalCase)
+      .find((c) => c.category === "action_request" && c.expected.type === "tool" && c.expected.tool === "list_orientation_sessions");
+    expect(template).toBeDefined();
+    const cases = Array.from({ length: 100 }, (_, i) => ({ ...(template as EvalCase), id: `x-${String(i + 1).padStart(3, "0")}` }));
+    const personas = PERSONA_KEYS.map((key, i) => ({ key, employeeId: `E${String(9000 + i)}`, email: `${key}@example.test` }));
+
+    // Every /messages request waits until the driver below answers it, so the completion order is exact.
+    const inFlight: Array<(res: Response) => void> = [];
+    const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+    const fakeFetch = async (input: string): Promise<Response> => {
+      const path = new URL(input).pathname;
+      if (path === "/dev/personas") return json({ personas });
+      if (path === "/dev/token") return json({ token: "t", expiresAt: "2026-10-01T01:00:00Z" });
+      if (path === "/api/health") {
+        return json({ ok: true, authMode: "dev", llmProvider: "stub", model: "fake", retriever: "d1-fts", asOf: meta.asOf, version: "1", datasetSha256: meta.datasetSha256 });
+      }
+      if (path === "/api/tickets") return json({ tickets: [] });
+      if (path === "/api/orientation-sessions") return json({ sessions: [] });
+      if (path === "/api/conversations") return json({ id: crypto.randomUUID() }, 201);
+      if (path.endsWith("/messages")) return new Promise<Response>((resolve) => inFlight.push(resolve));
+      return json({}, 404);
+    };
+    const okTurn = () =>
+      json({
+        turnId: crypto.randomUUID(),
+        conversationId: "c",
+        kind: "tool_result",
+        text: "Sessions listed.",
+        citations: [],
+        toolCall: { tool: "list_orientation_sessions", arguments: {}, status: "ok" },
+        toolResult: { sessions: [] },
+        trace: {
+          asOf: meta.asOf,
+          llmProvider: "stub",
+          model: "fake",
+          totalMs: 1,
+          router: { intent: "tool_call", ms: 1, inputTokens: 1, outputTokens: 1, retries: 0 },
+          gatewayLogIdHints: [],
+        },
+      });
+
+    let done = 0;
+    let finished = false;
+    const run = runEval({
+      fetch: fakeFetch,
+      baseUrl: "http://localhost:8782",
+      runId: "abort-test",
+      command: "test",
+      gitSha: "0000000",
+      cases,
+      dataset: meta,
+      auth: { kind: "dev" },
+      concurrency: 2,
+      listPrice: () => 0,
+      listPriceModel: "m",
+      onProgress: (n) => {
+        done = n;
+      },
+    }).finally(() => {
+      finished = true;
+    });
+    const until = async (cond: () => boolean) => {
+      for (let i = 0; i < 20_000 && !cond(); i++) await new Promise((r) => setImmediate(r));
+      if (!cond()) throw new Error("the runner stalled");
+    };
+
+    // The 1st, 2nd and 59th completed cases fail: 3 errors in 59 cases is 5.08%, over the 5% limit,
+    // while the other worker still has a case in flight. Counted at 60 cases, 3 errors is exactly 5%.
+    let completed = 0;
+    for (;;) {
+      await until(() => finished || inFlight.length >= (completed < 59 ? 2 : 1));
+      if (finished) break;
+      const respond = inFlight.shift() as (res: Response) => void;
+      const n = completed + 1;
+      respond(n === 1 || n === 2 || n === 59 ? json({ error: { code: "internal", message: "x", requestId: "r" } }, 500) : okTurn());
+      await until(() => done >= n);
+      completed = n;
+    }
+    const { summary: s, results } = await run;
+    expect(results.filter((r) => r.infrastructureError)).toHaveLength(3);
+    expect(s.aborted?.reason).toMatch(/error rate 5.1% exceeds 5% after 59 cases/);
+    expect(s.cases.run).toBe(60);
+    expect(s.cases.total).toBe(100);
   });
 });
 
