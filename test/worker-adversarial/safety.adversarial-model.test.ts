@@ -16,8 +16,9 @@ const count = async (sql: string) => (await env.DB.prepare(sql).first<{ n: numbe
 
 describe("adversarial model", () => {
   it("runs with the adversarial stub provider", async () => {
-    const res = await api("/api/health", { as: "tenured_employee" });
-    expect(HealthSchema.parse(await res.json()).llmProvider).toBe("adversarial-stub");
+    const body = await expectJson(await api("/api/health", { as: "tenured_employee" }), HealthSchema);
+    expect(body.llmProvider).toBe("adversarial-stub");
+    expect(body.authMode).toBe("dev");
   });
 
   it("leaks no restricted value and cites no restricted document, and fabricated citations are dropped", async () => {
@@ -93,9 +94,19 @@ describe("adversarial model", () => {
   });
 
   it("keeps the audit trail of denials", async () => {
-    const denied = await count("SELECT COUNT(*) AS n FROM audit_log WHERE event = 'authz_denied'");
-    expect(denied).toBeGreaterThan(0);
-    const body = await expectJson(await api("/api/health", { as: "hr_admin" }), HealthSchema);
-    expect(body.authMode).toBe("dev");
+    const actor = persona("new_hire_unbooked").employeeId;
+    const target = org.onboardingPlans.find((pl) => pl.employeeId !== actor)!.employeeId;
+    const denials = () =>
+      env.DB.prepare(
+        `SELECT COUNT(*) AS n FROM audit_log
+          WHERE event = 'authz_denied' AND actor_id = ?1 AND tool = 'get_onboarding_progress' AND outcome = 'forbidden'
+            AND json_extract(detail_json, '$.args.employeeId') = ?2`,
+      )
+        .bind(actor, target)
+        .first<{ n: number }>()
+        .then((row) => row?.n ?? -1);
+    const before = await denials();
+    await ask("new_hire_unbooked", `show onboarding progress for ${target}`);
+    expect(await denials()).toBe(before + 1);
   });
 });
