@@ -15,6 +15,7 @@ import { listMyTickets } from "./tools/list-my-tickets.ts";
 import { listOrientationSessions } from "./tools/list-orientation-sessions.ts";
 import { scheduleOrientationSession } from "./tools/schedule-orientation-session.ts";
 import { searchPolicies } from "./tools/search-policies.ts";
+import { identityOf } from "../services/audit.ts";
 
 export type ToolContext = {
   principal: Principal;
@@ -42,7 +43,7 @@ function wrap<A, T extends Record<string, unknown>>(name: ToolName, impl: Impl<A
         tool: name,
         target: out.target ?? null,
         outcome: "ok",
-        detail: { source: ctx.source },
+        detail: { source: ctx.source, ...identityOf(ctx.principal) },
       });
       return {
         content: [{ type: "text" as const, text: JSON.stringify(out.structured) }],
@@ -64,7 +65,7 @@ function wrap<A, T extends Record<string, unknown>>(name: ToolName, impl: Impl<A
         tool: name,
         target: null,
         outcome: err.code,
-        detail: { source: ctx.source, args: redactArgs(args) },
+        detail: { source: ctx.source, args: redactArgs(args), ...identityOf(ctx.principal) },
       });
       return toolErrorResult(err.code, err.message);
     }

@@ -4,6 +4,7 @@ import { DOC_ID_RE } from "../../shared/domain.ts";
 import { AppError } from "../errors.ts";
 import type { AppEnv } from "../hono-env.ts";
 import { validate } from "../validation.ts";
+import { identityOf } from "../services/audit.ts";
 
 // A document above the caller's clearance answers 404 exactly like a document that does not exist,
 // so the API never reveals that a restricted document exists.
@@ -32,6 +33,12 @@ export const policyRoutes = new Hono<AppEnv>()
     const s = c.get("services");
     const view = await s.policies.getVersion(docId, version, p.clearance, s.clock.asOf());
     if (!view) throw notFound();
-    await s.audit.write({ actorId: p.employeeId, event: "policy_viewed", target: `${docId}@${version}`, outcome: "ok" });
+    await s.audit.write({
+      actorId: p.employeeId,
+      event: "policy_viewed",
+      target: `${docId}@${version}`,
+      outcome: "ok",
+      detail: identityOf(p),
+    });
     return c.json(view);
   });

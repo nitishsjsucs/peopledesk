@@ -4,11 +4,11 @@ import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { ActionListSchema, PendingActionViewSchema } from "../../src/shared/api-types.ts";
 import { approve, approveJson, proposeBooking, proposeTicket, reject, scalar, ticketArgs } from "../helpers/actions.ts";
-import { booked, org, persona, planned, reportsOf, spareEmployees } from "../helpers/fixtures.ts";
+import { booked, manifest, org, persona, planned, reportsOf, spareEmployees } from "../helpers/fixtures.ts";
 import { api, expectError, expectJson } from "../helpers/http.ts";
 import { call, mcpClient } from "../helpers/mcp.ts";
 
-const spares = spareEmployees(14, (e) => !planned.has(e.id));
+const spares = spareEmployees(15, (e) => !planned.has(e.id));
 const spare = (i: number) => spares[i]!.email;
 const unbookedHires = org.onboardingPlans
   .map((p) => p.employeeId)
@@ -240,5 +240,48 @@ describe("listing", () => {
     const theirs = await expectJson(await api("/api/actions", { as: spare(11) }), ActionListSchema);
     expect(theirs.actions.some((a) => a.actionId === t.actionId)).toBe(false);
     PendingActionViewSchema.parse(mine.actions[0]);
+  });
+});
+
+describe("audit identity", () => {
+  it("records which verified identity acted when a second identity is linked to the employee", async () => {
+    const who = spares[14]!;
+    const linked = "Linked.Person@Example.test";
+    await env.DB.prepare("INSERT INTO identity_links (identity, kind, employee_id, created_at) VALUES (?1, 'email', ?2, ?3)")
+      .bind(linked.toLowerCase(), who.id, "2026-10-01T00:00:00.000Z")
+      .run();
+    const asLinked = { identityKind: "user", identity: linked.toLowerCase() };
+    const detailOf = async (event: string, target: string | null) => {
+      const row = await env.DB.prepare(
+        "SELECT actor_id, detail_json FROM audit_log WHERE event = ?1 AND (?2 IS NULL OR target = ?2) AND actor_id = ?3 ORDER BY id DESC LIMIT 1",
+      )
+        .bind(event, target, who.id)
+        .first<{ actor_id: string; detail_json: string }>();
+      expect(row, `${event} ${target}`).not.toBeNull();
+      return JSON.parse(row!.detail_json) as Record<string, unknown>;
+    };
+
+    const t = await proposeTicket(linked);
+    expect(await detailOf("action_proposed", t.actionId)).toMatchObject({ source: "form", ...asLinked });
+    await approveJson(linked, t.actionId);
+    expect(await detailOf("action_executed", t.actionId)).toMatchObject(asLinked);
+
+    // The employee's own email is a different identity for the same actor_id.
+    const own = await proposeTicket(who.email, ticketArgs(14));
+    expect(await detailOf("action_proposed", own.actionId)).toMatchObject({ identityKind: "user", identity: who.email.toLowerCase() });
+    await reject(linked, own.actionId);
+    expect(await detailOf("action_rejected", own.actionId)).toMatchObject(asLinked);
+
+    const r = await call(await mcpClient(linked), "list_my_tickets", {});
+    expect(r.isError).toBeFalsy();
+    expect(await detailOf("tool_call", null)).toMatchObject({ source: "mcp", ...asLinked });
+
+    const doc = manifest.documents.find((d) => d.rank === 1)!;
+    expect((await api(`/api/policies/${doc.docId}/versions/1`, { as: linked })).status).toBe(200);
+    expect(await detailOf("policy_viewed", `${doc.docId}@1`)).toMatchObject(asLinked);
+
+    const stranger = persona("tenured_employee").employeeId;
+    expect((await api(`/api/onboarding/${stranger}`, { as: linked })).status).toBe(404);
+    expect(await detailOf("authz_denied", stranger)).toMatchObject(asLinked);
   });
 });

@@ -19,6 +19,7 @@ import type { Principal } from "../auth/principal.ts";
 import type { Services } from "../container.ts";
 import { agentFor } from "./conversations.ts";
 import { validate } from "../validation.ts";
+import { identityOf } from "../services/audit.ts";
 
 const TOOL_TO_HTTP: Record<ToolErrorCode, [ContentfulStatusCode, ApiErrorCode]> = {
   validation_error: [400, "validation_error"],
@@ -54,7 +55,7 @@ export const actionRoutes = new Hono<AppEnv>()
         event: err.code === "forbidden" ? "authz_denied" : "tool_call",
         tool: body.tool,
         outcome: err.code,
-        detail: { source: "form" },
+        detail: { source: "form", ...identityOf(p) },
       });
       const [status, code] = TOOL_TO_HTTP[err.code];
       throw new AppError(status, code, err.message, { reason: err.code });

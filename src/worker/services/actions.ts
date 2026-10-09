@@ -29,6 +29,7 @@ import { can, clearanceOf } from "../authz/policy.ts";
 import type { Clock } from "../clock.ts";
 import { AppError } from "../errors.ts";
 import { ToolError } from "../mcp/errors.ts";
+import { identityOf } from "./audit.ts";
 import type { AuditService } from "./audit.ts";
 import type { EmployeeService } from "./employees.ts";
 import type { OnboardingService } from "./onboarding.ts";
@@ -180,7 +181,7 @@ export class ActionService {
           `INSERT INTO audit_log (at, actor_id, event, tool, target, outcome, detail_json)
            SELECT ?1, ?2, 'action_proposed', ?3, ?4, 'ok', ?5 WHERE EXISTS (SELECT 1 FROM pending_actions WHERE id = ?4)`,
         )
-        .bind(now, principal.employeeId, tool, id, JSON.stringify({ source, subject: subjectEmployeeId, supersedes: opts.supersedes ?? null })),
+        .bind(now, principal.employeeId, tool, id, JSON.stringify({ source, subject: subjectEmployeeId, supersedes: opts.supersedes ?? null, ...identityOf(principal) })),
     );
     const results = await this.db.batch(statements);
     if ((results[0]?.meta.changes ?? 0) === 0) {
@@ -302,7 +303,7 @@ export class ActionService {
         tool: row.tool,
         target: row.id,
         outcome: decision.reason,
-        detail: { route: "approve", identityKind: principal.identityKind },
+        detail: { route: "approve", ...identityOf(principal) },
       });
       throw new AppError(
         403,
@@ -391,7 +392,7 @@ export class ActionService {
              WHERE id = ?1 AND claim_id = ?2 AND status = 'executing'`,
           )
           .bind(aid, claimId),
-        this.auditOutcome(aid, claimId, me, now, "create_support_ticket", "tickets"),
+        this.auditOutcome(aid, claimId, principal, now, "create_support_ticket", "tickets"),
       );
     } else {
       const a = args as ScheduleOrientationSessionArgs;
@@ -420,7 +421,7 @@ export class ActionService {
              WHERE id = ?1 AND claim_id = ?2 AND status = 'executing'`,
           )
           .bind(aid, claimId, emp, a.sessionId),
-        this.auditOutcome(aid, claimId, me, now, "schedule_orientation_session", "orientation_bookings"),
+        this.auditOutcome(aid, claimId, principal, now, "schedule_orientation_session", "orientation_bookings"),
       );
     }
 
@@ -446,7 +447,7 @@ export class ActionService {
   private auditOutcome(
     aid: string,
     claimId: string,
-    me: string,
+    principal: Principal,
     now: string,
     tool: WriteToolName,
     table: "tickets" | "orientation_bookings",
@@ -456,10 +457,11 @@ export class ActionService {
         `INSERT INTO audit_log (at, actor_id, event, tool, target, outcome, detail_json)
          SELECT ?1, ?2,
                 CASE WHEN EXISTS (SELECT 1 FROM ${table} WHERE action_id = ?3) THEN 'action_executed' ELSE 'action_failed' END,
-                ?4, ?3, (SELECT COALESCE(error_code, 'ok') FROM pending_actions WHERE id = ?3), json_object('claimId', ?5)
+                ?4, ?3, (SELECT COALESCE(error_code, 'ok') FROM pending_actions WHERE id = ?3),
+                json_object('claimId', ?5, 'identityKind', ?6, 'identity', ?7)
           WHERE EXISTS (SELECT 1 FROM pending_actions WHERE id = ?3 AND claim_id = ?5)`,
       )
-      .bind(now, me, aid, tool, claimId);
+      .bind(now, principal.employeeId, aid, tool, claimId, principal.identityKind, principal.identity);
   }
 
   private async finalizeFailed(row: ActionRow, principal: Principal, code: ToolErrorCode | string): Promise<ApproveOutcome> {
@@ -477,10 +479,10 @@ export class ActionService {
       this.db
         .prepare(
           `INSERT INTO audit_log (at, actor_id, event, tool, target, outcome, detail_json)
-           SELECT ?1, ?2, 'action_failed', ?3, ?4, ?5, json_object('claimId', ?6)
+           SELECT ?1, ?2, 'action_failed', ?3, ?4, ?5, json_object('claimId', ?6, 'identityKind', ?7, 'identity', ?8)
             WHERE EXISTS (SELECT 1 FROM pending_actions WHERE id = ?4 AND claim_id = ?6)`,
         )
-        .bind(now, me, row.tool, row.id, code, claimId),
+        .bind(now, me, row.tool, row.id, code, claimId, principal.identityKind, principal.identity),
     ]);
     if ((results[0]?.meta.changes ?? 0) === 0) return this.afterLostClaim(row.id, principal);
     return { status: "failed", errorCode: code, replayed: false };
@@ -591,7 +593,7 @@ export class ActionService {
            SELECT ?1, ?2, 'action_rejected', ?3, ?4, 'ok', ?5
             WHERE EXISTS (SELECT 1 FROM pending_actions WHERE id = ?4 AND status = 'rejected' AND decided_at = ?1)`,
         )
-        .bind(now, principal.employeeId, row.tool, row.id, JSON.stringify({ reason: reason ?? null, identityKind: principal.identityKind })),
+        .bind(now, principal.employeeId, row.tool, row.id, JSON.stringify({ reason: reason ?? null, ...identityOf(principal) })),
     ]);
     if ((update?.meta.changes ?? 0) === 0) {
       const again = (await this.load(row.id)) as ActionRow;

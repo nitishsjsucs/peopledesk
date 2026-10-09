@@ -1,4 +1,13 @@
-import type { AuditEvent } from "../../shared/domain.ts";
+import type { AuditEvent, IdentityKind } from "../../shared/domain.ts";
+
+/**
+ * The verified identity behind an audit row: a lowercased email for a user, or a service token's
+ * common_name (its Client ID). identity_links can map several identities to one employee, so actor_id
+ * alone cannot say which of them acted.
+ */
+export function identityOf(p: { identityKind: IdentityKind; identity: string }): { identityKind: IdentityKind; identity: string } {
+  return { identityKind: p.identityKind, identity: p.identity };
+}
 
 export type AuditEntry = {
   actorId: string;

@@ -42,6 +42,13 @@ describe("Access service tokens", () => {
       .bind(actionId)
       .first<{ n: number }>();
     expect(denied?.n).toBe(1);
+    const asToken = { identityKind: "service_token", identity: COMMON_NAME };
+    for (const event of ["authz_denied", "action_proposed"]) {
+      const row = await env.DB.prepare("SELECT detail_json FROM audit_log WHERE event = ?1 AND target = ?2")
+        .bind(event, actionId)
+        .first<{ detail_json: string }>();
+      expect(JSON.parse(row?.detail_json ?? "{}"), event).toMatchObject(asToken);
+    }
     const tickets = await env.DB.prepare("SELECT COUNT(*) AS n FROM tickets WHERE action_id = ?1").bind(actionId).first<{ n: number }>();
     expect(tickets?.n).toBe(0);
 
@@ -60,6 +67,14 @@ describe("Access service tokens", () => {
     await expectError(await api(`/api/actions/${actionId}/approve`, { token, body: {} }), 403, "human_approval_required");
     const asUser = await api(`/api/actions/${actionId}/approve`, { as: "tenured_employee", body: {} });
     expect(asUser.status).toBe(200);
+    // The audit trail tells the two identities of one employee apart.
+    const detail = async (event: string) =>
+      JSON.parse(
+        (await env.DB.prepare("SELECT detail_json FROM audit_log WHERE event = ?1 AND target = ?2").bind(event, actionId).first<{ detail_json: string }>())
+          ?.detail_json ?? "{}",
+      ) as Record<string, unknown>;
+    expect(await detail("action_proposed")).toMatchObject({ source: "mcp", identityKind: "service_token", identity: COMMON_NAME });
+    expect(await detail("action_executed")).toMatchObject({ identityKind: "user", identity: persona("tenured_employee").email.toLowerCase() });
   });
 
   it("refuses an unlinked service token with 403", async () => {

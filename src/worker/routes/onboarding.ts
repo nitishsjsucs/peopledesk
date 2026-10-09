@@ -3,6 +3,7 @@ import { EMPLOYEE_ID_RE } from "../../shared/domain.ts";
 import { can } from "../authz/policy.ts";
 import { AppError } from "../errors.ts";
 import type { AppEnv } from "../hono-env.ts";
+import { identityOf } from "../services/audit.ts";
 
 const notFound = () => new AppError(404, "not_found", "No onboarding plan found.");
 
@@ -29,7 +30,7 @@ export const onboardingRoutes = new Hono<AppEnv>()
         event: "authz_denied",
         target: employeeId,
         outcome: decision.reason,
-        detail: { route: "GET /api/onboarding/:employeeId" },
+        detail: { route: "GET /api/onboarding/:employeeId", ...identityOf(p) },
       });
       throw notFound();
     }
