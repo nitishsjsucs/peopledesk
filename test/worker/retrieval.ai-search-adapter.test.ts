@@ -209,3 +209,83 @@ describe("a failing AI Search inside a chat turn", () => {
     expect(r.text).not.toBe("I couldn't find that in the policies available to you.");
   });
 });
+
+// AI Search chunks its own way (64 to 512 tokens, split at paragraph and sentence boundaries), so a
+// chunk can hold most of a policy file, YAML front matter first. Every policy file is 1.0 to 1.3 KB
+// and its Policy section starts 526 to 744 characters in, past a quote of the first 300 characters.
+// A correct answer over such a chunk must still show its fact in the citation quote, and the eval's
+// grounding check (which reads the quote) must still pass.
+describe("an AI Search chunk longer than a citation quote", () => {
+  it("quotes the lines that hold the fact the answer states, so correct answers grade as grounded", async () => {
+    const { runTurn } = await import("../../src/worker/chat/orchestrator.ts");
+    const { QUOTE_CHARS } = await import("../../src/worker/chat/citations.ts");
+    const { scoreCase } = await import("../../evals/lib/scorer.ts");
+    const { containsAllValues } = await import("../../evals/lib/normalize.ts");
+    const { principalFor, testServices } = await import("../helpers/services.ts");
+    const { persona } = await import("../helpers/fixtures.ts");
+    const casesRaw = (await import("../../evals/dataset/asof-2026-10-01/cases.jsonl?raw")).default;
+    type EvalCase = import("../../src/shared/synth/eval-cases.ts").EvalCase;
+    const answerCases = casesRaw
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l) as EvalCase)
+      .filter((c) => c.expected.type === "answer");
+    expect(answerCases).toHaveLength(95);
+
+    /** A model that routes to retrieval and answers with the passage line that states the fact. */
+    class OracleProvider {
+      readonly id = "stub" as const;
+      readonly model = "oracle";
+      private readonly answer: string;
+      constructor(answer: string) {
+        this.answer = answer;
+      }
+      async completeJson<T>(req: { purpose: string; zod: { parse(v: unknown): T } }) {
+        const raw =
+          req.purpose === "router"
+            ? { intent: "policy_question", search_query: "policy question" }
+            : { kind: "answer", answer: this.answer, citations: ["P1"] };
+        return { value: req.zod.parse(raw), rawText: JSON.stringify(raw), usage: { inputTokens: 1, outputTokens: 1 }, latencyMs: 0, gatewayLogId: null, retries: 0 };
+      }
+    }
+
+    const failures: string[] = [];
+    for (const c of answerCases) {
+      if (c.expected.type !== "answer") continue;
+      const target = c.expected.mustCiteAnyOf[0]!;
+      const version = manifest.documents.find((d) => d.docId === target.docId)!.versions.find((x) => x.version === target.version)!;
+      const markdown = await (await env.POLICY_BUCKET.get(version.r2Key))!.text();
+      const values = c.expected.mustContainAll;
+      // Two chunk shapes: the whole file, and the file without its front matter.
+      const body = markdown.replace(/^---\n[\s\S]*?\n---\n/, "");
+      expect(body.length, c.id).toBeLessThan(markdown.length);
+      // The bullet in the policy text, not the front matter's change summary.
+      const factLine = body.split("\n").find((line) => line.startsWith("- ") && containsAllValues(line, values))!;
+      expect(factLine, c.id).toBeTruthy();
+      for (const [shape, text] of [["file", markdown], ["body", body]] as const) {
+        expect(text.length, `${c.id} ${shape}`).toBeGreaterThan(QUOTE_CHARS);
+        const services = testServices();
+        services.retriever = new AiSearchRetriever(new FakeAiSearch([aisChunk(`${c.id}-${shape}`, version.r2Key, text)]));
+        const turn = await runTurn(
+          {
+            provider: new OracleProvider(factLine.replace(/^-\s*/, "")),
+            services,
+            principal: await principalFor(c.persona),
+            conversationId: crypto.randomUUID(),
+            turnId: crypto.randomUUID(),
+            asOf: "2026-10-01",
+            approvalOrigin: "http://localhost",
+            history: { userMessages: [], assistantTurns: [] },
+          },
+          c.question,
+        );
+        const quote = turn.citations[0]?.quote ?? "";
+        const score = scoreCase(c, turn, persona(c.persona).employeeId);
+        if (!score.passed || !text.includes(quote) || quote.length > QUOTE_CHARS || !quote.includes(factLine.replace(/^-\s*/, ""))) {
+          failures.push(`${c.id} ${shape}: ${score.reasons.join(",") || "quote"} | ${JSON.stringify(quote.slice(0, 60))}`);
+        }
+      }
+    }
+    expect(failures).toEqual([]);
+  }, 120_000);
+});

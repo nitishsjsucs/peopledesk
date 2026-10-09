@@ -380,7 +380,7 @@ async function policyTurn(
     trace.gatewayLogIdHints,
   );
   const out = composed.value;
-  const { citations, invalidDropped } = out ? validateCitations(out.citations, labeled) : { citations: [], invalidDropped: 0 };
+  const { citations, invalidDropped } = out ? validateCitations(out.citations, labeled, out.answer) : { citations: [], invalidDropped: 0 };
   trace.composer = {
     ms: composed.ms,
     inputTokens: composed.inputTokens,

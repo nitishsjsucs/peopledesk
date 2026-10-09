@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Passage } from "../../src/shared/tool-schemas.ts";
-import { labelPassages, sourceLine, validateCitations } from "../../src/worker/chat/citations.ts";
+import { labelPassages, QUOTE_CHARS, quoteFor, sourceLine, validateCitations } from "../../src/worker/chat/citations.ts";
 import { runTurn } from "../../src/worker/chat/orchestrator.ts";
 import type { LlmProvider, LlmRequest, LlmResult } from "../../src/worker/llm/provider.ts";
 import { principalFor, testServices } from "../helpers/services.ts";
@@ -26,6 +26,27 @@ describe("CitationValidator", () => {
     expect(out.citations.map((c) => c.passageId)).toEqual(["POL-002@1#3", "POL-001@1#3"]);
     expect(out.invalidDropped).toBe(3);
     expect(out.citations[0]?.quote).toHaveLength(300);
+  });
+
+  it("quotes a passage that fits whole, and a longer one from the line stating the answer's number", () => {
+    const short = "- Paid time off accrues at 1.75 days per month.\n- A planned vacation week requires 10 weeks of notice.";
+    expect(quoteFor(short, "It accrues at 1.75 days per month.")).toBe(short);
+    const intro = "This policy explains who may ask for what, and when; it applies to every region. ".repeat(4);
+    const long = `# Leave\n${intro}\n## Policy\n- Leave accrues at 1.75 days per month.\n- Carryover is capped at 12 days.\n## Contacts\nAsk HR.`;
+    expect(quoteFor(long, "Leave accrues at 1.75 days a month.")).toBe(
+      "- Leave accrues at 1.75 days per month.\n- Carryover is capped at 12 days.\n## Contacts\nAsk HR.",
+    );
+    // Both stated numbers: the start that covers both wins over a later line that holds one.
+    expect(quoteFor(long, "1.75 days a month, and at most 12 days carry over.")).toMatch(/^- Leave accrues at 1\.75/);
+    // No stated number found in the passage: the first QUOTE_CHARS characters, as before.
+    expect(quoteFor(long, "It depends.")).toBe(long.slice(0, QUOTE_CHARS));
+    expect(quoteFor(long, "It is 99 days.")).toBe(long.slice(0, QUOTE_CHARS));
+    // One long line without breaks is split after sentence ends.
+    const line = `${intro}Leave accrues at 1.75 days per month. ${intro}`;
+    const q = quoteFor(line, "1.75 days");
+    expect(q.startsWith("Leave accrues at 1.75 days per month.")).toBe(true);
+    expect(q.length).toBeLessThanOrEqual(QUOTE_CHARS);
+    expect(line.includes(q)).toBe(true);
   });
 
   it("writes a source line naming doc id, version and effective date", () => {
