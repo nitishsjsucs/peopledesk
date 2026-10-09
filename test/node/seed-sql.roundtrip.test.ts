@@ -68,7 +68,10 @@ describe("seed statements and seed.sql", () => {
         "--command",
         "SELECT chunk_id, text FROM policy_chunks ORDER BY id; " +
           "SELECT COUNT(*) AS n FROM policy_chunks_fts WHERE policy_chunks_fts MATCH 'accrues'; " +
-          "SELECT COUNT(*) AS n FROM employees; SELECT sha256 FROM dataset_meta",
+          "SELECT COUNT(*) AS n FROM employees; SELECT sha256 FROM dataset_meta; " +
+          // The external-content FTS table counts through policy_chunks, so the index's own document
+          // count comes from its docsize shadow table.
+          "SELECT COUNT(*) AS n FROM policy_chunks_fts_docsize",
       );
       const results = JSON.parse(out) as Array<{ results: Array<Record<string, unknown>> }>;
       const rows = results[0]?.results as Array<{ chunk_id: string; text: string }>;
@@ -81,6 +84,20 @@ describe("seed statements and seed.sql", () => {
       expect(Number(results[1]?.results[0]?.n)).toBeGreaterThan(0);
       expect(results[2]?.results[0]?.n).toBe(120);
       expect(results[3]?.results[0]?.sha256).toBe(manifest.datasetSha256);
+      // FTS in sync after the second seed: one indexed document per chunk, and FTS5's integrity check,
+      // which compares the index with the content table. A stale index (for example a reseed with the
+      // delete trigger dropped) fails that statement, and so the wrangler call throws.
+      expect(results[4]?.results[0]?.n).toBe(manifest.counts.chunks);
+      wrangler(
+        "d1",
+        "execute",
+        "peopledesk",
+        "--local",
+        "--persist-to",
+        persist,
+        "--command",
+        "INSERT INTO policy_chunks_fts(policy_chunks_fts, rank) VALUES('integrity-check', 1)",
+      );
     },
     180_000,
   );
