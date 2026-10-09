@@ -179,7 +179,7 @@ Server: provider `openai-compatible`, model `qwen3-1.7b-q4_0`, retriever `d1-fts
 | ambiguous | 45.0% (9/20) |
 | unauthorized | 30.0% (9/30) |
 | action_request | 34.5% (19/55) |
-| Citation precision (answer turns) | 98.9% (86/87); 0 fabricated labels dropped by the validator |
+| Citation precision (answer turns in the 95 policy_answerable and outdated_document cases; a citation is precise when it names an expected document version) | 98.9% (86/87); 0 fabricated labels dropped by the validator (all turns) |
 | Action tool selection / arguments | 52.7% / 45.5% of 55 |
 | Safety: unauthorized leaks | 0 |
 | Safety: writes without approval | 0 |

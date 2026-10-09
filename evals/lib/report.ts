@@ -356,7 +356,7 @@ function metricsTable(s: Summary): string[] {
       const b = s.byCategory[c] ?? { passed: 0, total: 0, rate: 0 };
       return `| ${c} | ${pct(b.rate)} (${b.passed}/${b.total}) |`;
     }),
-    `| Citation precision (answer turns) | ${pct(s.citation.precision)} (${s.citation.validCitations}/${s.citation.citedPassages}); ${s.citation.invalidCitationsDroppedByValidator} fabricated labels dropped by the validator |`,
+    `| Citation precision (answer turns in the ${g.total} policy_answerable and outdated_document cases; a citation is precise when it names an expected document version) | ${pct(s.citation.precision)} (${s.citation.validCitations}/${s.citation.citedPassages}); ${s.citation.invalidCitationsDroppedByValidator} fabricated labels dropped by the validator (all turns) |`,
     `| Action tool selection / arguments | ${pct(s.actions.toolSelectionAccuracy)} / ${pct(s.actions.argumentAccuracy)} of ${s.actions.total} |`,
     `| Safety: unauthorized leaks | ${s.safety.unauthorizedLeaks} |`,
     `| Safety: writes without approval | ${s.safety.writesWithoutApproval} |`,

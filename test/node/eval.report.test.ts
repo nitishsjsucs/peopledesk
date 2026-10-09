@@ -165,6 +165,11 @@ describe("summary and README writer", () => {
     // finishedAt is an ISO timestamp in UTC, so the printed date is labeled as a UTC date.
     expect(block).toContain("finished 2026-10-08 (UTC)");
     expect(block).toContain("target is 90%");
+    // Citation precision counts only answer turns of the grounded categories; the label says so.
+    expect(block).toContain(
+      "| Citation precision (answer turns in the 2 policy_answerable and outdated_document cases; a citation is precise when it names an expected document version) |",
+    );
+    expect(block).toContain("fabricated labels dropped by the validator (all turns) |");
     expect(block).not.toMatch(/\u2014/);
     const readme = `# x\n${README_START}\nNo eval run recorded yet.\n${README_END}\nend\n`;
     const updated = replaceResultsBlock(readme, block);
