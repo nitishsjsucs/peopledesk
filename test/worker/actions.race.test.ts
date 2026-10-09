@@ -6,6 +6,7 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { AppError } from "../../src/worker/errors.ts";
+import { ToolError } from "../../src/worker/mcp/errors.ts";
 import { ActionService } from "../../src/worker/services/actions.ts";
 import type { ApproveOutcome } from "../../src/worker/services/actions.ts";
 import { scalar, ticketArgs } from "../helpers/actions.ts";
@@ -117,5 +118,36 @@ describe("two approvals racing past every JS check", () => {
     expect(await scalar("SELECT COUNT(*) AS n FROM orientation_bookings WHERE action_id = ?1", view.actionId)).toBe(1);
     expect(await auditCount("action_executed", view.actionId)).toBe(1);
     expect(await auditCount("action_failed", view.actionId)).toBe(0);
+  });
+});
+
+describe("an edit racing an approval of the request it replaces", () => {
+  it("refuses the edit with conflict when the original is approved first, and writes nothing", async () => {
+    const who = spares[1]!;
+    const principal = await principalFor(who.email);
+    const s = testServices();
+    const ticketsBefore = await scalar("SELECT COUNT(*) AS n FROM tickets WHERE requester_id = ?1", who.id);
+    const { view: old } = await s.actions.propose(principal, "create_support_ticket", ticketArgs(1), "form", origin);
+    // The edit passes its JS check (the original is still awaiting); then, just before its batch, the
+    // original is approved elsewhere (another tab).
+    let approvedFirst = false;
+    const editing = serviceOver(
+      d1Proxy(async (target, statements) => {
+        if (!approvedFirst) {
+          approvedFirst = true;
+          await s.actions.approve(principal, old.actionId);
+        }
+        return target.batch(statements);
+      }),
+    );
+
+    const attempt = editing.propose(principal, "create_support_ticket", ticketArgs(2), "form", { ...origin, supersedes: old.actionId });
+
+    await expect(attempt).rejects.toBeInstanceOf(ToolError);
+    await expect(attempt).rejects.toMatchObject({ code: "conflict" });
+    expect(await actionRow(old.actionId)).toMatchObject({ status: "executed", superseded_by: null });
+    expect(await scalar("SELECT COUNT(*) AS n FROM pending_actions WHERE requester_id = ?1", who.id)).toBe(1);
+    expect(await scalar("SELECT COUNT(*) AS n FROM tickets WHERE requester_id = ?1", who.id)).toBe(ticketsBefore + 1);
+    expect(await scalar("SELECT COUNT(*) AS n FROM audit_log WHERE event = 'action_proposed' AND actor_id = ?1", who.id)).toBe(1);
   });
 });

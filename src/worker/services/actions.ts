@@ -133,6 +133,9 @@ export class ActionService {
     const statements: D1PreparedStatement[] = [
       // Atomic rate limit: one conditional insert, so two concurrent proposals cannot both pass a
       // check-then-insert. Only non-expired awaiting rows count; the action being replaced does not.
+      // An edit also requires, inside the same transaction, that the request it replaces is still
+      // awaiting approval: if it was approved or rejected after the JS check above (another tab), the
+      // replacement is not created, so one edit can never lead to two executions.
       this.db
         .prepare(
           `INSERT INTO pending_actions (id, tool, requester_id, subject_employee_id, conversation_id, source,
@@ -140,7 +143,10 @@ export class ActionService {
            SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'awaiting_approval', ?10, ?11
             WHERE (SELECT COUNT(*) FROM pending_actions
                     WHERE requester_id = ?3 AND status = 'awaiting_approval' AND expires_at > ?10
-                      AND id IS NOT ?12) < ${MAX_PENDING_PER_REQUESTER}`,
+                      AND id IS NOT ?12) < ${MAX_PENDING_PER_REQUESTER}
+              AND (?12 IS NULL OR EXISTS (SELECT 1 FROM pending_actions
+                                           WHERE id = ?12 AND requester_id = ?3
+                                             AND status = 'awaiting_approval' AND expires_at > ?10))`,
         )
         .bind(
           id,
@@ -162,7 +168,7 @@ export class ActionService {
         this.db
           .prepare(
             `UPDATE pending_actions SET status = 'rejected', superseded_by = ?1, decided_at = ?2, decided_by = ?3
-              WHERE id = ?4 AND requester_id = ?3 AND status = 'awaiting_approval'
+              WHERE id = ?4 AND requester_id = ?3 AND status = 'awaiting_approval' AND expires_at > ?2
                 AND EXISTS (SELECT 1 FROM pending_actions WHERE id = ?1)`,
           )
           .bind(id, now, principal.employeeId, opts.supersedes),
@@ -178,6 +184,12 @@ export class ActionService {
     );
     const results = await this.db.batch(statements);
     if ((results[0]?.meta.changes ?? 0) === 0) {
+      if (opts.supersedes) {
+        const old = await this.load(opts.supersedes);
+        if (!old || old.status !== "awaiting_approval" || old.expires_at <= now) {
+          throw new ToolError("conflict", "The request you were editing was decided or expired in the meantime, so nothing was changed.");
+        }
+      }
       throw new ToolError(
         "rate_limited",
         `You already have ${MAX_PENDING_PER_REQUESTER} requests awaiting approval. Approve or reject one first.`,
