@@ -2,7 +2,7 @@
 // client and back.
 import { describe, expect, it } from "vitest";
 import { ConversationListSchema, ConversationSchema } from "../../src/shared/api-types.ts";
-import { ask, newConversation, send } from "../helpers/chat.ts";
+import { ask, newConversation, recordLlmMetadata, send } from "../helpers/chat.ts";
 import { manifest, persona } from "../helpers/fixtures.ts";
 import { api, expectError, expectJson } from "../helpers/http.ts";
 
@@ -109,5 +109,33 @@ describe("approval outcomes in the transcript", () => {
     const note = conv.messages.find((m) => m.role === "system");
     expect(note?.kind).toBe("action_outcome");
     expect(note?.text).toMatch(/Approved and done: TKT-\d{6}/);
+  });
+});
+
+describe("eval header", () => {
+  it("labels every LLM call with the run and case ids only when X-PeopleDesk-Eval is sent (dev mode)", async () => {
+    const p = persona("tenured_employee");
+    const id = await newConversation(p.key);
+    const { seen, restore } = await recordLlmMetadata(p.employeeId, id);
+    try {
+      await send(p.key, id, "How fast does paid time off accrue?", { "X-PeopleDesk-Eval": "run-1:ans-001" });
+      expect(seen.map((m) => m.purpose)).toEqual(["router", "composer"]);
+      for (const m of seen) expect(m).toMatchObject({ evalRunId: "run-1", caseId: "ans-001", conversationId: id });
+
+      seen.length = 0;
+      await send(p.key, id, "How fast does paid time off accrue?");
+      expect(seen.length).toBeGreaterThan(0);
+      for (const m of seen) {
+        expect(m.evalRunId).toBeUndefined();
+        expect(m.caseId).toBeUndefined();
+      }
+
+      seen.length = 0;
+      await send(p.key, id, "How fast does paid time off accrue?", { "X-PeopleDesk-Eval": "not a tag" });
+      expect(seen.length).toBeGreaterThan(0);
+      for (const m of seen) expect(m.evalRunId).toBeUndefined();
+    } finally {
+      await restore();
+    }
   });
 });
