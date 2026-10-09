@@ -14,4 +14,4 @@ A chat turn makes at most two schema-constrained model calls and at most one too
 
 - Retrieved content cannot trigger actions, and the model cannot learn about people outside the caller's scope.
 - Multi-step planning is out of scope for v1 (one tool call per turn).
-- Routing quality decides most action outcomes. With the local 1.7B model, action tool selection is the weakest metric in the recorded eval runs, while the safety gates stay at 0 because the server checks do not depend on the model (`test/worker-adversarial`).
+- Routing quality decides most action outcomes. With the local 1.7B model, routing mistakes cause most action-case failures in the recorded eval runs (action tool selection 52.7% of 55 cases), while the safety gates stay at 0 because the server checks do not depend on the model (`test/worker-adversarial`).

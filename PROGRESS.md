@@ -19,18 +19,25 @@ This file is the hand-off log for whoever continues the build. SPEC.md (revision
   - Fixed: at phone width the main navigation collapsed to zero width (no way to navigate), and between about 800px and 1080px the last links were cut off.
   - Fixed: after a reload, approval cards in chat showed their stored state (enabled Approve after a rejection); they now show the request's current state.
   - New web tests for `OrientationForm`, `ScheduleOrientationPage`, `ActionsPage`, the ticket edit round trip and reloaded chat cards (P1 web tests in SPEC section 1).
-- Next: everything that needs Nitish (SPEC section 17): `wrangler login`, deploy, `verify:ai-search`, `verify:gateway`, the production eval in the eval window, the resume wording choices, and pushing to GitHub. A later builder could re-run the local eval, but no server-side code that the eval exercises changed in builder 2's round (only `canonicalJson`'s `toJSON` handling, which no request path hits), so the recorded run still describes the current server.
+- After the plan (builder 3), in commit order:
+  - `2a033dc` docs: `CONTEXT.md` (domain glossary, no implementation details) and ten ADRs in `docs/adr/` for the decisions a reader would most likely question (single-batch approval, router and composer split, Worker-side Access JWT verification, permission gate over retriever filters, human-only approval, generated corpus, deterministic grading, pinned test config, in-process MCP client, one Durable Object per conversation). The README links them under "Design decisions".
+  - `3349bf8` fix(evals): the README writer labels the finish date as UTC (a Pacific-evening run printed the next day). Test-first in `eval.report.test.ts`.
+  - `1d29933` eval: a second full local run at `7517b30` (details below). It reproduced the first run exactly; the README Results block now comes from it.
+  - `68c280f` ci: `permissions: contents: read` and a `concurrency` group that cancels superseded runs. Steps unchanged.
+  - A final docs commit refreshing this file and correcting one sentence in ADR 0002 (routing mistakes cause most action-case failures; action tool selection is not the lowest metric, the unauthorized pass rate is).
+- Next: everything that needs Nitish (SPEC section 17): `wrangler login`, deploy, `verify:ai-search`, `verify:gateway`, the production eval in the eval window, the resume wording choices, and pushing to GitHub. Nothing else in the commit plan or the orchestrator's list (evals, README, ADRs, CI) is open.
 
 ## Status at the last commit
 
-All checks run on 2026-10-08 on this Mac.
+All checks run on 2026-10-08 on this Mac (builder 3, after the last code change).
 
 - `npm run typecheck`: pass (worker, web and node tsconfigs, TypeScript 7.0.2)
 - `npm test`: pass, 460 tests in 61 files across the five projects (`worker`, `worker-access`, `worker-adversarial`, `node`, `web`)
 - `npm run build`: pass
 - `npm run deploy:check`: pass (offline dry run lists `CONVERSATION_AGENT`, `DB`, `POLICY_SEARCH`, `POLICY_BUCKET`, `AI`)
-- `npm run generate && git diff --exit-code -- data/generated evals/dataset`: no diff
+- `npm run generate && git diff --exit-code -- data/generated evals/dataset` (with `TZ=UTC`): no diff
 - `npx wrangler types --strict-vars false --check`: pass with `.dev.vars` moved aside (see deviation 16)
+- `npm ci` was not rerun this round; `package-lock.json` is unchanged since commit 1.
 
 ## First local eval run (commit 25)
 
@@ -41,6 +48,16 @@ Command: `npm run eval -- --base-url http://localhost:8782 --run-id local-qwen3-
 - Turn latency p50 2614 ms, p95 3540 ms. Cost source `trace-tokens-x-list-price` ($0.1442 for 347 calls at the Workers AI list price; an estimate, not a cost incurred).
 - No prompt or code was tuned against the eval set before or after this run; three manual questions were asked first to confirm the pipeline worked end to end. Weak spots are the small model's routing (action tool selection 52.7%) and refusing instead of answering from a different permitted document on unauthorized questions.
 - After the run, llama-server and the preview server were stopped and `.dev.vars` was switched back to `LLM_PROVIDER=stub`.
+
+## Second local eval run (builder 3)
+
+Command: `npm run eval -- --base-url http://localhost:8782 --run-id local-qwen3-1.7b-2026-10-08-r2 --concurrency 1`, against `INSPECTOR_PORT=9232 npx vite preview --port 8782 --strictPort` (after `npm run build`) with `.dev.vars` set by `npm run dev:keys -- --llm-provider openai-compatible --llm-base-url http://127.0.0.1:8120/v1`, and `node scripts/llm-serve.ts --port 8120 --parallel 1 --ngl 99` (Qwen3-1.7B-Q4_0-rtn.gguf, `-c 8192 --jinja --reasoning-budget 0 --temp 0`), after `npm run db:reset:local`. `/api/health` was checked first (provider `openai-compatible`, model `qwen3-1.7b-q4_0`, retriever `d1-fts`, the committed dataset hash); no chat question was asked before the run. Server git SHA `7517b30`. Started 2026-10-08 16:50 Pacific, 599 s. Output: `evals/results/local-qwen3-1.7b-2026-10-08-r2/`.
+
+- groundedAnswerAccuracy 90.5% (86/95, Wilson 95% CI 83.0% to 94.9%); overallPassRate 61.5% (123/200). Safety gates all 0; 0 infrastructure errors; 0 zero-passage answerable cases.
+- `summary.json` is identical to the first run's except `runId`, timestamps, `command`, `server` (git SHA) and `latencyMs`; `failures` is the same list. Comparing the two `results.jsonl` files case by case (an ad hoc node one-liner, not a repo script, so it is not quoted in the README Results block): all 200 cases have the same pass/fail, kind, reasons, answer text, citations, tool selection and argument match.
+- Turn latency p50 2726 ms, p95 4825 ms, max 5524 ms (first run: p50 2614, p95 3540). The Mac was on battery (77%) with other repos' test suites running; load average was about 7 to 14.
+- No prompt or code was tuned against the eval set. Afterwards the preview server and llama-server were stopped, `.dev.vars` was switched back to `LLM_PROVIDER=stub` with `LLM_BASE_URL=http://127.0.0.1:8080/v1`, and `npm run db:reset:local` restored the seeded state.
+- `npm run eval:readme -- evals/results/local-qwen3-1.7b-2026-10-08-r2/summary.json` wrote the README Results block. The paragraph under the block (hand-written) says it is the second run and that the first matched it.
 
 ## Deviations from SPEC.md
 
@@ -70,6 +87,10 @@ Command: `npm run eval -- --base-url http://localhost:8782 --run-id local-qwen3-
 
 24. `api.contract.test.ts` calls the Worker's exported `fetch` with a spread env (`LLM_PROVIDER=workers-ai`, a fake `AI` binding) on a path that reaches the Durable Object. SPEC section 14 uses spread envs only for paths that never reach a Durable Object; this one works because the gateway-logs route only reads the turn trace, which does not depend on the Agent's own env. The stored trace's `gatewayLogIdHints` are set through `runInDurableObject`, because the stub provider records none.
 25. Small UI changes beyond SPEC section 15, all from the manual pass: below 1080px the top bar wraps and the nav gets its own row; below 480px the user badge shows the role only (the full name stays in its accessible label and tooltip); an executed booking's card names its session.
+26. `CONTEXT.md` and `docs/adr/0001` to `0010` are not in the SPEC section 4 file tree. They were added in builder 3's round because the orchestrator asked for ADRs and the owner's other repos keep a root glossary plus `docs/adr/`. They restate decisions already in SPEC.md (with the SPEC deviations they caused, for example deviation 6 in ADR 0006 and deviation 15 in ADR 0010); they introduce no new behavior.
+27. CI (SPEC section 19) also sets `permissions: contents: read` and a `concurrency` group with `cancel-in-progress`. The run steps are unchanged: the spec's seven, with deviation 4's `--` pathspec separator.
+28. The README Results line reads "finished <date> (UTC)". SPEC section 13 does not fix the wording; the label avoids a run finished on a Pacific evening appearing to be from the next day.
+29. The second local eval used the same local setup as deviation 22 (ports 8782 and 8120, `-np 1`, concurrency 1) and the run id suffix `-r2`, because `local-qwen3-1.7b-2026-10-08` already existed and the runner refuses to overwrite a run.
 
 ## Coordination notes
 
@@ -79,6 +100,7 @@ Command: `npm run eval -- --base-url http://localhost:8782 --run-id local-qwen3-
 - Builder 2's manual pass (2026-10-08, `vite dev` on port 8782, inspector 9232, after `npm run db:reset:local`) as the manager, the tenured employee, the unbooked new hire and HR: form booking for a report, Edit and Update with supersede, a chat booking approved from its card, "approve it" in chat answered with the button instruction, a second approval for an already booked person ending as failed `already_booked`, a report's onboarding by full name and an unknown name refused, a manager-only and a nonexistent policy both "Policy not found", the policy change list, HR's onboarding overview, the dark theme, and phone (375px), tablet (768px) and desktop (1280px) widths. The four UI bugs listed above were found this way and fixed test-first. Local state was reset afterwards.
 - The stub router only treats person-referential onboarding phrasings ("Olivia Morgan's onboarding progress", "onboarding for X") as onboarding lookups; "How is X doing with her onboarding?" goes to policy search. That is the deterministic test double working as designed, not a bug; real models route by the prompt.
 - The README's Status table and test counts are maintained by hand; refresh them when the test count changes.
+- Builder 3 (2026-10-08) ran the second local eval and the CI steps above; the README Status table, Results block and the paragraph under it are current at the last commit.
 
 ## Local machine notes for builders
 
