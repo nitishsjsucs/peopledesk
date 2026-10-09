@@ -61,8 +61,11 @@ export const conversationRoutes = new Hono<AppEnv>()
     const principal = c.get("principal");
     const { text } = c.req.valid("json");
     // The eval header only labels gateway metadata (evalRunId, caseId) and turns off the gateway
-    // cache. It cannot change the provider, the retriever or the auth mode.
-    const evalTag = EVAL_HEADER_RE.exec(c.req.header(EVAL_HEADER) ?? "");
+    // cache. It cannot change the provider, the retriever or the auth mode. It is honored only for the
+    // eval runner's identities: Access service tokens in production, anyone in local dev mode. A
+    // signed-in user cannot use it to switch off the gateway cache.
+    const evalAllowed = c.get("services").config.authMode === "dev" || principal.identityKind === "service_token";
+    const evalTag = evalAllowed ? EVAL_HEADER_RE.exec(c.req.header(EVAL_HEADER) ?? "") : null;
     const agent = await agentFor(c.env, principal.employeeId, conv.id);
     const outcome = await agent.sendMessage({
       principal,
