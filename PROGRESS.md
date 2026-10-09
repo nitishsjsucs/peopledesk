@@ -45,9 +45,27 @@ This file is the hand-off log for whoever continues the build. SPEC.md (revision
   - `32ec2e8` docs: README, CONTEXT.md, ADR 0005 and a one-line SPEC.md header claim only what was run and what the approval check proves.
   - A final docs commit updating this file.
 - After the plan (final verification gate, 2026-10-08): a fresh clone of `4d8ae5b` passed every CI step and reproduced the local eval; the README Results block now comes from that run (`local-qwen3-1.7b-2026-10-08-gate`). Details under "Final verification gate".
+- After the plan (round 2, builder 2, 2026-10-09): confirmed the starting state (all seven CI steps pass at `e5bff27`), then a manual pass against `vite preview` and a check of the production retrieval path. In commit order:
+  - `77d8e0d` fix(web): `/onboarding` asks for the caller's own checklist only when `/api/me` reports a plan (every manager or HR admin visit used to log a failed 404 request). Test-first in `OnboardingPage.test.tsx`.
+  - `5a76d35` fix(chat): citation quotes of long passages. A quote was the first 300 characters of its passage. Every D1 chunk fits (longest 255 characters), but an AI Search chunk can hold most of a policy file, and the Policy section starts 526 to 744 characters into every file. Measured with a fake AI Search and an oracle model over all 95 answer cases: 62 graded `not_grounded` with whole-file chunks and 95 of 95 with front matter removed, so a production eval would have under-reported `groundedAnswerAccuracy` for reasons unrelated to the model, and the source drawer showed front matter instead of the fact. A passage that fits is still quoted whole; a longer one is quoted from the line that states a number the answer gives (deviation 41). README Evals definition and ADR 0007 say so.
+  - `1bc1ef0` test(safety): 60 s ceilings on the two multi-turn adversarial tests (deviation 42).
+  - `9fc4d13` fix(chat): such a quote stops before the next heading or front matter fence.
+  - An eval commit: a fourth local run at `9fc4d13` (below), the README Results block from it, and this file.
 - Next: everything that needs Nitish (SPEC section 17): `wrangler login`, deploy, `verify:ai-search`, `verify:gateway`, the production eval in the eval window and the resume wording choices. Also his decision on which git history GitHub should carry (see "Coordination notes": the repo is already public, published by a mirror script with rewritten commit messages). Nothing else in the commit plan or the orchestrator's list (evals, README, ADRs, CI) is open.
 
 ## Status at the last commit
+
+Round 2 builder 2, 2026-10-09, in this checkout on this Mac (load average 15 to 30 from other builds), at `9fc4d13` (the last code commit; the eval commit after it adds only results and docs, and the three checks were rerun on it):
+
+- `npm run typecheck`: pass
+- `npm test`: pass, 487 tests in 65 files (about 3 minutes under load)
+- `npm run build`: pass
+- `npm run deploy:check`: pass (bindings `CONVERSATION_AGENT`, `DB`, `POLICY_SEARCH`, `POLICY_BUCKET`, `AI`)
+- `TZ=UTC npm run generate && git diff --exit-code -- data/generated evals/dataset`: no diff
+- `npx wrangler types --strict-vars false --check` with `.dev.vars` moved aside: up to date
+- `npm ci` not rerun (`package-lock.json` unchanged since commit 1). `npm audit --omit=dev` reports the same 3 high severity advisories as below (MCP SDK OAuth client, through `agents`).
+
+Before this round's changes, at `e5bff27`: the same six checks (all but `npm ci`) passed, with 482 tests in 65 files.
 
 Final verification gate, 2026-10-08, in a fresh clone (`git clone ~/Developer/projects/peopledesk /tmp/gate-peopledesk` at `4d8ae5b`, no `.dev.vars`, no `.wrangler` state, no `node_modules`):
 
@@ -89,6 +107,18 @@ Command: `npm run eval -- --base-url http://localhost:8782 --run-id local-qwen3-
 - Turn latency p50 2726 ms, p95 4825 ms, max 5524 ms (first run: p50 2614, p95 3540). The Mac was on battery (77%) with other repos' test suites running; load average was about 7 to 14.
 - No prompt or code was tuned against the eval set. Afterwards the preview server and llama-server were stopped, `.dev.vars` was switched back to `LLM_PROVIDER=stub` with `LLM_BASE_URL=http://127.0.0.1:8080/v1`, and `npm run db:reset:local` restored the seeded state.
 - `npm run eval:readme -- evals/results/local-qwen3-1.7b-2026-10-08-r2/summary.json` wrote the README Results block. The paragraph under the block (hand-written) says it is the second run and that the first matched it.
+
+## Fourth local eval run (round 2 builder 2, 2026-10-09)
+
+Why: `5a76d35` and `9fc4d13` changed the answer path (citation quotes), and the README Results block should come from a run at the shipped code.
+
+Setup: `npm run dev:keys -- --llm-provider openai-compatible --llm-base-url http://127.0.0.1:8120/v1`, `npm run db:reset:local`, `node scripts/llm-serve.ts --port 8120 --parallel 1 --ngl 99` (Qwen3-1.7B-Q4_0-rtn.gguf, `-c 8192 --jinja --reasoning-budget 0 --temp 0`), `npm run build`, `INSPECTOR_PORT=9232 npx vite preview --port 8782 --strictPort`; `/api/health` showed provider `openai-compatible`, model `qwen3-1.7b-q4_0`, retriever `d1-fts` and the committed dataset hash. Command: `npm run eval -- --base-url http://localhost:8782 --run-id local-qwen3-1.7b-2026-10-09 --concurrency 1`. Server git SHA `9fc4d13`. Started 2026-10-09 18:45:02 UTC, 873 s, 200 of 200 cases, not aborted. On AC power, not in Low Power Mode, load average about 20 to 30 from other builds.
+
+- groundedAnswerAccuracy 90.5% (86/95, Wilson 95% CI 83.0% to 94.9%); overallPassRate 61.5% (123/200). Safety gates all 0; 0 infrastructure errors; 0 zero-passage answerable cases.
+- `summary.json` equals the gate run's except `runId`, timestamps, `command`, `server.gitSha` and `latencyMs`. An ad hoc Python comparison with the gate's `results.jsonl` (not a repo script) found no difference in pass/fail, kind, reasons, leak flag, answer text, HTTP status, error code, tool selection, argument match, pending-action target or cited doc/version/passage id. Expected: every local passage is at most 255 characters, so its quote is still the whole passage.
+- Turn latency p50 4228 ms, p95 6120 ms, max 8469 ms (slower than earlier runs because of the machine load).
+- No prompt or code was tuned against the eval set. Afterwards the preview server and llama-server were stopped, `.dev.vars` was switched back to `LLM_PROVIDER=stub` with `LLM_BASE_URL=http://127.0.0.1:8080/v1`, and `npm run db:reset:local` restored the seeded state.
+- `npm run eval:readme -- evals/results/local-qwen3-1.7b-2026-10-09/summary.json` wrote the README Results block; the paragraph under it and the Status row now say four runs and map `9fc4d13` to its published SHA (`9fc4d13`, from `_publish/peopledesk/.git/sha_map`, read only).
 
 ## Final verification gate (2026-10-08)
 
@@ -148,6 +178,9 @@ Resume claims (SPEC section 0) as judged by the gate: the summary sentence needs
 38. `decideCost` takes `turnLogs` (logs per turn with each turn's `llmCalls`) instead of a flat `logs` list, and `collectGatewayLogs` returns that shape; AI Gateway's numbers are used only when every turn has at least as many logs as model calls.
 39. The README and `summary.md` citation row reads "Citation precision (answer turns in the N policy_answerable and outdated_document cases; a citation is precise when it names an expected document version)" and "... fabricated labels dropped by the validator (all turns)". The two committed runs' `summary.md` files keep the old label, as they were written by those runs.
 40. The gate's eval used the same local setup as deviations 22 and 29 (ports 8782 and 8120, inspector 9232, `-np 1`, concurrency 1) with the run id suffix `-gate`, and ran in a fresh clone rather than this checkout so that it tested exactly the committed tree after `npm ci`.
+41. Citation quotes (SPEC section 8: "first 300 chars of the passage"). A passage of at most 300 characters is still quoted whole, which covers every D1 chunk. A longer passage (an AI Search chunk) is quoted from the line that states a number the answer gives: whole lines up to 300 characters, ending before the next markdown heading or front matter fence, choosing the start that covers the most of the answer's numbers, then the line closest to the answer's wording (token Jaccard), then the earliest; without such a line, the first 300 characters. The quote is always a substring of the passage. The eval's grounding check reads the quote, so with the old rule a production run over long chunks would have failed correct answers as `not_grounded`. The `summary.json` metric definition text in `evals/lib/report.ts` is unchanged ("at least one cited passage that contains every expected value"), so earlier runs' README blocks still regenerate byte for byte.
+42. `test/worker-adversarial/safety.adversarial-model.test.ts`: the leak test (about 70 HTTP chat turns) and the forbidden-target test (35 turns) have a 60 s timeout instead of Vitest's 5 s default, like the eval smoke test's 120 s. Under load average 15 to 25 the leak test timed out three runs in a row, also with the citation code from before this round. Assertions unchanged.
+43. The fourth local eval used the same local setup as deviations 22, 29 and 40 (ports 8782 and 8120, inspector 9232, `-np 1`, concurrency 1).
 
 ## Review findings
 
@@ -198,6 +231,9 @@ Honesty:
 - Two local commits by the concurrent agent have no Co-Authored-By trailer: `30033dd` (ci: pass pathspecs after --) and `a2dcf4a` (docs: README with status...). Every other commit has it. Rewording them would change every later SHA, including those the eval provenance cites, so it belongs to the same history decision; they were left as they are.
 
 ## Local machine notes for builders
+
+- `npm run deploy:check` leaves a production build (`AUTH_MODE=access`, remote AI Search binding) in `dist/`. Run `npm run build` before `npx vite preview`, or preview fails trying to open a remote proxy session (seen this round).
+- Production check to add when AI Search is live: open a few answers' source drawers. With multi-section AI Search chunks, `chunk-align` labels a passage with the best-overlapping D1 section (or `(excerpt)` below the overlap threshold, which a whole-file chunk always is), while the quote now shows the lines that state the answer's fact, which can sit in another section of the same chunk. Grading and citation precision use only doc id and version, so only the drawer's section label can be off.
 
 - Shared ports on this Mac: use `--port 8782 --strictPort` and `INSPECTOR_PORT=9232` for dev or preview servers. For llama-server use port 8120 with `-np 1 -c 8192 -ngl 99` against `~/Developer/projects/_models/Qwen3-1.7B-Q4_0-rtn.gguf` (`node scripts/llm-serve.ts --port 8120 --parallel 1 --ngl 99`), and kill it afterwards.
 - `.dev.vars` currently has `LLM_PROVIDER=stub`. To run against the local model: `npm run dev:keys -- --llm-provider openai-compatible --llm-base-url http://127.0.0.1:8120/v1`.
