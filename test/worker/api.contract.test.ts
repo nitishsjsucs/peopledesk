@@ -316,6 +316,23 @@ describe("error envelope", () => {
   });
 });
 
+describe("response headers", () => {
+  it("forbids framing and MIME sniffing on every Worker response, including errors, /mcp and /dev", async () => {
+    const responses = [
+      await api("/api/health", { as: "tenured_employee" }),
+      await api("/api/me"),
+      await api("/mcp", { as: "tenured_employee", body: {} }),
+      await api("/dev/personas"),
+    ];
+    for (const res of responses) {
+      expect(res.headers.get("x-frame-options"), res.url).toBe("DENY");
+      expect(res.headers.get("content-security-policy"), res.url).toBe("frame-ancestors 'none'");
+      expect(res.headers.get("x-content-type-options"), res.url).toBe("nosniff");
+      await res.body?.cancel();
+    }
+  });
+});
+
 describe("route inventory", () => {
   // Every route the Worker registers, each covered by a case above (or, for /mcp, by the mcp.* files).
   const COVERED = [

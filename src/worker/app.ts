@@ -26,6 +26,11 @@ export function buildApp(): Hono<AppEnv> {
     c.header("x-request-id", c.get("requestId"));
     c.header("cache-control", "no-store");
     await next();
+    // Set after the handler, so error responses and the MCP handler's own responses carry them too.
+    // The SPA's static assets get the same headers from public/_headers.
+    c.header("x-frame-options", "DENY");
+    c.header("content-security-policy", "frame-ancestors 'none'");
+    c.header("x-content-type-options", "nosniff");
   });
 
   // Config first: invalid config is a 500 on every route. No header, cookie or query parameter can
