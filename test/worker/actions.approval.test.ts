@@ -8,7 +8,7 @@ import { booked, org, persona, planned, reportsOf, spareEmployees } from "../hel
 import { api, expectError, expectJson } from "../helpers/http.ts";
 import { call, mcpClient } from "../helpers/mcp.ts";
 
-const spares = spareEmployees(12, (e) => !planned.has(e.id));
+const spares = spareEmployees(14, (e) => !planned.has(e.id));
 const spare = (i: number) => spares[i]!.email;
 const unbookedHires = org.onboardingPlans
   .map((p) => p.employeeId)
@@ -198,6 +198,37 @@ describe("rate limit", () => {
     const list = await expectJson(await api("/api/actions", { as: who }), ActionListSchema);
     expect(list.actions.filter((a) => a.status === "expired")).toHaveLength(2);
     expect(list.actions.filter((a) => a.status === "awaiting_approval")).toHaveLength(4);
+  });
+});
+
+describe("editing (supersedes)", () => {
+  it("replaces an awaiting request: the old one is rejected and points at the new one", async () => {
+    const who = spare(12);
+    const old = await proposeTicket(who, ticketArgs(1));
+    const next = await expectJson(
+      await api("/api/actions", { as: who, body: { tool: "create_support_ticket", arguments: ticketArgs(2), supersedes: old.actionId } }),
+      PendingActionViewSchema,
+      201,
+    );
+    const list = await expectJson(await api("/api/actions", { as: who }), ActionListSchema);
+    expect(list.actions.find((a) => a.actionId === old.actionId)).toMatchObject({ status: "rejected", supersededBy: next.actionId });
+    expect(list.actions.find((a) => a.actionId === next.actionId)?.status).toBe("awaiting_approval");
+    await expectError(await approve(who, old.actionId), 409, "not_pending");
+  });
+
+  it("does not count the request being replaced toward the limit of 5", async () => {
+    const who = spare(13);
+    const made = [];
+    for (let i = 0; i < 5; i++) made.push(await proposeTicket(who, ticketArgs(i)));
+    const replaced = made[2]!;
+    const next = await expectJson(
+      await api("/api/actions", { as: who, body: { tool: "create_support_ticket", arguments: ticketArgs(7), supersedes: replaced.actionId } }),
+      PendingActionViewSchema,
+      201,
+    );
+    const list = await expectJson(await api("/api/actions", { as: who }), ActionListSchema);
+    expect(list.actions.find((a) => a.actionId === replaced.actionId)).toMatchObject({ status: "rejected", supersededBy: next.actionId });
+    expect(list.actions.filter((a) => a.status === "awaiting_approval")).toHaveLength(5);
   });
 });
 
