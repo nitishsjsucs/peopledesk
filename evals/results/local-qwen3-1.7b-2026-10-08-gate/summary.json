@@ -11,7 +11,7 @@
     "retriever": "d1-fts",
     "asOf": "2026-10-01",
     "version": "1.0.0",
-    "gitSha": "eee084a0ca438a139cfa2aad79442bdd1db52ee7",
+    "gitSha": "4d8ae5b09964e7cc9172f2bcc9e334412ac23386",
     "datasetSha256": "6dea5cee1aa9a56cede942717a4a37402779c847e7629017920c58fd2e9a3626"
   },
   "cases": {

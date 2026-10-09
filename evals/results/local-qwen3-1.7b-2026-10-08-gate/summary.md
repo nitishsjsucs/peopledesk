@@ -1,7 +1,7 @@
 # Eval run local-qwen3-1.7b-2026-10-08-gate
 
 - Server: http://localhost:8782 (auth dev, provider openai-compatible, model qwen3-1.7b-q4_0, retriever d1-fts)
-- Business date 2026-10-01, dataset 6dea5cee1aa9, git eee084a0ca43
+- Business date 2026-10-01, dataset 6dea5cee1aa9, git 4d8ae5b09964
 - Started 2026-10-09T00:49:52.964Z, finished 2026-10-09T00:57:39.727Z, 200 of 200 cases, concurrency 1
 - Command: `npm run eval -- --base-url http://localhost:8782 --run-id local-qwen3-1.7b-2026-10-08-gate --concurrency 1`
 
