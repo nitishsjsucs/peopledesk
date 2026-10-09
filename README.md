@@ -10,7 +10,7 @@ All people, policies, tickets and numbers are synthetic, generated deterministic
 
 | | |
 |---|---|
-| **Works today** | Every P0 item of [SPEC.md](SPEC.md) section 1, including two recorded local eval runs with identical results: the deterministic synthetic organization and versioned policy corpus, D1 and R2 seeding, Access-shaped JWT authentication, the authorization matrix, permission-aware retrieval, the API, the six MCP tools at `/mcp`, the approval checkpoint, four LLM providers, the chat agent, the React UI and the 200-case eval harness. Also the P1 home page, manager onboarding view, ticket status filter, dark theme and policy version change list |
+| **Works today** | Every P0 item of [SPEC.md](SPEC.md) section 1, including three recorded local eval runs with identical grades: the deterministic synthetic organization and versioned policy corpus, D1 and R2 seeding, Access-shaped JWT authentication, the authorization matrix, permission-aware retrieval, the API, the six MCP tools at `/mcp`, the approval checkpoint, four LLM providers, the chat agent, the React UI and the 200-case eval harness. Also the P1 home page, manager onboarding view, ticket status filter, dark theme and policy version change list |
 | **Written, not yet run** | `seed:remote` (including the R2 S3 API fallback; its SigV4 signer is tested against AWS's documented example), `verify:ai-search`, `verify:gateway` and `link-identity --remote`. All need a Cloudflare account |
 | **Tests** | 482 tests in 65 files across five Vitest projects, all passing (`npm test`, 2026-10-08) |
 | **Not done yet** | A production deployment and a production eval run, both of which need a Cloudflare account |
@@ -168,8 +168,8 @@ npm run eval:readme -- evals/results/local-qwen3-1.7b-<date>/summary.json
 ## Results
 
 <!-- results:start -->
-Run `local-qwen3-1.7b-2026-10-08-r2`, finished 2026-10-09 (UTC), produced by `npm run eval -- --base-url http://localhost:8782 --run-id local-qwen3-1.7b-2026-10-08-r2 --concurrency 1`.
-Server: provider `openai-compatible`, model `qwen3-1.7b-q4_0`, retriever `d1-fts`, auth dev, business date 2026-10-01, git `7517b3054fa5`.
+Run `local-qwen3-1.7b-2026-10-08-gate`, finished 2026-10-09 (UTC), produced by `npm run eval -- --base-url http://localhost:8782 --run-id local-qwen3-1.7b-2026-10-08-gate --concurrency 1`.
+Server: provider `openai-compatible`, model `qwen3-1.7b-q4_0`, retriever `d1-fts`, auth dev, business date 2026-10-01, git `eee084a0ca43`.
 
 | Metric | Value |
 |---|---|
@@ -187,8 +187,8 @@ Server: provider `openai-compatible`, model `qwen3-1.7b-q4_0`, retriever `d1-fts
 | Safety: pending actions for forbidden targets | 0 |
 | Infrastructure errors | 0 error turns, 0 HTTP errors (error rate 0.0%) |
 | Zero-passage answerable cases | 0 |
-| Turn latency (client) | p50 2726 ms, p95 4825 ms, max 5524 ms |
-| Router / retrieval / composer latency | p50 1759 ms, p95 2929 ms, max 3209 ms / p50 5 ms, p95 11 ms, max 19 ms / p50 1471 ms, p95 2337 ms, max 3267 ms |
+| Turn latency (client) | p50 2304 ms, p95 3281 ms, max 3982 ms |
+| Router / retrieval / composer latency | p50 1240 ms, p95 2101 ms, max 2436 ms / p50 6 ms, p95 9 ms, max 62 ms / p50 1175 ms, p95 1789 ms, max 2209 ms |
 | Tokens | 405436 in, 11289 out (2027.2 / 56.4 per case) |
 | Cost | $0.1442 for 347 model calls; source `trace-tokens-x-list-price`: Estimate: this run's token volume (as reported by the model server) at the Workers AI list price of @cf/meta/llama-3.3-70b-instruct-fp8-fast. Not a cost incurred. |
 
@@ -196,12 +196,12 @@ Server: provider `openai-compatible`, model `qwen3-1.7b-q4_0`, retriever `d1-fts
 - **overallPassRate**: Passed cases over all 200 cases. It includes 55 action cases and 30 unauthorized cases whose pass depends largely on deterministic server checks, so it is not a grounding metric.
 - The design target is 90% groundedAnswerAccuracy. The number above is what this run measured.
 
-Full report: `evals/results/local-qwen3-1.7b-2026-10-08-r2/summary.md`; raw numbers: `evals/results/local-qwen3-1.7b-2026-10-08-r2/summary.json`.
+Full report: `evals/results/local-qwen3-1.7b-2026-10-08-gate/summary.md`; raw numbers: `evals/results/local-qwen3-1.7b-2026-10-08-gate/summary.json`.
 <!-- results:end -->
 
-How to read this local run: it used Qwen3-1.7B (Q4_0) on `llama-server` and the SQLite FTS5 retriever, not the production model or AI Search. It is the second local run on 2026-10-08 (Pacific time; the date above is UTC). The first, at git `464103b` (`evals/results/local-qwen3-1.7b-2026-10-08/`), produced a `summary.json` identical to this one except for the run id, timestamps, command, git SHA and latency, including the same list of failed cases: with temperature 0 and a fixed seed, the local model's outputs, and so the grades, repeated exactly. Latency differs between the runs (p95 3540 ms vs 4825 ms). The second ran on battery with other builds using the machine, so local latency is not a stable measurement. Most unauthorized-case failures are the small model answering from a different document the persona may read instead of refusing; the leak and forbidden-target gates above are what show that no restricted value, document or action got through. Most action-case failures are routing mistakes by the small model (for example, onboarding-progress questions routed as policy questions). The server-side checks themselves are covered by the test suite, including a model that deliberately reaches for other people's data (`test/worker-adversarial`).
+How to read this local run: it used Qwen3-1.7B (Q4_0) on `llama-server` and the SQLite FTS5 retriever, not the production model or AI Search. It is the third local run on 2026-10-08 (Pacific time; the date above is UTC), made by the final verification pass from a fresh clone of the repository at `eee084a` after `npm ci`, `npm run db:reset:local` and `npm run build`. The two earlier runs, at git `464103b` (`evals/results/local-qwen3-1.7b-2026-10-08/`) and `7517b30` (`evals/results/local-qwen3-1.7b-2026-10-08-r2/`), produced a `summary.json` identical to this one except for the run id, timestamps, command, git SHA and latency, including the same list of failed cases: with temperature 0 and a fixed seed, the local model's outputs, and so the grades, repeated exactly, including after the review-round code changes between `7517b30` and `eee084a`. Latency differs between the runs (turn p95 3540 ms, 4825 ms and 3281 ms). The second and third ran on battery with other builds using the machine, so local latency is not a stable measurement. Most unauthorized-case failures are the small model answering from a different document the persona may read instead of refusing; the leak and forbidden-target gates above are what show that no restricted value, document or action got through. Most action-case failures are routing mistakes by the small model (for example, onboarding-progress questions routed as policy questions). The server-side checks themselves are covered by the test suite, including a model that deliberately reaches for other people's data (`test/worker-adversarial`).
 
-The git SHAs above (and in each run's `summary.json`) are from the working history this repository was built in. The commits published on GitHub have the same trees but drop a trailer line from each message, so their SHAs differ: `7517b30` is `2fa4cc5` on GitHub, and `464103b` is `f93c880`.
+The git SHAs above (and in each run's `summary.json`) are from the working history this repository was built in. The commits published on GitHub have the same trees but drop a trailer line from each message, so their SHAs differ: `eee084a` is `4d8ae5b` on GitHub, `7517b30` is `2fa4cc5`, and `464103b` is `f93c880`.
 
 ## MCP
 

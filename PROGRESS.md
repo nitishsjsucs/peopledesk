@@ -44,11 +44,23 @@ This file is the hand-off log for whoever continues the build. SPEC.md (revision
   - `4dbb375` fix(evals): the citation precision row states which turns it counts (README block regenerated from the same r2 `summary.json`).
   - `4f4e837` docs: README, CONTEXT.md, ADR 0005 and a one-line SPEC.md header claim only what was run and what the approval check proves.
   - A final docs commit updating this file.
+- After the plan (final verification gate, 2026-10-08): a fresh clone of `eee084a` passed every CI step and reproduced the local eval; the README Results block now comes from that run (`local-qwen3-1.7b-2026-10-08-gate`). Details under "Final verification gate".
 - Next: everything that needs Nitish (SPEC section 17): `wrangler login`, deploy, `verify:ai-search`, `verify:gateway`, the production eval in the eval window and the resume wording choices. Also his decision on which git history GitHub should carry (see "Coordination notes": the repo is already public, published by a mirror script with rewritten commit messages). Nothing else in the commit plan or the orchestrator's list (evals, README, ADRs, CI) is open.
 
 ## Status at the last commit
 
-All checks run on 2026-10-08 on this Mac (fixer, after the last code change, at `4dbb375` plus the docs commits).
+Final verification gate, 2026-10-08, in a fresh clone (`git clone ~/Developer/projects/peopledesk /tmp/gate-peopledesk` at `eee084a`, no `.dev.vars`, no `.wrangler` state, no `node_modules`):
+
+- `npm ci`: pass (292 packages; npm audit reports 7 high severity advisories, see "Final verification gate")
+- `npm run typecheck`: pass
+- `npm test`: pass, 482 tests in 65 files (84 s, load average about 20)
+- `npm run build`: pass
+- `npm run deploy:check`: pass (bindings `CONVERSATION_AGENT`, `DB`, `POLICY_SEARCH`, `POLICY_BUCKET`, `AI`)
+- `TZ=UTC npm run generate && git diff --exit-code -- data/generated evals/dataset`: no diff
+- `npx wrangler types --strict-vars false --check`: pass (the clone has no `.dev.vars`)
+- After the gate's docs commit, `npm run typecheck` and `npm test` were rerun in this checkout; see "Final verification gate".
+
+Earlier status (fixer, after the last code change, at `4dbb375` plus the docs commits), all checks run on 2026-10-08 on this Mac:
 
 - `npm run typecheck`: pass (worker, web and node tsconfigs, TypeScript 7.0.2)
 - `npm test`: pass, 482 tests in 65 files across the five projects (`worker`, `worker-access`, `worker-adversarial`, `node`, `web`), 97 s
@@ -77,6 +89,21 @@ Command: `npm run eval -- --base-url http://localhost:8782 --run-id local-qwen3-
 - Turn latency p50 2726 ms, p95 4825 ms, max 5524 ms (first run: p50 2614, p95 3540). The Mac was on battery (77%) with other repos' test suites running; load average was about 7 to 14.
 - No prompt or code was tuned against the eval set. Afterwards the preview server and llama-server were stopped, `.dev.vars` was switched back to `LLM_PROVIDER=stub` with `LLM_BASE_URL=http://127.0.0.1:8080/v1`, and `npm run db:reset:local` restored the seeded state.
 - `npm run eval:readme -- evals/results/local-qwen3-1.7b-2026-10-08-r2/summary.json` wrote the README Results block. The paragraph under the block (hand-written) says it is the second run and that the first matched it.
+
+## Final verification gate (2026-10-08)
+
+Run in the fresh clone `/tmp/gate-peopledesk` at `eee084a` (removed afterwards), after the CI steps listed under "Status at the last commit".
+
+Eval setup: `npm run dev:keys -- --llm-provider openai-compatible --llm-base-url http://127.0.0.1:8120/v1`, `npm run db:reset:local`, `node scripts/llm-serve.ts --port 8120 --parallel 1 --ngl 99` (Qwen3-1.7B-Q4_0-rtn.gguf, `-c 8192 --jinja --reasoning-budget 0 --temp 0`), `npm run build`, `INSPECTOR_PORT=9232 npx vite preview --port 8782 --strictPort`. Command: `npm run eval -- --base-url http://localhost:8782 --run-id local-qwen3-1.7b-2026-10-08-gate --concurrency 1`. Started 2026-10-08 17:49:52 Pacific, 467 s, 200 of 200 cases, not aborted. The Mac was on battery (49%) with three other repos' test suites and an eval running (load average 17 to 20). Both servers were stopped afterwards and the clone was deleted.
+
+- groundedAnswerAccuracy 90.5% (86/95, Wilson 95% CI 83.0% to 94.9%); overallPassRate 61.5% (123/200). Safety gates all 0; 0 infrastructure errors; 0 zero-passage answerable cases.
+- `summary.json` equals the r2 run's except `runId`, timestamps, `command`, `server.gitSha` and `latencyMs`; `failures` is the same list. A case-by-case comparison with the r2 `results.jsonl` (an ad hoc Python check, not a repo script) found no difference in pass/fail, kind, reasons, leak flag, answer text, cited doc/version/section, tool selection, argument match, HTTP status or pending-action fields. So the review-round code changes between `7517b30` and `eee084a` did not change any graded outcome with the local model.
+- Turn latency p50 2304 ms, p95 3281 ms, max 3982 ms.
+- The results directory was copied into this checkout as `evals/results/local-qwen3-1.7b-2026-10-08-gate/`, and `npm run eval:readme -- evals/results/local-qwen3-1.7b-2026-10-08-gate/summary.json` rewrote the README Results block. The hand-written paragraph under it and the Status row now say three runs, and the SHA note maps `eee084a` as well.
+- Why the README block changed although the grades matched: it cited a run at `7517b30`, twenty commits before the code it ships with, and its latency row was not what this pass measured. The gate run is at the shipped code.
+- npm audit (from `npm ci`): 7 high severity advisories. Runtime: `@modelcontextprotocol/sdk` 1.30.0 and `@modelcontextprotocol/client` 2.0.0 (GHSA-6qxp-vccf-f47h, the OAuth client could send credentials to an authorization server chosen by the MCP server) and `agents`, which depends on them. PeopleDesk's only MCP client is the in-process `StreamableHTTPClientTransport` with no OAuth provider, talking to its own server, so the advisory's path is not used; the suggested fix (`agents@0.20.0`) is a breaking downgrade. Dev only: `sharp` through `miniflare`, `wrangler` and `@cloudflare/vitest-plugin`. Not changed by the gate.
+
+Resume claims (SPEC section 0) as judged by the gate: the summary sentence needs Nitish (the "internal" framing; SPEC section 17 item 4); "conversational interface with structured request forms, permission-aware retrieval, and authenticated tools" is true; bullet 1 needs Nitish for Workers AI and AI Search (implemented and tested against fakes only; every measured answer came from Qwen3-1.7B and FTS5) and is true for React/TypeScript, Workers (workerd locally), R2 (Miniflare locally) and 100 documents with 155 versions; bullet 2 is true for six typed tools, validated inputs, user-scoped access and approval checkpoints, and needs rewording for Access (JWT verification is built and tested against local JWKS; Access itself has not run); bullet 3 is true for the 200-case harness and its categories, the 90% target is met locally (90.5%, 86/95, Qwen3-1.7B and FTS5), and "latency and cost through AI Gateway" is not true until a production eval reports `cost.source = "ai-gateway"` (locally: per-stage latency and a token-count estimate at Workers AI list price).
 
 ## Deviations from SPEC.md
 
@@ -120,6 +147,7 @@ Command: `npm run eval -- --base-url http://localhost:8782 --run-id local-qwen3-
 37. Editing with `supersedes` when the original was approved, rejected or expired after the JS check now fails with `conflict` (409, `details.reason: "conflict"`) and writes nothing; the INSERT itself requires the replaced row to be awaiting and unexpired.
 38. `decideCost` takes `turnLogs` (logs per turn with each turn's `llmCalls`) instead of a flat `logs` list, and `collectGatewayLogs` returns that shape; AI Gateway's numbers are used only when every turn has at least as many logs as model calls.
 39. The README and `summary.md` citation row reads "Citation precision (answer turns in the N policy_answerable and outdated_document cases; a citation is precise when it names an expected document version)" and "... fabricated labels dropped by the validator (all turns)". The two committed runs' `summary.md` files keep the old label, as they were written by those runs.
+40. The gate's eval used the same local setup as deviations 22 and 29 (ports 8782 and 8120, inspector 9232, `-np 1`, concurrency 1) with the run id suffix `-gate`, and ran in a fresh clone rather than this checkout so that it tested exactly the committed tree after `npm ci`.
 
 ## Review findings
 
@@ -165,6 +193,7 @@ Honesty:
 - The README's Status table and test counts are maintained by hand; refresh them when the test count changes.
 - Builder 3 (2026-10-08) ran the second local eval and the CI steps above; the README Status table, Results block and the paragraph under it are current at the last commit.
 - GitHub (checked 2026-10-08 17:44 Pacific): `github.com/nitishsjsucs/peopledesk` is public and already carries this history. A background loop outside this repo, `~/Developer/projects/_publish/loop.sh`, runs `_publish/sync.sh peopledesk` every 20 minutes: it copies each new local commit's tree into a separate clone at `~/Developer/projects/_publish/peopledesk`, removes `Co-Authored-By: Claude` trailers from the message (its header comment calls this "Nitish's rule for his public repos"), keeps author and committer dates, and pushes `main`. The trees are identical but every SHA differs; `_publish/peopledesk/.git/sha_map` maps local to published SHAs (for example `7517b30` is `2fa4cc5`, `464103b` is `f93c880`, `2a033dc` is `6cd2b9f`). At 17:42 it had published everything up to `4dbb375` (66 commits, remote `main` at `6004ce5`), and GitHub Actions runs CI on each push: 10 runs by 17:45, the two failures being the earliest (`f10f866`, `a2dcf4a`), and every later run passed, including `6004ce5` (local `4dbb375`, this round's last code commit). Any commit made here is public within about 20 minutes. This agent did not push, did not stop the loop, and did not touch `_publish/`.
+- Final verification gate (checked 2026-10-08 17:58 Pacific with `git ls-remote`, read only): GitHub `main` was at `6004ce5` (local `4dbb375`); the mirror loop (`bash ./loop.sh`, running since 14:52) had not yet published `4f4e837` and `eee084a`. Its pass at 18:03 published both (`eee084a` is `4d8ae5b`, which `git ls-remote` then showed as `main`). The orchestrator's brief described the GitHub repo as empty; it is not. The gate did not push and did not touch `_publish/`; its own docs commit will be published by the loop like any other.
 - Before relying on SHAs in public docs, Nitish has to choose one history: keep the mirrored one (the README note maps the cited SHAs) or force-push the local one (needs his explicit approval; it would make the cited SHAs resolve on GitHub and carry the trailers).
 - Two local commits by the concurrent agent have no Co-Authored-By trailer: `e474ae3` (ci: pass pathspecs after --) and `ac700fa` (docs: README with status...). Every other commit has it. Rewording them would change every later SHA, including those the eval provenance cites, so it belongs to the same history decision; they were left as they are.
 
