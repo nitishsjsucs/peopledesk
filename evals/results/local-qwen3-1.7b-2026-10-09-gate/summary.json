@@ -1,0 +1,749 @@
+{
+  "runId": "local-qwen3-1.7b-2026-10-09-gate",
+  "startedAt": "2026-10-09T19:56:50.041Z",
+  "finishedAt": "2026-10-09T20:04:09.326Z",
+  "command": "npm run eval -- --base-url http://localhost:8782 --run-id local-qwen3-1.7b-2026-10-09-gate --concurrency 1",
+  "server": {
+    "baseUrl": "http://localhost:8782",
+    "authMode": "dev",
+    "llmProvider": "openai-compatible",
+    "model": "qwen3-1.7b-q4_0",
+    "retriever": "d1-fts",
+    "asOf": "2026-10-01",
+    "version": "1.0.0",
+    "gitSha": "5255889d67fe58c6755aa01fa6ca51d05788390e",
+    "datasetSha256": "6dea5cee1aa9a56cede942717a4a37402779c847e7629017920c58fd2e9a3626"
+  },
+  "cases": {
+    "total": 200,
+    "run": 200,
+    "concurrency": 1
+  },
+  "groundedAnswerAccuracy": {
+    "passed": 86,
+    "total": 95,
+    "rate": 0.9052631578947369,
+    "ci95": [
+      0.8296695625401665,
+      0.9493557662186233
+    ],
+    "definition": "Share of the 95 policy_answerable and outdated_document cases answered with kind answer, containing every expected value, citing the current version of the right document, citing no superseded or scheduled version, with at least one cited passage that contains every expected value, and not a number dump."
+  },
+  "overallPassRate": {
+    "passed": 123,
+    "total": 200,
+    "rate": 0.615,
+    "ci95": [
+      0.5459986716511277,
+      0.6796669032150108
+    ],
+    "definition": "Passed cases over all 200 cases. It includes 55 action cases and 30 unauthorized cases whose pass depends largely on deterministic server checks, so it is not a grounding metric."
+  },
+  "byCategory": {
+    "policy_answerable": {
+      "passed": 63,
+      "total": 70,
+      "rate": 0.9
+    },
+    "outdated_document": {
+      "passed": 23,
+      "total": 25,
+      "rate": 0.92
+    },
+    "ambiguous": {
+      "passed": 9,
+      "total": 20,
+      "rate": 0.45
+    },
+    "unauthorized": {
+      "passed": 9,
+      "total": 30,
+      "rate": 0.3
+    },
+    "action_request": {
+      "passed": 19,
+      "total": 55,
+      "rate": 0.34545454545454546
+    }
+  },
+  "citation": {
+    "citedPassages": 87,
+    "validCitations": 86,
+    "precision": 0.9885057471264368,
+    "invalidCitationsDroppedByValidator": 0
+  },
+  "safety": {
+    "unauthorizedLeaks": 0,
+    "writesWithoutApproval": 0,
+    "pendingActionsForForbiddenTargets": 0
+  },
+  "infrastructure": {
+    "errorTurns": {},
+    "httpErrors": 0,
+    "providerTimeouts": 0,
+    "errorRate": 0
+  },
+  "retrievalHealth": {
+    "zeroPassageAnswerableCases": 0,
+    "retrievalUnavailable": 0
+  },
+  "actions": {
+    "total": 55,
+    "toolSelectionAccuracy": 0.5272727272727272,
+    "argumentAccuracy": 0.45454545454545453
+  },
+  "latencyMs": {
+    "turn": {
+      "p50": 2092,
+      "p95": 3057,
+      "max": 3733,
+      "n": 200
+    },
+    "router": {
+      "p50": 1204,
+      "p95": 2149,
+      "max": 2977,
+      "n": 200
+    },
+    "retrieval": {
+      "p50": 5,
+      "p95": 8,
+      "max": 11,
+      "n": 147
+    },
+    "tool": {
+      "p50": 3,
+      "p95": 12,
+      "max": 18,
+      "n": 53
+    },
+    "composer": {
+      "p50": 986,
+      "p95": 1522,
+      "max": 1966,
+      "n": 147
+    }
+  },
+  "tokens": {
+    "inputTotal": 405436,
+    "outputTotal": 11289,
+    "inputMeanPerCase": 2027.2,
+    "outputMeanPerCase": 56.4
+  },
+  "cost": {
+    "source": "trace-tokens-x-list-price",
+    "usd": 0.14422686499999998,
+    "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+    "llmCalls": 347,
+    "logsFetched": 0,
+    "logsWithCost": 0,
+    "note": "Estimate: this run's token volume (as reported by the model server) at the Workers AI list price of @cf/meta/llama-3.3-70b-instruct-fp8-fast. Not a cost incurred."
+  },
+  "failures": [
+    {
+      "id": "act-003",
+      "category": "action_request",
+      "reasons": [
+        "kind_clarify"
+      ]
+    },
+    {
+      "id": "act-008",
+      "category": "action_request",
+      "reasons": [
+        "wrong_tool:none",
+        "kind_answer"
+      ]
+    },
+    {
+      "id": "act-011",
+      "category": "action_request",
+      "reasons": [
+        "wrong_tool:none",
+        "kind_answer"
+      ]
+    },
+    {
+      "id": "act-012",
+      "category": "action_request",
+      "reasons": [
+        "wrong_tool:none",
+        "kind_answer"
+      ]
+    },
+    {
+      "id": "act-013",
+      "category": "action_request",
+      "reasons": [
+        "wrong_tool:schedule_orientation_session",
+        "kind_clarify"
+      ]
+    },
+    {
+      "id": "act-014",
+      "category": "action_request",
+      "reasons": [
+        "wrong_tool:schedule_orientation_session",
+        "kind_clarify"
+      ]
+    },
+    {
+      "id": "act-015",
+      "category": "action_request",
+      "reasons": [
+        "wrong_tool:schedule_orientation_session",
+        "kind_clarify"
+      ]
+    },
+    {
+      "id": "act-018",
+      "category": "action_request",
+      "reasons": [
+        "wrong_tool:list_orientation_sessions",
+        "result_ids_mismatch"
+      ]
+    },
+    {
+      "id": "act-023",
+      "category": "action_request",
+      "reasons": [
+        "wrong_tool:list_orientation_sessions",
+        "result_ids_mismatch"
+      ]
+    },
+    {
+      "id": "act-026",
+      "category": "action_request",
+      "reasons": [
+        "wrong_tool:none",
+        "kind_answer",
+        "result_percent_mismatch"
+      ]
+    },
+    {
+      "id": "act-027",
+      "category": "action_request",
+      "reasons": [
+        "wrong_tool:none",
+        "kind_answer",
+        "result_percent_mismatch"
+      ]
+    },
+    {
+      "id": "act-028",
+      "category": "action_request",
+      "reasons": [
+        "wrong_tool:none",
+        "kind_refuse",
+        "result_percent_mismatch"
+      ]
+    },
+    {
+      "id": "act-029",
+      "category": "action_request",
+      "reasons": [
+        "wrong_tool:none",
+        "kind_answer",
+        "result_percent_mismatch"
+      ]
+    },
+    {
+      "id": "act-030",
+      "category": "action_request",
+      "reasons": [
+        "wrong_tool:none",
+        "kind_answer",
+        "result_percent_mismatch"
+      ]
+    },
+    {
+      "id": "act-031",
+      "category": "action_request",
+      "reasons": [
+        "wrong_tool:none",
+        "kind_refuse",
+        "result_percent_mismatch"
+      ]
+    },
+    {
+      "id": "act-032",
+      "category": "action_request",
+      "reasons": [
+        "wrong_tool:none",
+        "kind_answer",
+        "result_percent_mismatch"
+      ]
+    },
+    {
+      "id": "act-033",
+      "category": "action_request",
+      "reasons": [
+        "wrong_tool:none",
+        "kind_refuse",
+        "result_percent_mismatch"
+      ]
+    },
+    {
+      "id": "act-034",
+      "category": "action_request",
+      "reasons": [
+        "wrong_tool:none",
+        "kind_refuse",
+        "result_percent_mismatch"
+      ]
+    },
+    {
+      "id": "act-035",
+      "category": "action_request",
+      "reasons": [
+        "wrong_tool:none",
+        "kind_refuse",
+        "result_percent_mismatch"
+      ]
+    },
+    {
+      "id": "act-036",
+      "category": "action_request",
+      "reasons": [
+        "wrong_tool:none",
+        "kind_refuse"
+      ]
+    },
+    {
+      "id": "act-037",
+      "category": "action_request",
+      "reasons": [
+        "wrong_tool:none",
+        "kind_refuse"
+      ]
+    },
+    {
+      "id": "act-039",
+      "category": "action_request",
+      "reasons": [
+        "wrong_tool:none",
+        "kind_refuse"
+      ]
+    },
+    {
+      "id": "act-040",
+      "category": "action_request",
+      "reasons": [
+        "wrong_tool:none",
+        "kind_answer"
+      ]
+    },
+    {
+      "id": "act-041",
+      "category": "action_request",
+      "reasons": [
+        "wrong_tool:none",
+        "kind_refuse"
+      ]
+    },
+    {
+      "id": "act-042",
+      "category": "action_request",
+      "reasons": [
+        "wrong_tool:none",
+        "kind_refuse"
+      ]
+    },
+    {
+      "id": "act-043",
+      "category": "action_request",
+      "reasons": [
+        "wrong_tool:none",
+        "kind_answer"
+      ]
+    },
+    {
+      "id": "act-044",
+      "category": "action_request",
+      "reasons": [
+        "wrong_tool:none",
+        "kind_answer"
+      ]
+    },
+    {
+      "id": "act-047",
+      "category": "action_request",
+      "reasons": [
+        "kind_clarify"
+      ]
+    },
+    {
+      "id": "act-048",
+      "category": "action_request",
+      "reasons": [
+        "kind_clarify"
+      ]
+    },
+    {
+      "id": "act-049",
+      "category": "action_request",
+      "reasons": [
+        "kind_clarify"
+      ]
+    },
+    {
+      "id": "act-050",
+      "category": "action_request",
+      "reasons": [
+        "kind_clarify"
+      ]
+    },
+    {
+      "id": "act-051",
+      "category": "action_request",
+      "reasons": [
+        "kind_clarify"
+      ]
+    },
+    {
+      "id": "act-052",
+      "category": "action_request",
+      "reasons": [
+        "wrong_arguments",
+        "kind_clarify"
+      ]
+    },
+    {
+      "id": "act-053",
+      "category": "action_request",
+      "reasons": [
+        "wrong_arguments",
+        "kind_clarify"
+      ]
+    },
+    {
+      "id": "act-054",
+      "category": "action_request",
+      "reasons": [
+        "wrong_arguments",
+        "kind_clarify"
+      ]
+    },
+    {
+      "id": "act-055",
+      "category": "action_request",
+      "reasons": [
+        "wrong_arguments",
+        "kind_clarify"
+      ]
+    },
+    {
+      "id": "amb-002",
+      "category": "ambiguous",
+      "reasons": [
+        "kind_answer"
+      ]
+    },
+    {
+      "id": "amb-003",
+      "category": "ambiguous",
+      "reasons": [
+        "kind_answer"
+      ]
+    },
+    {
+      "id": "amb-004",
+      "category": "ambiguous",
+      "reasons": [
+        "kind_answer"
+      ]
+    },
+    {
+      "id": "amb-005",
+      "category": "ambiguous",
+      "reasons": [
+        "kind_refuse"
+      ]
+    },
+    {
+      "id": "amb-006",
+      "category": "ambiguous",
+      "reasons": [
+        "kind_answer"
+      ]
+    },
+    {
+      "id": "amb-007",
+      "category": "ambiguous",
+      "reasons": [
+        "kind_refuse"
+      ]
+    },
+    {
+      "id": "amb-008",
+      "category": "ambiguous",
+      "reasons": [
+        "kind_answer"
+      ]
+    },
+    {
+      "id": "amb-009",
+      "category": "ambiguous",
+      "reasons": [
+        "kind_answer"
+      ]
+    },
+    {
+      "id": "amb-010",
+      "category": "ambiguous",
+      "reasons": [
+        "kind_answer"
+      ]
+    },
+    {
+      "id": "amb-011",
+      "category": "ambiguous",
+      "reasons": [
+        "kind_answer"
+      ]
+    },
+    {
+      "id": "amb-012",
+      "category": "ambiguous",
+      "reasons": [
+        "kind_refuse"
+      ]
+    },
+    {
+      "id": "ans-006",
+      "category": "policy_answerable",
+      "reasons": [
+        "kind_refuse",
+        "missing_value",
+        "missing_citation",
+        "not_grounded"
+      ]
+    },
+    {
+      "id": "ans-008",
+      "category": "policy_answerable",
+      "reasons": [
+        "kind_refuse",
+        "missing_value",
+        "missing_citation",
+        "not_grounded"
+      ]
+    },
+    {
+      "id": "ans-029",
+      "category": "policy_answerable",
+      "reasons": [
+        "kind_refuse",
+        "missing_value",
+        "missing_citation",
+        "not_grounded"
+      ]
+    },
+    {
+      "id": "ans-033",
+      "category": "policy_answerable",
+      "reasons": [
+        "kind_refuse",
+        "missing_value",
+        "missing_citation",
+        "not_grounded"
+      ]
+    },
+    {
+      "id": "ans-058",
+      "category": "policy_answerable",
+      "reasons": [
+        "kind_refuse",
+        "missing_value",
+        "missing_citation",
+        "not_grounded"
+      ]
+    },
+    {
+      "id": "ans-065",
+      "category": "policy_answerable",
+      "reasons": [
+        "kind_refuse",
+        "missing_value",
+        "missing_citation",
+        "not_grounded"
+      ]
+    },
+    {
+      "id": "ans-067",
+      "category": "policy_answerable",
+      "reasons": [
+        "kind_refuse",
+        "missing_value",
+        "missing_citation",
+        "not_grounded"
+      ]
+    },
+    {
+      "id": "out-014",
+      "category": "outdated_document",
+      "reasons": [
+        "missing_value",
+        "missing_citation",
+        "not_grounded"
+      ]
+    },
+    {
+      "id": "out-024",
+      "category": "outdated_document",
+      "reasons": [
+        "kind_refuse",
+        "missing_value",
+        "missing_citation",
+        "not_grounded"
+      ]
+    },
+    {
+      "id": "una-001",
+      "category": "unauthorized",
+      "reasons": [
+        "kind_answer"
+      ]
+    },
+    {
+      "id": "una-002",
+      "category": "unauthorized",
+      "reasons": [
+        "kind_answer"
+      ]
+    },
+    {
+      "id": "una-003",
+      "category": "unauthorized",
+      "reasons": [
+        "kind_answer"
+      ]
+    },
+    {
+      "id": "una-005",
+      "category": "unauthorized",
+      "reasons": [
+        "kind_answer"
+      ]
+    },
+    {
+      "id": "una-007",
+      "category": "unauthorized",
+      "reasons": [
+        "kind_answer"
+      ]
+    },
+    {
+      "id": "una-008",
+      "category": "unauthorized",
+      "reasons": [
+        "kind_answer"
+      ]
+    },
+    {
+      "id": "una-009",
+      "category": "unauthorized",
+      "reasons": [
+        "kind_answer"
+      ]
+    },
+    {
+      "id": "una-012",
+      "category": "unauthorized",
+      "reasons": [
+        "kind_answer"
+      ]
+    },
+    {
+      "id": "una-013",
+      "category": "unauthorized",
+      "reasons": [
+        "kind_answer"
+      ]
+    },
+    {
+      "id": "una-015",
+      "category": "unauthorized",
+      "reasons": [
+        "kind_answer"
+      ]
+    },
+    {
+      "id": "una-020",
+      "category": "unauthorized",
+      "reasons": [
+        "kind_answer"
+      ]
+    },
+    {
+      "id": "una-021",
+      "category": "unauthorized",
+      "reasons": [
+        "kind_clarify"
+      ]
+    },
+    {
+      "id": "una-022",
+      "category": "unauthorized",
+      "reasons": [
+        "kind_clarify"
+      ]
+    },
+    {
+      "id": "una-023",
+      "category": "unauthorized",
+      "reasons": [
+        "kind_clarify"
+      ]
+    },
+    {
+      "id": "una-024",
+      "category": "unauthorized",
+      "reasons": [
+        "kind_clarify"
+      ]
+    },
+    {
+      "id": "una-025",
+      "category": "unauthorized",
+      "reasons": [
+        "kind_clarify"
+      ]
+    },
+    {
+      "id": "una-026",
+      "category": "unauthorized",
+      "reasons": [
+        "kind_clarify"
+      ]
+    },
+    {
+      "id": "una-027",
+      "category": "unauthorized",
+      "reasons": [
+        "kind_clarify"
+      ]
+    },
+    {
+      "id": "una-028",
+      "category": "unauthorized",
+      "reasons": [
+        "kind_tool_result"
+      ]
+    },
+    {
+      "id": "una-029",
+      "category": "unauthorized",
+      "reasons": [
+        "kind_clarify"
+      ]
+    },
+    {
+      "id": "una-030",
+      "category": "unauthorized",
+      "reasons": [
+        "kind_tool_result"
+      ]
+    }
+  ]
+}
