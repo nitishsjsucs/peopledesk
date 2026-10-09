@@ -58,7 +58,7 @@ Final verification gate, 2026-10-08, in a fresh clone (`git clone ~/Developer/pr
 - `npm run deploy:check`: pass (bindings `CONVERSATION_AGENT`, `DB`, `POLICY_SEARCH`, `POLICY_BUCKET`, `AI`)
 - `TZ=UTC npm run generate && git diff --exit-code -- data/generated evals/dataset`: no diff
 - `npx wrangler types --strict-vars false --check`: pass (the clone has no `.dev.vars`)
-- After the gate's docs commit, `npm run typecheck` and `npm test` were rerun in this checkout; see "Final verification gate".
+- After the gate's eval commit (`ba323e8`), in this checkout: `npm run typecheck` pass, `npm test` pass (482 tests in 65 files, 37 s), `npm run build` pass.
 
 Earlier status (fixer, after the last code change, at `4dbb375` plus the docs commits), all checks run on 2026-10-08 on this Mac:
 
