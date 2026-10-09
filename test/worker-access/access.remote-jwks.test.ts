@@ -35,6 +35,29 @@ describe("remote JWKS (AUTH_MODE=access)", () => {
     await expectError(await api("/api/me", { headers: { Cookie: `CF_Authorization=${token}` } }), 401, "unauthenticated");
   });
 
+  it("answers 404 on any hostname other than APP_HOSTNAME, even with a valid token", async () => {
+    const token = await mintToken({ email: me.email });
+    expect((await api("/api/me", { token })).status).toBe(200);
+    for (const baseUrl of [
+      "https://peopledesk.example.workers.dev",
+      "https://0123abcd-peopledesk.example.workers.dev",
+      "https://peopledesk.test.example.com",
+    ]) {
+      await expectError(await api("/api/me", { token, baseUrl }), 404, "not_found");
+      await expectError(await api("/api/conversations", { token, baseUrl, body: {} }), 404, "not_found");
+      await expectError(
+        await api("/mcp", {
+          token,
+          baseUrl,
+          headers: { Accept: "application/json, text/event-stream" },
+          body: { jsonrpc: "2.0", id: 1, method: "tools/list", params: {} },
+        }),
+        404,
+        "not_found",
+      );
+    }
+  });
+
   it("does not register /dev/* routes", async () => {
     for (const path of ["/dev/login", "/dev/personas"]) {
       expect((await SELF.fetch(`https://peopledesk.test${path}`)).status).toBe(404);

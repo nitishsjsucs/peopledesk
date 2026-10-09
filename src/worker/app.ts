@@ -47,6 +47,12 @@ export function buildApp(): Hono<AppEnv> {
     if (cfg.authMode === "dev" && !isLocalHostname(c.req.url)) {
       return errorResponse(500, "misconfigured_auth_mode", "AUTH_MODE=dev is only allowed on localhost.", c.get("requestId"));
     }
+    // Access mode answers only on APP_HOSTNAME. The Access application protects that hostname; a
+    // workers.dev or preview URL reaches the Worker without passing it, so session revocation and
+    // policy rules that the JWT does not carry would be skipped there until the token expires.
+    if (cfg.authMode === "access" && new URL(c.req.url).hostname !== cfg.appHostname.toLowerCase()) {
+      return errorResponse(404, "not_found", "Not found.", c.get("requestId"));
+    }
     c.set("config", cfg);
     c.set("clock", clockFor(cfg.asOfOverride));
     await next();

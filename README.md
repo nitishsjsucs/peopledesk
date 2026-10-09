@@ -228,6 +228,7 @@ Every input schema is strict (`additionalProperties: false`), every tool has an 
 - The SPA and every Worker response send `X-Frame-Options: DENY` and `Content-Security-Policy: frame-ancestors 'none'`, so the approval page cannot be framed by another site.
 - A turn's error message is always a fixed text for its code; provider and tool exception details go to the Worker logs only. How many restricted passages a retriever returned is logged, never sent to the caller.
 - `arguments_sha256` is an integrity check (it detects serialization drift or a partial write between propose and approve). It is not a security control: anyone who can rewrite the row can rewrite the digest too.
+- In access mode the Worker answers 404 on any hostname other than `APP_HOSTNAME`, so a `workers.dev` or preview URL, which does not pass the Access application, cannot be used to skip what Access enforces only at the edge (session revocation, policy rules the JWT does not carry). Preview URLs are also turned off in `env.production`.
 - Test-only model providers are rejected in access mode, and no header, cookie or query parameter can change the auth mode, model provider or retriever.
 - Known limit: authorization is re-checked in code just before the approval batch, so a role change landing in the milliseconds between the two is not seen.
 
@@ -261,8 +262,9 @@ npm run seed:remote -- --as-of <deploy date>      # D1 migrations + seed, and 15
 #   vector + keyword, reranking on, AI Gateway "peopledesk", custom metadata: doc_id text, version number,
 #   audience_rank number, effective_from_ts number, effective_to_ts number
 npm run verify:ai-search -- --as-of <deploy date> # sync, then filter, exclusion and strict-failure checks
-# Zero Trust > Access > Applications: self-hosted app for the hostname; set ACCESS_TEAM_DOMAIN and ACCESS_AUD;
-#   in the app's cookie settings set SameSite to Lax or Strict
+# Zero Trust > Access > Applications: self-hosted app for the hostname; set ACCESS_TEAM_DOMAIN, ACCESS_AUD and
+#   APP_HOSTNAME; in the app's cookie settings set SameSite to Lax or Strict. With a custom domain as
+#   APP_HOSTNAME, add "workers_dev": false to env.production (preview URLs are already off)
 npm run deploy                                    # service tokens off
 npm run verify:gateway                            # which AI Gateway log reader works, and whether cost is numeric
 npm run link-identity -- --remote --email <your Access email> --employee <persona id>
