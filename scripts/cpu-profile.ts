@@ -407,22 +407,34 @@ if (values["cold-child"] !== undefined) {
     await doTurn(c, tenured.email, convId);
   }
   const first = [...samples.values()][0]?.[0] as Sample;
-  console.log(JSON.stringify({ kind, cpuMs: first.cpuMs, d1Statements: first.d1Statements }));
+  console.log(JSON.stringify({ kind, cpuMs: first.cpuMs, d1Statements: first.d1Statements, referenceMs: reference }));
   process.exit(0);
 }
 
-const coldRows: Array<{ kind: string; n: number; minMs: number; p50Ms: number; maxMs: number }> = [];
+const coldRows: Array<{ kind: string; n: number; minMs: number; p50Ms: number; maxMs: number; referenceP50Ms: number }> = [];
 const coldRuns = Math.max(0, Number(values.cold));
 if (coldRuns > 0) {
   const { execFileSync } = await import("node:child_process");
   for (let k = 0; k < COLD_KINDS.length; k++) {
     const xs: number[] = [];
+    const refs: number[] = [];
     for (let i = 0; i < coldRuns; i++) {
       const out = execFileSync(process.execPath, [import.meta.filename, "--cold-child", String(k)], { encoding: "utf8" });
-      xs.push((JSON.parse(out.trim().split("\n").pop() as string) as { cpuMs: number }).cpuMs);
+      const line = JSON.parse(out.trim().split("\n").pop() as string) as { cpuMs: number; referenceMs: number };
+      xs.push(line.cpuMs);
+      refs.push(line.referenceMs);
     }
     xs.sort((a, b) => a - b);
-    coldRows.push({ kind: COLD_KINDS[k] as string, n: xs.length, minMs: Number((xs[0] as number).toFixed(2)), p50Ms: Number((xs[Math.floor((xs.length - 1) / 2)] as number).toFixed(2)), maxMs: Number((xs[xs.length - 1] as number).toFixed(2)) });
+    refs.sort((a, b) => a - b);
+    const mid = (v: number[]) => v[Math.floor((v.length - 1) / 2)] as number;
+    coldRows.push({
+      kind: COLD_KINDS[k] as string,
+      n: xs.length,
+      minMs: Number((xs[0] as number).toFixed(2)),
+      p50Ms: Number(mid(xs).toFixed(2)),
+      maxMs: Number((xs[xs.length - 1] as number).toFixed(2)),
+      referenceP50Ms: Number(mid(refs).toFixed(2)),
+    });
   }
 }
 
@@ -540,9 +552,10 @@ for (const r of rows) {
 console.log("turn kinds (category:kind):", JSON.stringify(report.turnKinds));
 if (coldRows.length) {
   console.log(`\nCold: the first invocation in a fresh process, ${coldRuns} processes each, ms`);
-  console.log("invocation".padEnd(58), "n".padStart(5), "min".padStart(7), "p50".padStart(7), "max".padStart(7));
+  console.log("invocation".padEnd(58), "n".padStart(5), "min".padStart(7), "p50".padStart(7), "max".padStart(7), "ref p50".padStart(8));
   for (const r of coldRows) {
-    console.log(r.kind.padEnd(58), String(r.n).padStart(5), r.minMs.toFixed(2).padStart(7), r.p50Ms.toFixed(2).padStart(7), r.maxMs.toFixed(2).padStart(7));
+    console.log(r.kind.padEnd(58), String(r.n).padStart(5), r.minMs.toFixed(2).padStart(7), r.p50Ms.toFixed(2).padStart(7), r.maxMs.toFixed(2).padStart(7), r.referenceP50Ms.toFixed(2).padStart(8));
   }
+  console.log("ref p50: the reference workload in those processes; compare runs only at similar values.");
 }
 if (values.json) writeFileSync(values.json, `${JSON.stringify(report, null, 2)}\n`);

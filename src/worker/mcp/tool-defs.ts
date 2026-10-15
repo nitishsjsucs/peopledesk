@@ -106,3 +106,15 @@ export const TOOL_DEFS = {
     annotations: proposes,
   },
 } as const satisfies Record<ToolName, unknown>;
+
+/** The JSON Schema draft the MCP SDK converts tool schemas to (its JSON_SCHEMA_CONVERSION_TARGET). */
+export const MCP_JSON_SCHEMA_TARGET = "draft-2020-12";
+
+// Convert every tool schema at module evaluation, which workerd does once per isolate under its own
+// startup limit, instead of inside the first request that lists or calls a tool. On the Workers Free
+// plan's 10 ms CPU limit this moves about 1.4 ms out of an isolate's first chat turn (npm run
+// cpu:profile, cold; README, Workers Free plan).
+for (const d of Object.values(TOOL_DEFS)) {
+  d.input["~standard"].jsonSchema.input({ target: MCP_JSON_SCHEMA_TARGET });
+  d.output["~standard"].jsonSchema.output({ target: MCP_JSON_SCHEMA_TARGET });
+}
