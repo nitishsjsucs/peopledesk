@@ -172,7 +172,12 @@ if (tail) {
     over += exceeded;
     console.log(key.padEnd(50), String(list.length).padStart(4), pct(cpu, 50).toFixed(1).padStart(7), pct(cpu, 95).toFixed(1).padStart(7), Math.max(...cpu).toFixed(1).padStart(7), String(n10).padStart(6), String(exceeded).padStart(12));
   }
-  record("no invocation ended exceededCpu", over === 0, events.length ? `${over} of ${events.length}` : "no tail events seen (is wrangler logged in?)");
+  const timed = events.filter((e) => typeof e.cpuTime === "number").length;
+  if (events.length > 0 && timed === 0) {
+    record("tail events carry cpuTime", false, `${events.length} events, none with cpuTime; use --analytics instead`);
+  } else {
+    record("no invocation ended exceededCpu", events.length > 0 && over === 0, events.length ? `${over} of ${events.length}` : "no tail events seen (is wrangler logged in?)");
+  }
 }
 
 // --- CPU from the GraphQL Analytics API.
