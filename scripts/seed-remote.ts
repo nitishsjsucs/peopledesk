@@ -1,14 +1,15 @@
 // npm run seed:remote -- --as-of YYYY-MM-DD
 // Production seeding (needs `npx wrangler login` and the D1 database id in wrangler.jsonc):
 //   1. wrangler d1 migrations apply --remote --env production
-//   2. wrangler d1 execute --remote --env production --file data/generated/asof-<date>/seed.sql
-//      (deletes children first, upserts employees so identity_links survive). If the remote file
-//      import rejects the statements that fire the FTS5 triggers, the same seedStatements() list is
-//      sent in chunks of 50 through `wrangler d1 execute --remote --command`.
-//   3. 155 R2 puts with customMetadata through getPlatformProxy with remote bindings, or through R2's
+//   2. 155 R2 puts with customMetadata through getPlatformProxy with remote bindings, or through R2's
 //      S3-compatible API with x-amz-meta-* headers (`--r2 s3`, or automatically when the proxy fails and
 //      CLOUDFLARE_ACCOUNT_ID, R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY are set). `wrangler r2 object put`
 //      has no custom-metadata option, which is why neither path uses it.
+//   3. wrangler d1 execute --remote --env production --file data/generated/asof-<date>/seed.sql
+//      (deletes children first, upserts employees so identity_links survive). If the remote file
+//      import rejects the statements that fire the FTS5 triggers, the same seedStatements() list is
+//      sent in chunks of 50 through `wrangler d1 execute --remote --command`. It runs last because it
+//      writes dataset_meta, the marker setup:production uses to skip seeding.
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
@@ -35,15 +36,18 @@ const manifest = JSON.parse(readFileSync(join(dataDir, "manifest.json"), "utf8")
 const org = JSON.parse(readFileSync(join(dataDir, "org.json"), "utf8")) as Org;
 
 wrangler(["d1", "migrations", "apply", "peopledesk", "--remote", "--env", "production"]);
-try {
-  wrangler(["d1", "execute", "peopledesk", "--remote", "--env", "production", "--file", join(dataDir, "seed.sql")]);
-} catch (err) {
-  console.warn(`Remote file import failed (${String(err).slice(0, 200)}); falling back to chunked --command batches.`);
-  const statements = seedStatements(manifest, org);
-  for (let i = 0; i < statements.length; i += 50) {
-    const sql = renderSeedSql(statements.slice(i, i + 50)).replace(/\n/g, " ");
-    wrangler(["d1", "execute", "peopledesk", "--remote", "--env", "production", "--command", sql]);
-    console.log(`  statements ${i + 1}..${Math.min(i + 50, statements.length)} of ${statements.length}`);
+
+function importSeed(): void {
+  try {
+    wrangler(["d1", "execute", "peopledesk", "--remote", "--env", "production", "--file", join(dataDir, "seed.sql")]);
+  } catch (err) {
+    console.warn(`Remote file import failed (${String(err).slice(0, 200)}); falling back to chunked --command batches.`);
+    const statements = seedStatements(manifest, org);
+    for (let i = 0; i < statements.length; i += 50) {
+      const sql = renderSeedSql(statements.slice(i, i + 50)).replace(/\n/g, " ");
+      wrangler(["d1", "execute", "peopledesk", "--remote", "--env", "production", "--command", sql]);
+      console.log(`  statements ${i + 1}..${Math.min(i + 50, statements.length)} of ${statements.length}`);
+    }
   }
 }
 
@@ -107,4 +111,7 @@ if (values.r2 === "s3") {
     await putAllViaS3();
   }
 }
+// The seed writes dataset_meta (the marker setup:production checks to skip this step), so it runs only
+// after every policy object is in R2: a failed upload must never look like a finished seed.
+importSeed();
 console.log(JSON.stringify({ seeded: asOf, r2Objects: objects.length, datasetSha256: manifest.datasetSha256 }));
