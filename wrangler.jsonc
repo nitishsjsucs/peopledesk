@@ -59,7 +59,7 @@
           "binding": "DB",
           "database_name": "peopledesk",
           // Written by npm run setup:production after it finds or creates the database.
-          "database_id": "<set by npm run setup:production>",
+          "database_id": "e5a94fb1-cf91-4108-81c2-863f8f4e3180",
           "migrations_dir": "migrations"
         }
       ],
@@ -72,7 +72,7 @@
         "ACCESS_TEAM_DOMAIN": "https://old-truth-a7dc.cloudflareaccess.com",
         // The Access application's AUD tag, written by npm run setup:production. Until then it is empty,
         // which the Worker rejects as misconfigured: every route answers 500 (fail closed).
-        "ACCESS_AUD": "",
+        "ACCESS_AUD": "e573d66fda8fbc763955a081bde55e8d0b902a639576e2e091bda70badcacc71",
         "LLM_PROVIDER": "workers-ai",
         "WORKERS_AI_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
         "AI_GATEWAY_ID": "peopledesk",
