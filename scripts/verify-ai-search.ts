@@ -8,6 +8,10 @@
 //   - item.metadata contains audience_rank (did R2 customMetadata reach the index?);
 //   - with return_on_failure false, an invalid filter throws instead of returning an empty list.
 // It prints which retrieval mode is usable: custom metadata, or the folder-range fallback.
+// During an eval window (npm run deploy:eval-window) it also calls search_policies on the deployed
+// Worker's /mcp as the employee and HR admin personas' service tokens, so the whole production path
+// (Access, the Worker's JWT check, AiSearchRetriever, the permission gate) answers from the index.
+// Each search spends one of AI Search's 1,000 included queries a month; a run makes about 20.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
@@ -16,6 +20,7 @@ import { ARCHETYPES, fillTemplate } from "../src/shared/synth/archetypes.ts";
 import type { Manifest } from "../src/shared/synth/dataset.ts";
 import { buildAiSearchRequest, parsePolicyKey } from "../src/worker/policies/ai-search-request.ts";
 import { remoteProxyConfig, repo } from "./lib/cloudflare.ts";
+import { PROD, readServiceTokens } from "./lib/production.ts";
 
 type Search = {
   search(req: unknown): Promise<{ chunks: Array<{ id: string; item: { key: string; metadata?: Record<string, unknown> } }> }>;
@@ -92,6 +97,44 @@ try {
   check("return_on_failure false makes an invalid filter throw", threw, threw ? "threw" : "returned results instead of throwing");
 } finally {
   await dispose();
+}
+
+// The deployed Worker's /mcp, when service tokens are allowed (eval window).
+const tokens = readServiceTokens();
+const base = `https://${PROD.hostname}`;
+const headersOf = (t: { clientId: string; clientSecret: string }) => ({ "CF-Access-Client-Id": t.clientId, "CF-Access-Client-Secret": t.clientSecret });
+const employee = tokens.tenured_employee;
+const hr = tokens.hr_admin;
+const open = employee ? (await fetch(`${base}/api/health`, { headers: headersOf(employee), redirect: "manual" }).catch(() => null))?.status === 200 : false;
+if (!open || !employee || !hr) {
+  console.log("SKIP deployed Worker /mcp checks: no eval window open (npm run deploy:eval-window) or no saved service tokens");
+} else {
+  const mcpSearch = async (t: { clientId: string; clientSecret: string }, query: string) => {
+    const res = await fetch(`${base}/mcp`, {
+      method: "POST",
+      headers: { ...headersOf(t), "content-type": "application/json", accept: "application/json, text/event-stream" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "search_policies", arguments: { query, topK: 6 } } }),
+    });
+    const text = await res.text();
+    const json = (res.headers.get("content-type") ?? "").includes("text/event-stream")
+      ? text.split("\n").filter((l) => l.startsWith("data:")).map((l) => l.slice(5).trim()).pop() ?? "{}"
+      : text;
+    const msg = JSON.parse(json) as { result?: { isError?: boolean; structuredContent?: { passages?: Array<{ docId: string }> } } };
+    return { status: res.status, isError: msg.result?.isError ?? true, docIds: (msg.result?.structuredContent?.passages ?? []).map((p) => p.docId) };
+  };
+  const rank1 = manifest.documents.find((x) => x.rank === 1)!;
+  const rank3 = manifest.documents.find((x) => x.rank === 3)!;
+  const q = (d: (typeof manifest.documents)[number]) => {
+    const f = d.versions.find((v) => v.status === "current")!.facts[0]!;
+    return fillTemplate(ARCHETYPES[f.archetype].questions[0], { subject: f.subject });
+  };
+  const e1 = await mcpSearch(employee, q(rank1));
+  check("Worker /mcp: an employee finds a rank 1 document", e1.status === 200 && !e1.isError && e1.docIds.includes(rank1.docId), `HTTP ${e1.status}, ${e1.docIds.length} passages`);
+  const e3 = await mcpSearch(employee, q(rank3));
+  const rank3Ids = new Set(manifest.documents.filter((x) => x.rank > 1).map((x) => x.docId));
+  check("Worker /mcp: an employee never gets a rank 2 or 3 passage", e3.status === 200 && e3.docIds.every((id) => !rank3Ids.has(id)), `HTTP ${e3.status}, ${e3.docIds.length} passages`);
+  const h3 = await mcpSearch(hr, q(rank3));
+  check("Worker /mcp: HR finds a rank 3 document", h3.status === 200 && !h3.isError && h3.docIds.includes(rank3.docId), `HTTP ${h3.status}, ${h3.docIds.length} passages`);
 }
 const failed = checks.filter((c) => !c.ok);
 console.log(JSON.stringify({ passed: checks.length - failed.length, failed: failed.map((c) => c.name) }));

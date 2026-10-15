@@ -30,7 +30,10 @@
     "link-identity": "node scripts/link-identity.ts",
     "verify:ai-search": "node scripts/verify-ai-search.ts",
     "verify:gateway": "node scripts/verify-gateway.ts",
-    "cpu:profile": "node scripts/cpu-profile.ts"
+    "cpu:profile": "node scripts/cpu-profile.ts",
+    "setup:production": "node scripts/setup-production.ts",
+    "doctor": "node scripts/doctor.ts",
+    "verify:production": "node scripts/verify-production.ts"
   },
   "dependencies": {
     "@hono/zod-validator": "0.9.1",

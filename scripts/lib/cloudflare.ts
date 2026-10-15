@@ -54,14 +54,21 @@ type ProductionEnv = {
   vars: Record<string, string>;
 };
 
-export function productionEnv(): ProductionEnv & { name: string; compatibility_date: string; compatibility_flags: string[] } {
+export function productionEnv(): ProductionEnv & { name: string; account_id?: string; compatibility_date: string; compatibility_flags: string[] } {
   const cfg = JSON.parse(stripJsonc(readFileSync(join(repo, "wrangler.jsonc"), "utf8"))) as {
     name: string;
+    account_id?: string;
     compatibility_date: string;
     compatibility_flags: string[];
     env: { production: ProductionEnv };
   };
-  return { ...cfg.env.production, name: cfg.name, compatibility_date: cfg.compatibility_date, compatibility_flags: cfg.compatibility_flags };
+  return {
+    ...cfg.env.production,
+    name: cfg.name,
+    ...(cfg.account_id ? { account_id: cfg.account_id } : {}),
+    compatibility_date: cfg.compatibility_date,
+    compatibility_flags: cfg.compatibility_flags,
+  };
 }
 
 /**
@@ -71,7 +78,7 @@ export function productionEnv(): ProductionEnv & { name: string; compatibility_d
 export function remoteProxyConfig(): string {
   const p = productionEnv();
   if (p.d1_databases.some((d) => d.database_id.startsWith("<"))) {
-    throw new Error("Set env.production.d1_databases[0].database_id in wrangler.jsonc first (npx wrangler d1 create peopledesk).");
+    throw new Error("Set env.production.d1_databases[0].database_id in wrangler.jsonc first (npm run setup:production does).");
   }
   const dir = mkdtempSync(join(tmpdir(), "peopledesk-remote-"));
   const path = join(dir, "wrangler.json");
@@ -80,6 +87,7 @@ export function remoteProxyConfig(): string {
     JSON.stringify(
       {
         name: `${p.name}-scripts`,
+        ...(p.account_id ? { account_id: p.account_id } : {}),
         compatibility_date: p.compatibility_date,
         compatibility_flags: p.compatibility_flags,
         r2_buckets: p.r2_buckets.map((b) => ({ ...b, remote: true })),
