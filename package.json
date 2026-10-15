@@ -13,7 +13,7 @@
     "dev": "vite dev",
     "build": "vite build",
     "preview": "vite build && vite preview",
-    "typecheck": "tsc -p tsconfig.worker.json && tsc -p tsconfig.web.json && tsc -p tsconfig.node.json",
+    "typecheck": "tsc -p tsconfig.worker.json && tsc -p tsconfig.web.json && tsc -p tsconfig.node.json && tsc -p tsconfig.profile.json",
     "test": "vitest run",
     "types": "wrangler types --strict-vars false",
     "generate": "node scripts/generate.ts",
@@ -29,7 +29,8 @@
     "seed:remote": "node scripts/seed-remote.ts",
     "link-identity": "node scripts/link-identity.ts",
     "verify:ai-search": "node scripts/verify-ai-search.ts",
-    "verify:gateway": "node scripts/verify-gateway.ts"
+    "verify:gateway": "node scripts/verify-gateway.ts",
+    "cpu:profile": "node scripts/cpu-profile.ts"
   },
   "dependencies": {
     "@hono/zod-validator": "0.9.1",

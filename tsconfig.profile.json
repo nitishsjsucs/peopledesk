@@ -1,0 +1,7 @@
+{
+  // scripts/cpu-profile.ts runs the Worker's own modules in Node, so it needs the Worker's generated
+  // types and Node's together (tsconfig.node.json has only Node's).
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": { "lib": ["es2024"], "types": ["node"] },
+  "files": ["worker-configuration.d.ts", "scripts/cpu-profile.ts"]
+}
