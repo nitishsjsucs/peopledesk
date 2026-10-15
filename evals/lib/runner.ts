@@ -44,6 +44,11 @@ export type RunOptions = {
   /** Production only: fetch AI Gateway logs for the run's turns after it finishes. */
   gatewayLogs?: (turns: Array<{ conversationId: string; turnId: string; persona: PersonaKey; llmCalls: number }>) => Promise<TurnLogs[] | null>;
   onProgress?: (done: number, total: number, last: CaseResult) => void;
+  /**
+   * Checked before each case starts: a reason stops the run there (a budget cap), and the cases already
+   * run are graded as a partial run. Not an abort: nothing failed.
+   */
+  stopBefore?: (results: readonly CaseResult[]) => string | null;
   /** Called before each wait for a 429's Retry-After. */
   onRateLimited?: (info: { persona: PersonaKey; path: string; waitSeconds: number; scope: string | null }) => void;
   /** Longest total wait for one request before its 429 counts as an error (default 26 hours). */
@@ -73,7 +78,7 @@ export class RunnerError extends Error {
   }
 }
 
-export async function runEval(o: RunOptions): Promise<{ summary: Summary; results: CaseResult[] }> {
+export async function runEval(o: RunOptions): Promise<{ summary: Summary; results: CaseResult[]; stopped: string | null }> {
   const now = o.now ?? (() => new Date());
   const startedAt = now().toISOString();
   const origin = new URL(o.baseUrl).origin;
@@ -250,8 +255,11 @@ export async function runEval(o: RunOptions): Promise<{ summary: Summary; result
   };
 
   const concurrency = Math.max(1, o.concurrency ?? 2);
+  let stopped: string | null = null;
   const workers = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
-    while (queue.length > 0 && !aborted) {
+    while (queue.length > 0 && !aborted && !stopped) {
+      stopped = o.stopBefore?.(results) ?? null;
+      if (stopped) break;
       const c = queue.shift() as EvalCase;
       const r = await runOne(c);
       results.push(r);
@@ -306,5 +314,5 @@ export async function runEval(o: RunOptions): Promise<{ summary: Summary; result
     cost,
     aborted,
   });
-  return { summary, results };
+  return { summary, results, stopped };
 }

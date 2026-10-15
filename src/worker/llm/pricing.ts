@@ -13,3 +13,18 @@ export function listPriceUsd(inputTokens: number, outputTokens: number, model = 
   if (!p) throw new Error(`no list price for ${model}`);
   return (inputTokens * p.inputPerMillion + outputTokens * p.outputPerMillion) / 1_000_000;
 }
+
+/**
+ * Workers AI neurons per million tokens (Workers AI pricing page, checked 2026-10-15). The Workers Free
+ * plan includes 10,000 neurons a day for the whole account; the eval runner's --max-neurons budget uses
+ * these to stop a production run before it spends more than its share.
+ */
+export const WORKERS_AI_NEURONS: Readonly<Record<string, { inputPerMillion: number; outputPerMillion: number }>> = {
+  "@cf/meta/llama-3.3-70b-instruct-fp8-fast": { inputPerMillion: 26_668, outputPerMillion: 204_805 },
+};
+
+export function neurons(inputTokens: number, outputTokens: number, model = REFERENCE_MODEL): number {
+  const p = WORKERS_AI_NEURONS[model];
+  if (!p) throw new Error(`no neuron rate for ${model}`);
+  return (inputTokens * p.inputPerMillion + outputTokens * p.outputPerMillion) / 1_000_000;
+}

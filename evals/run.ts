@@ -1,13 +1,16 @@
 // npm run eval -- --base-url URL --run-id ID [--concurrency 2] [--dataset evals/dataset/asof-<date>]
-//                 [--auth dev|service-tokens] [--gateway-report] [--limit N]
+//                 [--auth dev|service-tokens] [--gateway-report] [--limit N] [--sample N] [--max-neurons N]
 // Local: --auth dev logs each persona in through /dev/token (dev mode only).
 // Production: --auth service-tokens reads PEOPLEDESK_SERVICE_TOKENS, a JSON object
 // { "<persona>": { "clientId": "...", "clientSecret": "..." } } of Access service tokens linked to the
-// personas, and --gateway-report reads AI Gateway logs (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN with
-// AI Gateway Read, AI_GATEWAY_ID default "peopledesk").
-// A 429 from the server's CHAT_RATE_LIMITS is waited out (Retry-After), not counted as an error: on the
-// Workers Free plan a 200-case production run spends the account-wide daily budget part way through,
-// pauses until 00:00 UTC and finishes the next day (README, Workers Free plan).
+// personas, or else the file npm run setup:production writes (~/.config/peopledesk/service-tokens.json).
+// --gateway-report reads AI Gateway logs (CF_API_TOKEN with AI Gateway Read for the REST reader; the
+// account id comes from wrangler.jsonc; AI_GATEWAY_ID default "peopledesk").
+// Workers Free plan budget (README, Workers Free plan): --sample N runs a deterministic stratified
+// sample of N cases, and --max-neurons N stops before a case once the run's model tokens, at Workers AI
+// neuron rates, plus one more case at the run's largest so far, would pass N. Both make a partial run,
+// which eval:readme refuses to publish. Production default: --sample 20 --max-neurons 2000.
+// A 429 from the server's CHAT_RATE_LIMITS is waited out (Retry-After), not counted as an error.
 // Writes evals/results/<runId>/{results.jsonl, summary.json, summary.md}.
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -16,11 +19,13 @@ import { parseArgs } from "node:util";
 import type { PersonaKey } from "../src/shared/domain.ts";
 import type { EvalCase } from "../src/shared/synth/eval-cases.ts";
 import type { Org } from "../src/shared/synth/org.ts";
-import { listPriceUsd, REFERENCE_MODEL } from "../src/worker/llm/pricing.ts";
+import { listPriceUsd, neurons, REFERENCE_MODEL } from "../src/worker/llm/pricing.ts";
+import { PROD, readServiceTokens } from "../scripts/lib/production.ts";
 import { bindingRouteReader, collectGatewayLogs, restReader } from "./lib/gateway.ts";
 import { renderSummaryMarkdown, SummarySchema } from "./lib/report.ts";
 import type { DatasetMeta, RunnerAuth } from "./lib/runner.ts";
 import { runEval } from "./lib/runner.ts";
+import { stratifiedSample } from "./lib/sample.ts";
 
 const repo = resolve(import.meta.dirname, "..");
 const { values } = parseArgs({
@@ -32,6 +37,8 @@ const { values } = parseArgs({
     auth: { type: "string", default: "dev" },
     "gateway-report": { type: "boolean", default: false },
     limit: { type: "string" },
+    sample: { type: "string" },
+    "max-neurons": { type: "string" },
   },
 });
 const baseUrl = values["base-url"];
@@ -49,10 +56,19 @@ let cases = readFileSync(join(datasetDir, "cases.jsonl"), "utf8")
   .map((l) => JSON.parse(l) as EvalCase);
 const datasetSize = cases.length;
 if (values.limit) cases = cases.slice(0, Number(values.limit));
+if (values.sample) cases = stratifiedSample(cases, Number(values.sample));
+const maxNeurons = values["max-neurons"] ? Number(values["max-neurons"]) : null;
+if (maxNeurons !== null && !(maxNeurons > 0)) {
+  console.error("--max-neurons must be a positive number");
+  process.exit(2);
+}
 
 let auth: RunnerAuth = { kind: "dev" };
 if (values.auth === "service-tokens") {
-  const tokens = JSON.parse(process.env["PEOPLEDESK_SERVICE_TOKENS"] ?? "{}") as Record<string, { clientId: string; clientSecret: string }>;
+  const tokens = (process.env["PEOPLEDESK_SERVICE_TOKENS"] ? JSON.parse(process.env["PEOPLEDESK_SERVICE_TOKENS"]) : readServiceTokens()) as Record<
+    string,
+    { clientId: string; clientSecret: string }
+  >;
   const org = JSON.parse(readFileSync(join(repo, `data/generated/asof-${meta.asOf}/org.json`), "utf8")) as Org;
   auth = {
     kind: "headers",
@@ -80,7 +96,8 @@ if (existsSync(join(outDir, "summary.json"))) {
 }
 
 const started = Date.now();
-const { summary, results } = await runEval({
+const neuronsOf = (r: { trace?: { inputTokens?: number; outputTokens?: number } }) => neurons(r.trace?.inputTokens ?? 0, r.trace?.outputTokens ?? 0, REFERENCE_MODEL);
+const { summary, results, stopped } = await runEval({
   fetch: (input, init) => fetch(input, init),
   baseUrl,
   runId,
@@ -93,11 +110,20 @@ const { summary, results } = await runEval({
   concurrency: Number(values.concurrency),
   listPrice: (i, o) => listPriceUsd(i, o, REFERENCE_MODEL),
   listPriceModel: REFERENCE_MODEL,
+  ...(maxNeurons !== null
+    ? {
+        stopBefore: (done) => {
+          const spent = done.reduce((n, r) => n + neuronsOf(r), 0);
+          const next = Math.max(100, ...done.map(neuronsOf));
+          return spent + next > maxNeurons ? `budget: ${Math.round(spent)} neurons spent, the next case could pass --max-neurons ${maxNeurons}` : null;
+        },
+      }
+    : {}),
   ...(values["gateway-report"]
     ? {
         gatewayLogs: (turns) => {
-          const accountId = process.env["CLOUDFLARE_ACCOUNT_ID"];
-          const apiToken = process.env["CLOUDFLARE_API_TOKEN"];
+          const accountId = process.env["CLOUDFLARE_ACCOUNT_ID"] ?? PROD.accountId;
+          const apiToken = process.env["CF_API_TOKEN"];
           const gatewayId = process.env["AI_GATEWAY_ID"] ?? "peopledesk";
           return collectGatewayLogs(turns, {
             ...(accountId && apiToken ? { rest: restReader({ accountId, gatewayId, apiToken, fetch }) } : {}),
@@ -131,6 +157,8 @@ console.log(
     overallPassRate: summary.overallPassRate.rate,
     safety: summary.safety,
     aborted: summary.aborted ?? null,
+    stopped,
+    estimatedNeurons: Math.round(results.reduce((n, r) => n + neuronsOf(r), 0)),
     out: outDir,
   }),
 );

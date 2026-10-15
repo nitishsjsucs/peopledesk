@@ -298,6 +298,23 @@ describe("rate limits (CHAT_RATE_LIMITS)", () => {
     ]);
   });
 
+  it("stops before a case when stopBefore gives a reason (the --max-neurons budget), and grades what ran", async () => {
+    const seen: number[] = [];
+    const { results, summary: s, stopped } = await run(server({ conversations: [], messages: [] }), {
+      cases: [{ ...template, id: "x-001" }, { ...template, id: "x-002" }, { ...template, id: "x-003" }],
+      datasetSize: 200,
+      stopBefore: (done) => {
+        seen.push(done.length);
+        return done.length >= 2 ? "budget: test" : null;
+      },
+    });
+    expect(seen).toEqual([0, 1, 2]);
+    expect(stopped).toBe("budget: test");
+    expect(results.map((r) => r.id)).toEqual(["x-001", "x-002"]);
+    expect(s.aborted ?? null).toBe(null);
+    expect(s.cases).toMatchObject({ total: 200, run: 2 });
+  });
+
   it("counts a 429 as an HTTP error once the total wait would pass the ceiling", async () => {
     const { results } = await run(server({ conversations: [], messages: [limited(90_000, "all")] }), {
       sleep: async () => undefined,
