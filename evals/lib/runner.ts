@@ -137,6 +137,27 @@ export async function runEval(o: RunOptions): Promise<{ summary: Summary; result
     }
   };
 
+  // --- Service tokens: wait until every persona is admitted three rounds in a row. Right after
+  // deploy:eval-window some requests still reach isolates of the previous version (service tokens off), so
+  // a run that starts at once can count tickets through a 403 (seen in production on 2026-10-15).
+  if (o.auth.kind === "headers") {
+    const deadline = Date.now() + 120_000;
+    let streak = 0;
+    let refused: string[] = [];
+    while (streak < 3) {
+      refused = [];
+      for (const p of personas) {
+        const r = await get(p.key, "/api/tickets");
+        if (!r.ok) refused.push(`${p.key} ${r.status}`);
+      }
+      streak = refused.length === 0 ? streak + 1 : 0;
+      if (streak < 3) {
+        if (Date.now() > deadline) throw new RunnerError(`service tokens not admitted after 120 s (${refused.join(", ")}); is the eval window open (npm run deploy:eval-window)?`);
+        await sleep(2_000);
+      }
+    }
+  }
+
   // --- Server identity and dataset check (abort before grading a mismatched server).
   const firstPersona = personas[0]?.key ?? "tenured_employee";
   const healthRes = await get(firstPersona, "/api/health");
@@ -165,6 +186,7 @@ export async function runEval(o: RunOptions): Promise<{ summary: Summary; result
     let tickets = 0;
     for (const p of personas) {
       const r = await get(p.key, "/api/tickets");
+      if (!r.ok) throw new RunnerError(`GET /api/tickets as ${p.key} answered ${r.status}`);
       tickets += ((await r.json()) as { tickets: unknown[] }).tickets.length;
     }
     const s = await get(firstPersona, "/api/orientation-sessions?from=2000-01-01&to=2100-01-01");

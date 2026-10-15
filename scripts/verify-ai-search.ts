@@ -19,14 +19,21 @@ import { getPlatformProxy } from "wrangler";
 import { ARCHETYPES, fillTemplate } from "../src/shared/synth/archetypes.ts";
 import type { Manifest } from "../src/shared/synth/dataset.ts";
 import { buildAiSearchRequest, parsePolicyKey } from "../src/worker/policies/ai-search-request.ts";
-import { remoteProxyConfig, repo } from "./lib/cloudflare.ts";
+import { remoteProxyConfig, repo, wrangler } from "./lib/cloudflare.ts";
 import { PROD, readServiceTokens } from "./lib/production.ts";
 
+type Stats = { queued?: number; running?: number; completed?: number; error?: number };
 type Search = {
   search(req: unknown): Promise<{ chunks: Array<{ id: string; item: { key: string; metadata?: Record<string, unknown> } }> }>;
-  stats(): Promise<{ queued?: number; running?: number; completed?: number; error?: number }>;
-  jobs: { create(params?: { description?: string }): Promise<unknown> };
+  stats?(): Promise<Stats>;
+  // Not exposed through getPlatformProxy's remote binding (wrangler 4.149, 2026-10-15); the CLI is the fallback.
+  jobs?: { create?(params?: { description?: string }): Promise<unknown> };
 };
+
+// The remote proxy runs wrangler in this process, and wrangler reads CF_API_TOKEN as a deprecated alias of
+// CLOUDFLARE_API_TOKEN. This script needs no REST token, so drop it and keep wrangler on its OAuth login
+// (the account token has no AI Search permission).
+delete process.env["CF_API_TOKEN"];
 
 const { values } = parseArgs({ options: { "as-of": { type: "string" } } });
 const asOf = values["as-of"];
@@ -43,10 +50,15 @@ const check = (name: string, ok: boolean, detail: string) => {
 
 const { env, dispose } = await getPlatformProxy<{ POLICY_SEARCH: Search }>({ configPath: remoteProxyConfig(["ai_search"]), persist: false });
 try {
-  await env.POLICY_SEARCH.jobs.create({ description: "peopledesk verify" });
+  if (typeof env.POLICY_SEARCH.jobs?.create === "function") await env.POLICY_SEARCH.jobs.create({ description: "peopledesk verify" });
+  else wrangler(["ai-search", "jobs", "create", PROD.aiSearch, "--description", "peopledesk verify"], { capture: true });
+  const stats = async (): Promise<Stats> =>
+    typeof env.POLICY_SEARCH.stats === "function"
+      ? env.POLICY_SEARCH.stats()
+      : (JSON.parse(wrangler(["ai-search", "stats", PROD.aiSearch, "--json"], { capture: true })) as Stats);
   const deadline = Date.now() + 15 * 60_000;
   for (;;) {
-    const s = await env.POLICY_SEARCH.stats();
+    const s = await stats();
     console.log(`indexing: queued ${s.queued ?? 0}, running ${s.running ?? 0}, completed ${s.completed ?? 0}, error ${s.error ?? 0}`);
     if ((s.error ?? 0) > 0) throw new Error(`indexing reported ${s.error} errors`);
     if ((s.queued ?? 0) === 0 && (s.running ?? 0) === 0 && (s.completed ?? 0) >= manifest.counts.versions) break;

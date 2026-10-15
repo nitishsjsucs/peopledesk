@@ -21,6 +21,11 @@ import { renderSeedSql, seedStatements } from "../src/shared/synth/seed-sql.ts";
 import { productionEnv, remoteProxyConfig, repo, wrangler } from "./lib/cloudflare.ts";
 import { amzDateOf, sha256Hex, signRequest } from "./lib/sigv4.ts";
 
+// The remote proxy runs wrangler in this process, and wrangler reads CF_API_TOKEN as a deprecated alias of
+// CLOUDFLARE_API_TOKEN. This script needs no REST token, so drop it and keep wrangler on its OAuth login
+// (the account token has no AI Search permission).
+delete process.env["CF_API_TOKEN"];
+
 const { values } = parseArgs({ options: { "as-of": { type: "string" }, r2: { type: "string", default: "proxy" } } });
 const asOf = values["as-of"];
 if (!asOf) {
