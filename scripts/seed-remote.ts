@@ -54,7 +54,7 @@ const objects = r2PolicyObjects(manifest);
 const bodyOf = (key: string) => readFileSync(join(dataDir, key), "utf8");
 
 async function putAllViaProxy(): Promise<void> {
-  const { env, dispose } = await getPlatformProxy<{ POLICY_BUCKET: Bucket }>({ configPath: remoteProxyConfig(), persist: false });
+  const { env, dispose } = await getPlatformProxy<{ POLICY_BUCKET: Bucket }>({ configPath: remoteProxyConfig(["r2"]), persist: false });
   try {
     for (const obj of objects) {
       await env.POLICY_BUCKET.put(obj.key, bodyOf(obj.key), {

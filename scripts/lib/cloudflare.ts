@@ -83,7 +83,12 @@ export function productionEnv(): ProductionEnv & { name: string; account_id?: st
  * A throwaway wrangler config whose production bindings are marked remote, for getPlatformProxy.
  * The repository's wrangler.jsonc stays local-first (no account-only bindings in the default env).
  */
-export function remoteProxyConfig(): string {
+export type RemoteBinding = "r2" | "ai" | "ai_search";
+
+// Only the bindings a script uses go into the proxy config: wrangler checks every remote binding when it
+// starts the session, so an AI Search binding whose instance does not exist yet (setup creates it after
+// seeding R2) would fail a script that only needs R2.
+export function remoteProxyConfig(bindings: readonly RemoteBinding[]): string {
   // getPlatformProxy runs wrangler in this process: keep it on the OAuth login too.
   if (process.env["CLOUDFLARE_API_TOKEN"]) {
     console.warn("Ignoring CLOUDFLARE_API_TOKEN: remote bindings use wrangler's OAuth login (npx wrangler login).");
@@ -103,9 +108,9 @@ export function remoteProxyConfig(): string {
         ...(p.account_id ? { account_id: p.account_id } : {}),
         compatibility_date: p.compatibility_date,
         compatibility_flags: p.compatibility_flags,
-        r2_buckets: p.r2_buckets.map((b) => ({ ...b, remote: true })),
-        ...(p.ai ? { ai: { ...p.ai, remote: true } } : {}),
-        ...(p.ai_search ? { ai_search: p.ai_search.map((s) => ({ ...s, remote: true })) } : {}),
+        ...(bindings.includes("r2") ? { r2_buckets: p.r2_buckets.map((b) => ({ ...b, remote: true })) } : {}),
+        ...(bindings.includes("ai") && p.ai ? { ai: { ...p.ai, remote: true } } : {}),
+        ...(bindings.includes("ai_search") && p.ai_search ? { ai_search: p.ai_search.map((s) => ({ ...s, remote: true })) } : {}),
       },
       null,
       2,

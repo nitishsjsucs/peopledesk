@@ -70,7 +70,7 @@ if (windowOpen && headers) {
   const prod = productionEnv();
   const model = prod.vars["WORKERS_AI_MODEL"] ?? "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
   const turnId = `verify-${crypto.randomUUID()}`;
-  const { env, dispose } = await getPlatformProxy<{ AI: AiLike }>({ configPath: remoteProxyConfig(), persist: false });
+  const { env, dispose } = await getPlatformProxy<{ AI: AiLike }>({ configPath: remoteProxyConfig(["ai"]), persist: false });
   try {
     await env.AI.run(
       model,

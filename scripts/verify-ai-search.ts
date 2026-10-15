@@ -41,7 +41,7 @@ const check = (name: string, ok: boolean, detail: string) => {
   console.log(`${ok ? "PASS" : "FAIL"} ${name}: ${detail}`);
 };
 
-const { env, dispose } = await getPlatformProxy<{ POLICY_SEARCH: Search }>({ configPath: remoteProxyConfig(), persist: false });
+const { env, dispose } = await getPlatformProxy<{ POLICY_SEARCH: Search }>({ configPath: remoteProxyConfig(["ai_search"]), persist: false });
 try {
   await env.POLICY_SEARCH.jobs.create({ description: "peopledesk verify" });
   const deadline = Date.now() + 15 * 60_000;
