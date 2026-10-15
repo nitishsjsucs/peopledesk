@@ -17,7 +17,7 @@ import {
 import type { CaseResult, GatewayLogSample, Summary } from "../../evals/lib/report.ts";
 import { percentile, wilson } from "../../evals/lib/stats.ts";
 import { bindingRouteReader, collectGatewayLogs, restReader } from "../../evals/lib/gateway.ts";
-import { runEval } from "../../evals/lib/runner.ts";
+import { retryAfterOf, runEval } from "../../evals/lib/runner.ts";
 import type { DatasetMeta } from "../../evals/lib/runner.ts";
 import { PERSONA_KEYS } from "../../src/shared/domain.ts";
 import type { EvalCase } from "../../src/shared/synth/eval-cases.ts";
@@ -207,6 +207,111 @@ describe("abort rules", () => {
     expect(s.aborted?.reason).toMatch(/error rate 5.1% exceeds 5% after 59 cases/);
     expect(s.cases.run).toBe(60);
     expect(s.cases.total).toBe(100);
+  });
+});
+
+describe("rate limits (CHAT_RATE_LIMITS)", () => {
+  const meta = JSON.parse(readFileSync(join(repo, "evals/dataset/asof-2026-10-01/meta.json"), "utf8")) as DatasetMeta;
+  const template = readFileSync(join(repo, "evals/dataset/asof-2026-10-01/cases.jsonl"), "utf8")
+    .trim()
+    .split("\n")
+    .map((l) => JSON.parse(l) as EvalCase)
+    .find((c) => c.category === "action_request" && c.expected.type === "tool" && c.expected.tool === "list_orientation_sessions") as EvalCase;
+  const personas = PERSONA_KEYS.map((key, i) => ({ key, employeeId: `E${String(9000 + i)}`, email: `${key}@example.test` }));
+  const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
+    new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });
+  const limited = (retryAfter: number, scope: string) =>
+    json({ error: { code: "rate_limited", message: "slow down", requestId: "r", details: { scope, retryAfterSeconds: retryAfter } } }, 429, {
+      "retry-after": String(retryAfter),
+    });
+  const okTurn = () =>
+    json({
+      turnId: crypto.randomUUID(),
+      conversationId: "c",
+      kind: "tool_result",
+      text: "Sessions listed.",
+      citations: [],
+      toolCall: { tool: "list_orientation_sessions", arguments: {}, status: "ok" },
+      toolResult: { sessions: [] },
+      trace: {
+        asOf: meta.asOf,
+        llmProvider: "stub",
+        model: "fake",
+        totalMs: 1,
+        router: { intent: "tool_call", ms: 1, inputTokens: 1, outputTokens: 1, retries: 0 },
+        gatewayLogIdHints: [],
+      },
+    });
+  // Answers each POST to `path` with the queued responses first, then normally.
+  const server = (queued: Record<"conversations" | "messages", Response[]>) => async (input: string): Promise<Response> => {
+    const path = new URL(input).pathname;
+    if (path === "/dev/personas") return json({ personas });
+    if (path === "/dev/token") return json({ token: "t", expiresAt: "2026-10-01T01:00:00Z" });
+    if (path === "/api/health") {
+      return json({ ok: true, authMode: "dev", llmProvider: "stub", model: "fake", retriever: "d1-fts", asOf: meta.asOf, version: "1", datasetSha256: meta.datasetSha256 });
+    }
+    if (path === "/api/tickets") return json({ tickets: [] });
+    if (path === "/api/orientation-sessions") return json({ sessions: [] });
+    if (path === "/api/conversations") return queued.conversations.shift() ?? json({ id: crypto.randomUUID() }, 201);
+    if (path.endsWith("/messages")) return queued.messages.shift() ?? okTurn();
+    return json({}, 404);
+  };
+  const run = (fetch: (input: string) => Promise<Response>, extra: Partial<Parameters<typeof runEval>[0]> = {}) =>
+    runEval({
+      fetch,
+      baseUrl: "http://localhost:8782",
+      runId: "rate-limit-test",
+      command: "test",
+      gitSha: "0000000",
+      cases: [{ ...template, id: "x-001" }, { ...template, id: "x-002" }],
+      dataset: meta,
+      auth: { kind: "dev" },
+      concurrency: 1,
+      listPrice: () => 0,
+      listPriceModel: "m",
+      ...extra,
+    });
+
+  it("waits for Retry-After and resends, so a 429 is neither an error nor part of the latency", async () => {
+    const slept: number[] = [];
+    const waits: Array<{ path: string; waitSeconds: number; scope: string | null }> = [];
+    const { results, summary: s } = await run(
+      server({ conversations: [limited(5, "user")], messages: [limited(43_170, "all"), limited(30, "user")] }),
+      {
+        // A real 60 ms pause per wait, so a latency that included a wait would show it.
+        sleep: async (ms) => {
+          slept.push(ms);
+          await new Promise((r) => setTimeout(r, 60));
+        },
+        onRateLimited: ({ path, waitSeconds, scope }) => waits.push({ path: path.replace(/[0-9a-f-]{36}/, ":id"), waitSeconds, scope }),
+      },
+    );
+    expect(results.map((r) => r.infrastructureError)).toEqual([false, false]);
+    expect(results.every((r) => r.passed)).toBe(true);
+    expect(s.infrastructure).toMatchObject({ errorTurns: {}, httpErrors: 0, errorRate: 0 });
+    expect(slept).toEqual([6_000, 43_171_000, 31_000]);
+    expect(Math.max(...results.map((r) => r.latencyMs))).toBeLessThan(60);
+    expect(waits).toEqual([
+      { path: "/api/conversations", waitSeconds: 5, scope: "user" },
+      { path: "/api/conversations/:id/messages", waitSeconds: 43_170, scope: "all" },
+      { path: "/api/conversations/:id/messages", waitSeconds: 30, scope: "user" },
+    ]);
+  });
+
+  it("counts a 429 as an HTTP error once the total wait would pass the ceiling", async () => {
+    const { results } = await run(server({ conversations: [], messages: [limited(90_000, "all")] }), {
+      sleep: async () => undefined,
+      maxRateLimitWaitMs: 3_600_000,
+    });
+    expect(results[0]).toMatchObject({ infrastructureError: true, httpStatus: 429, reasons: ["infrastructure_error", "http_429"] });
+    expect(results[1]?.infrastructureError).toBe(false);
+  });
+
+  it("reads Retry-After from the header, then the error details, else waits 60 s", async () => {
+    expect(await retryAfterOf(limited(12, "user"))).toEqual({ seconds: 12, scope: "user" });
+    const noHeader = json({ error: { code: "rate_limited", message: "m", requestId: "r", details: { scope: "all", retryAfterSeconds: 7 } } }, 429);
+    expect(await retryAfterOf(noHeader)).toEqual({ seconds: 7, scope: "all" });
+    expect(await retryAfterOf(new Response("busy", { status: 429 }))).toEqual({ seconds: 60, scope: null });
   });
 });
 

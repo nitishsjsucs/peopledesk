@@ -3,7 +3,10 @@
 // Origin and Content-Type, because requireSameOrigin guards conversations, messages and reject.
 // The runner never approves anything: it rejects every pending action a case created, so per-user
 // rate limits do not leak across cases, and any increase in tickets or booked seats over the run is a
-// write without approval.
+// write without approval. A 429 rate_limited from CHAT_RATE_LIMITS is the server's own limit, not an
+// infrastructure error: the runner waits for Retry-After and sends the same request again, so on the
+// Workers Free plan a production run pauses at the account-wide daily budget and resumes after 00:00
+// UTC. Latency counts only the attempt that was answered.
 import { HealthSchema, TurnResultSchema } from "../../src/shared/api-types.ts";
 import type { Health, TurnResult } from "../../src/shared/api-types.ts";
 import type { PersonaKey } from "../../src/shared/domain.ts";
@@ -41,8 +44,27 @@ export type RunOptions = {
   /** Production only: fetch AI Gateway logs for the run's turns after it finishes. */
   gatewayLogs?: (turns: Array<{ conversationId: string; turnId: string; persona: PersonaKey; llmCalls: number }>) => Promise<TurnLogs[] | null>;
   onProgress?: (done: number, total: number, last: CaseResult) => void;
+  /** Called before each wait for a 429's Retry-After. */
+  onRateLimited?: (info: { persona: PersonaKey; path: string; waitSeconds: number; scope: string | null }) => void;
+  /** Longest total wait for one request before its 429 counts as an error (default 26 hours). */
+  maxRateLimitWaitMs?: number;
+  sleep?: (ms: number) => Promise<void>;
   now?: () => Date;
 };
+
+/** Retry-After in seconds from the header, else from the error details, else 60. */
+export async function retryAfterOf(res: Response): Promise<{ seconds: number; scope: string | null }> {
+  let details: { retryAfterSeconds?: unknown; scope?: unknown } | undefined;
+  try {
+    details = ((await res.json()) as { error?: { details?: typeof details } }).error?.details;
+  } catch {
+    details = undefined;
+  }
+  const header = Number(res.headers.get("retry-after"));
+  const fromDetails = Number(details?.retryAfterSeconds);
+  const seconds = Number.isFinite(header) && header > 0 ? header : Number.isFinite(fromDetails) && fromDetails > 0 ? fromDetails : 60;
+  return { seconds: Math.min(seconds, 7 * 86_400), scope: typeof details?.scope === "string" ? details.scope : null };
+}
 
 export class RunnerError extends Error {
   constructor(message: string) {
@@ -89,6 +111,26 @@ export async function runEval(o: RunOptions): Promise<{ summary: Summary; result
       headers: { ...headers[key], Origin: origin, "Content-Type": "application/json", ...extra },
       body: JSON.stringify(body),
     });
+
+  const sleep = o.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const maxWaitMs = o.maxRateLimitWaitMs ?? 26 * 3_600_000;
+  /** POST, waiting out 429 rate_limited answers. Returns the answered attempt and its latency. */
+  const postPatiently = async (key: PersonaKey, path: string, body: unknown, extra: Record<string, string> = {}) => {
+    let waitedMs = 0;
+    for (;;) {
+      const t0 = Date.now();
+      const res = await post(key, path, body, extra);
+      const ms = Date.now() - t0;
+      if (res.status !== 429) return { res, ms };
+      const { seconds, scope } = await retryAfterOf(res);
+      // One extra second so the retry lands inside the next window.
+      const waitMs = seconds * 1000 + 1000;
+      if (waitedMs + waitMs > maxWaitMs) return { res, ms };
+      o.onRateLimited?.({ persona: key, path, waitSeconds: seconds, scope });
+      await sleep(waitMs);
+      waitedMs += waitMs;
+    }
+  };
 
   // --- Server identity and dataset check (abort before grading a mismatched server).
   const firstPersona = personas[0]?.key ?? "tenured_employee";
@@ -148,14 +190,13 @@ export async function runEval(o: RunOptions): Promise<{ summary: Summary; result
     };
     let turn: TurnResult | null = null;
     try {
-      const conv = await post(c.persona, "/api/conversations", {});
+      const { res: conv } = await postPatiently(c.persona, "/api/conversations", {});
       if (!conv.ok) return { ...base, httpStatus: conv.status, reasons: ["infrastructure_error", `create_conversation_${conv.status}`] };
       const { id } = (await conv.json()) as { id: string };
-      const t0 = Date.now();
-      const res = await post(c.persona, `/api/conversations/${id}/messages`, { text: c.question }, {
+      const { res, ms } = await postPatiently(c.persona, `/api/conversations/${id}/messages`, { text: c.question }, {
         "X-PeopleDesk-Eval": `${o.runId}:${c.id}`,
       });
-      base.latencyMs = Date.now() - t0;
+      base.latencyMs = ms;
       base.httpStatus = res.status;
       base.conversationId = id;
       if (!res.ok) return { ...base, reasons: ["infrastructure_error", `http_${res.status}`] };

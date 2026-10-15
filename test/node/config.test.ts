@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { CONFIG_KEYS } from "../../src/worker/config-keys.ts";
 import { verifierFor } from "../../src/worker/auth/identity.ts";
 import { getConfig, parseConfig, readConfigVars } from "../../src/worker/env.ts";
+import { humanWait, parseRateLimits } from "../../src/worker/services/rate-limit-rules.ts";
 import { BASE_TEST_VARS } from "../pool-vars.ts";
 
 const JWKS = JSON.stringify({ keys: [{ kty: "RSA", n: "x", e: "AQAB", kid: "k" }] });
@@ -71,9 +72,55 @@ describe("parseConfig", () => {
     expect(parseConfig({ ...access, RETRIEVER: "ai-search", POLICY_SEARCH: {} }).ok).toBe(true);
   });
 
+  it("requires CHAT_RATE_LIMITS with at least one per-user rule", () => {
+    const r = parseConfig(dev);
+    expect(r.ok && r.config.chatRateLimits).toEqual([
+      { scope: "user", max: 1000, windowSeconds: 60 },
+      { scope: "all", max: 1_000_000, windowSeconds: 86_400 },
+    ]);
+    expect(parseConfig({ ...dev, CHAT_RATE_LIMITS: "" }).ok).toBe(false);
+    expect(parseConfig({ ...access, CHAT_RATE_LIMITS: "all:100/86400" }).ok).toBe(false);
+    const { CHAT_RATE_LIMITS: _limits, ...missing } = dev;
+    expect(parseConfig(missing).ok).toBe(false);
+  });
+
   it("requires the D1, R2 and Durable Object bindings", () => {
     const { DB: _db, ...noDb } = dev;
     expect(parseConfig(noDb).ok).toBe(false);
+  });
+});
+
+describe("parseRateLimits", () => {
+  it("parses the production rules", () => {
+    expect(parseRateLimits("user:6/60, user:60/86400,all:120/86400")).toEqual({
+      ok: true,
+      rules: [
+        { scope: "user", max: 6, windowSeconds: 60 },
+        { scope: "user", max: 60, windowSeconds: 86_400 },
+        { scope: "all", max: 120, windowSeconds: 86_400 },
+      ],
+    });
+  });
+
+  it("rejects malformed, zero, oversized, repeated and too many rules", () => {
+    for (const bad of [
+      "user:6",
+      "user:6/60s",
+      "team:6/60",
+      "user:0/60",
+      "user:6/0",
+      "user:6/604801",
+      "user:6/60,user:7/60",
+      "user:1/1,user:1/2,user:1/3,user:1/4,user:1/5,user:1/6,user:1/7",
+    ]) {
+      expect(parseRateLimits(bad).ok, bad).toBe(false);
+    }
+  });
+
+  it("words the wait for the 429 message", () => {
+    expect(humanWait(30)).toBe("30 seconds");
+    expect(humanWait(600)).toBe("about 10 minutes");
+    expect(humanWait(43_170)).toBe("about 12 hours");
   });
 });
 

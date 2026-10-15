@@ -24,6 +24,8 @@ export const BASE_TEST_VARS = {
   APP_HOSTNAME: "localhost",
   ACTION_TTL_SECONDS: "900",
   ALLOW_SERVICE_TOKENS: "false",
+  // High enough that no test file reaches it by sending turns; the limiter's own tests seed counters.
+  CHAT_RATE_LIMITS: "user:1000/60,all:1000000/86400",
 } satisfies Record<ConfigKey, string>;
 
 export type TestKeys = {

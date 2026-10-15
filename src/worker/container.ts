@@ -18,6 +18,7 @@ import { AuditService } from "./services/audit.ts";
 import { EmployeeService } from "./services/employees.ts";
 import { OnboardingService } from "./services/onboarding.ts";
 import { OrientationService } from "./services/orientation.ts";
+import { RateLimiter } from "./services/rate-limit.ts";
 import { TicketService } from "./services/tickets.ts";
 
 export type Services = {
@@ -33,6 +34,7 @@ export type Services = {
   retriever: PolicyRetriever;
   gate: PermissionGate;
   actions: ActionService;
+  rateLimiter: RateLimiter;
 };
 
 export function retrieverFor(cfg: AppConfig, env: Env): PolicyRetriever {
@@ -78,5 +80,7 @@ export function buildServices(env: Env, cfg: AppConfig, clock: Clock): Services 
     gate: new PermissionGate(env.DB),
     // No hooks: only the crash-injection test constructs ActionService with afterCommit.
     actions: new ActionService({ db: env.DB, clock, audit, employees, onboarding, orientation, ttlSeconds: cfg.actionTtlSeconds }),
+    // Wall time, never the business date: windows line up with the platform's 00:00 UTC resets.
+    rateLimiter: new RateLimiter(env.DB, cfg.chatRateLimits, () => clock.nowMs()),
   };
 }

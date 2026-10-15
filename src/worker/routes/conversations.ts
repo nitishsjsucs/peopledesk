@@ -7,9 +7,11 @@ import type { Context } from "hono";
 import { CreateConversationRequestSchema, SendMessageRequestSchema } from "../../shared/api-types.ts";
 import type { TurnResult } from "../../shared/api-types.ts";
 import { UUID_RE } from "../../shared/domain.ts";
-import { AppError } from "../errors.ts";
+import { AppError, errorResponse } from "../errors.ts";
 import type { AppEnv } from "../hono-env.ts";
 import { BindingGatewayLogReader } from "../llm/gateway-log.ts";
+import { humanWait } from "../services/rate-limit.ts";
+import type { RateLimitBucket } from "../services/rate-limit.ts";
 import { validate } from "../validation.ts";
 
 const EVAL_HEADER = "X-PeopleDesk-Eval";
@@ -25,6 +27,30 @@ async function ownedConversation(c: Context<AppEnv>): Promise<{ id: string; titl
     .first<{ id: string; title: string }>();
   if (!row) throw notFound();
   return row;
+}
+
+/**
+ * CHAT_RATE_LIMITS, checked after validation and ownership and before any work: a 429 with
+ * Retry-After, or null when the request may go on. A rejected request is not counted.
+ */
+async function rateLimited(c: Context<AppEnv>, bucket: RateLimitBucket): Promise<Response | null> {
+  const employeeId = c.get("principal").employeeId;
+  const d = await c.get("services").rateLimiter.take(employeeId, bucket);
+  if (d.ok) return null;
+  console.warn(JSON.stringify({ msg: "rate_limited", bucket, scope: d.scope, employeeId, requestId: c.get("requestId") }));
+  const wait = humanWait(d.retryAfterSeconds);
+  const message =
+    d.scope === "all"
+      ? `PeopleDesk has reached its shared chat capacity for now. Try again in ${wait}.`
+      : bucket === "turn"
+        ? `You have sent too many messages. Try again in ${wait}.`
+        : `You have started too many conversations. Try again in ${wait}.`;
+  const res = errorResponse(429, "rate_limited", message, c.get("requestId"), {
+    scope: d.scope,
+    retryAfterSeconds: d.retryAfterSeconds,
+  });
+  res.headers.set("retry-after", String(d.retryAfterSeconds));
+  return res;
 }
 
 export function agentFor(env: Env, employeeId: string, conversationId: string) {
@@ -43,6 +69,8 @@ export const conversationRoutes = new Hono<AppEnv>()
     });
   })
   .post("/conversations", validate("json", CreateConversationRequestSchema), async (c) => {
+    const limited = await rateLimited(c, "conversation");
+    if (limited) return limited;
     const id = crypto.randomUUID();
     const now = c.get("clock").nowIso();
     await c.env.DB.prepare("INSERT INTO conversations (id, employee_id, title, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?4)")
@@ -58,6 +86,8 @@ export const conversationRoutes = new Hono<AppEnv>()
   })
   .post("/conversations/:id/messages", validate("json", SendMessageRequestSchema), async (c) => {
     const conv = await ownedConversation(c);
+    const limited = await rateLimited(c, "turn");
+    if (limited) return limited;
     const principal = c.get("principal");
     const { text } = c.req.valid("json");
     // The eval header only labels gateway metadata (evalRunId, caseId) and turns off the gateway

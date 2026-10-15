@@ -3,6 +3,8 @@ import { ISO_DATE_RE } from "../shared/domain.ts";
 import type { AuthMode, LlmProviderId, RetrieverKind } from "../shared/domain.ts";
 import { CONFIG_KEYS } from "./config-keys.ts";
 import type { ConfigKey } from "./config-keys.ts";
+import { parseRateLimits } from "./services/rate-limit-rules.ts";
+import type { RateLimitRule } from "./services/rate-limit-rules.ts";
 
 export type JwkSet = { keys: Array<Record<string, unknown> & { kty: string }> };
 
@@ -26,6 +28,8 @@ export type AppConfig = {
   appHostname: string;
   actionTtlSeconds: number;
   allowServiceTokens: boolean;
+  /** CHAT_RATE_LIMITS: per-user and account-wide limits on chat turns and new conversations. */
+  chatRateLimits: RateLimitRule[];
   /** Fingerprint of the CONFIG_KEYS values; keys module-scope caches of derived objects. */
   fingerprint: string;
 };
@@ -108,6 +112,9 @@ export function parseConfig(env: Record<string, unknown>): ConfigResult {
     issues,
   );
 
+  const limits = parseRateLimits(raw.CHAT_RATE_LIMITS);
+  if (!limits.ok) issues.push(`CHAT_RATE_LIMITS: ${limits.issue}`);
+
   let auth: AuthConfig | undefined;
   let asOfOverride: string | null = null;
   if (authMode === "access") {
@@ -167,7 +174,8 @@ export function parseConfig(env: Record<string, unknown>): ConfigResult {
     !retriever ||
     !appHostname ||
     ttl === undefined ||
-    !allowServiceTokens
+    !allowServiceTokens ||
+    !limits.ok
   ) {
     return { ok: false, issues: issues.length > 0 ? issues : ["invalid configuration"] };
   }
@@ -183,6 +191,7 @@ export function parseConfig(env: Record<string, unknown>): ConfigResult {
       appHostname,
       actionTtlSeconds: ttl,
       allowServiceTokens: allowServiceTokens === "true",
+      chatRateLimits: limits.rules,
       fingerprint: fingerprintOf(raw, bindings),
     },
   };

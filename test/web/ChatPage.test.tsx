@@ -129,6 +129,25 @@ describe("ChatPage", () => {
     expect(container.querySelector(".message-list")?.getAttribute("aria-live")).toBe("polite");
   });
 
+  it("shows the server's rate limit message when a send answers 429, and keeps the text for a retry", async () => {
+    installFetch([
+      { path: "/api/conversations", body: { conversations: [] } },
+      { path: "/api/conversations/c1", body: { id: "c1", title: "t", messages: [] } },
+      {
+        method: "POST",
+        path: "/api/conversations/c1/messages",
+        status: 429,
+        body: { error: { code: "rate_limited", message: "You have sent too many messages. Try again in 42 seconds.", requestId: "r", details: { scope: "user", retryAfterSeconds: 42 } } },
+      },
+    ]);
+    const { container } = renderChat();
+    const input = await screen.findByLabelText("Message");
+    fireEvent.change(input, { target: { value: "How much PTO do I get?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await screen.findByText("You have sent too many messages. Try again in 42 seconds.");
+    expect(within(container.querySelector(".message-list") as HTMLElement).getByRole("button", { name: "Retry" })).toBeTruthy();
+  });
+
   describe("approval cards in a reloaded transcript", () => {
     // The transcript stores each turn as it was: this card was awaiting approval when it was proposed.
     const proposedThen = pendingTicket();

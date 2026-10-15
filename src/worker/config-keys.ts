@@ -19,6 +19,7 @@ export const CONFIG_KEYS = [
   "APP_HOSTNAME",
   "ACTION_TTL_SECONDS",
   "ALLOW_SERVICE_TOKENS",
+  "CHAT_RATE_LIMITS",
 ] as const;
 
 export type ConfigKey = (typeof CONFIG_KEYS)[number];

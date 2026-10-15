@@ -21,6 +21,7 @@ describe("D1 migrations", () => {
       "policy_chunks_fts",
       "policy_documents",
       "policy_versions",
+      "rate_limits",
       "tickets",
     ]);
   });

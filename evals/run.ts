@@ -5,6 +5,9 @@
 // { "<persona>": { "clientId": "...", "clientSecret": "..." } } of Access service tokens linked to the
 // personas, and --gateway-report reads AI Gateway logs (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN with
 // AI Gateway Read, AI_GATEWAY_ID default "peopledesk").
+// A 429 from the server's CHAT_RATE_LIMITS is waited out (Retry-After), not counted as an error: on the
+// Workers Free plan a 200-case production run spends the account-wide daily budget part way through,
+// pauses until 00:00 UTC and finishes the next day (README, Workers Free plan).
 // Writes evals/results/<runId>/{results.jsonl, summary.json, summary.md}.
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -105,6 +108,10 @@ const { summary, results } = await runEval({
         },
       }
     : {}),
+  onRateLimited: ({ persona, path, waitSeconds, scope }) => {
+    const until = new Date(Date.now() + waitSeconds * 1000).toISOString();
+    console.log(`rate limited (${scope ?? "unknown"} scope) on ${path.replace(/\/[0-9a-f-]{36}\//, "/:id/")} as ${persona}; waiting ${waitSeconds} s, until ${until}`);
+  },
   onProgress: (done, total, last) => {
     const mark = last.passed ? "pass" : `FAIL ${last.reasons.join(",")}`;
     console.log(`[${done}/${total}] ${last.id} ${last.kind ?? "-"} ${last.latencyMs}ms ${mark}`);
