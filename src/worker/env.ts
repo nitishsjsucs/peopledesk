@@ -42,6 +42,7 @@ export const ADVERSARIAL_MODEL = "adversarial-stub-v1";
 const nonEmpty = z.string().trim().min(1);
 const httpsUrl = z.url({ protocol: /^https$/ });
 const anyUrl = z.url({ protocol: /^https?$/ });
+const accessAud = z.string().trim().regex(/^[0-9a-f]{64}$/i, "must be the Access application's 64-character AUD tag");
 
 const jwkSetSchema = z.object({
   keys: z.array(z.looseObject({ kty: z.string() })).min(1),
@@ -119,7 +120,10 @@ export function parseConfig(env: Record<string, unknown>): ConfigResult {
   let asOfOverride: string | null = null;
   if (authMode === "access") {
     const teamDomain = parseWith(httpsUrl, raw.ACCESS_TEAM_DOMAIN, "ACCESS_TEAM_DOMAIN", issues);
-    const audience = parseWith(nonEmpty, raw.ACCESS_AUD, "ACCESS_AUD", issues);
+    // An Access application's AUD tag is 64 hexadecimal characters (the Access JWT validation docs'
+    // example). Anything else, including the empty value production ships with until
+    // npm run setup:production writes the tag, is a misconfiguration: every route answers 500.
+    const audience = parseWith(accessAud, raw.ACCESS_AUD, "ACCESS_AUD", issues);
     if (provider === "stub" || provider === "adversarial-stub") {
       issues.push(`LLM_PROVIDER: ${provider} is a test-only provider and is rejected when AUTH_MODE=access`);
     }

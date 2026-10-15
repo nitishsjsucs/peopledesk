@@ -55,7 +55,7 @@ export default defineConfig({
         {
           AUTH_MODE: "access",
           ACCESS_TEAM_DOMAIN: "https://team.test",
-          ACCESS_AUD: "test-aud",
+          ACCESS_AUD: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
           APP_HOSTNAME: "peopledesk.test",
           ALLOW_SERVICE_TOKENS: "true",
           LLM_PROVIDER: "openai-compatible",

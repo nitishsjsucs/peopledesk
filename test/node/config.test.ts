@@ -13,7 +13,7 @@ const access = {
   ...bindings,
   AUTH_MODE: "access",
   ACCESS_TEAM_DOMAIN: "https://team.test",
-  ACCESS_AUD: "aud",
+  ACCESS_AUD: "4714c1358e65fe4b408ad6d432a5f878f08194bdb4752441fd56faefa9b2b6f2",
   LLM_PROVIDER: "openai-compatible",
 };
 
@@ -59,6 +59,9 @@ describe("parseConfig", () => {
   it("requires an https team domain and an audience in access mode, and ignores AS_OF_OVERRIDE", () => {
     expect(parseConfig({ ...access, ACCESS_TEAM_DOMAIN: "http://team.test" }).ok).toBe(false);
     expect(parseConfig({ ...access, ACCESS_AUD: "" }).ok).toBe(false);
+    // Fail closed until the setup script writes the Access application's 64-character AUD tag.
+    expect(parseConfig({ ...access, ACCESS_AUD: "<Access application AUD tag>" }).ok).toBe(false);
+    expect(parseConfig({ ...access, ACCESS_AUD: "4714c1358e65fe4b408ad6d432a5f878f08194bdb4752441fd56faefa9b2b6f" }).ok).toBe(false);
     const r = parseConfig(access);
     expect(r.ok && r.config.asOfOverride).toBe(null);
   });
@@ -146,7 +149,7 @@ describe("module-scope caches (CPU budget, SPEC sections 5 and 10)", () => {
     expect(verifierFor(d.config.auth)).toBe(verifierFor({ ...d.config.auth }));
     expect(verifierFor(a.config.auth)).toBe(verifierFor({ ...a.config.auth }));
     expect(verifierFor(a.config.auth)).not.toBe(verifierFor(d.config.auth));
-    const otherAud = getConfig({ ...access, ACCESS_AUD: "other-aud" });
+    const otherAud = getConfig({ ...access, ACCESS_AUD: "b".repeat(64) });
     if (!otherAud.ok) throw new Error("test config must parse");
     expect(verifierFor(otherAud.config.auth)).not.toBe(verifierFor(a.config.auth));
   });

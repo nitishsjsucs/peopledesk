@@ -4,6 +4,8 @@
   // `env.production` redeclares every non-inheritable key (selected with CLOUDFLARE_ENV=production).
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "peopledesk",
+  // The Cloudflare account that every remote command and deploy uses (README, Production setup).
+  "account_id": "dc93c3bc8aa4f9e09a0d7e7354a80873",
   "main": "./src/worker/index.ts",
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
@@ -41,16 +43,23 @@
   },
   "env": {
     "production": {
-      // Preview URLs (<version>-peopledesk.<subdomain>.workers.dev) would bypass an Access application
-      // set up for APP_HOSTNAME. In access mode the Worker also answers 404 on every other hostname.
-      // With a custom domain as APP_HOSTNAME, also add "workers_dev": false (README, deploy steps).
+      // Deployed as "peopledesk" rather than wrangler's default "peopledesk-production", so the app is
+      // https://peopledesk.nitish-ratakonda.workers.dev, the APP_HOSTNAME below, which the Access
+      // application protects. npm run setup:production sets up everything this environment names.
+      "name": "peopledesk",
+      "workers_dev": true,
+      // Preview URLs (<version>-peopledesk.<subdomain>.workers.dev) would bypass the Access application
+      // for APP_HOSTNAME. In access mode the Worker also answers 404 on every other hostname.
       "preview_urls": false,
+      // Workers Logs (invocation logs and console output). Free plan: 200,000 events a day, kept 3 days.
+      "observability": { "enabled": true, "head_sampling_rate": 1 },
       "assets": { "not_found_handling": "single-page-application", "run_worker_first": ["/api/*", "/mcp"] },
       "d1_databases": [
         {
           "binding": "DB",
           "database_name": "peopledesk",
-          "database_id": "<set after wrangler d1 create>",
+          // Written by npm run setup:production after it finds or creates the database.
+          "database_id": "<set by npm run setup:production>",
           "migrations_dir": "migrations"
         }
       ],
@@ -60,13 +69,15 @@
       "ai_search": [{ "binding": "POLICY_SEARCH", "instance_name": "peopledesk-policies" }],
       "vars": {
         "AUTH_MODE": "access",
-        "ACCESS_TEAM_DOMAIN": "https://<team>.cloudflareaccess.com",
-        "ACCESS_AUD": "<Access application AUD tag>",
+        "ACCESS_TEAM_DOMAIN": "https://old-truth-a7dc.cloudflareaccess.com",
+        // The Access application's AUD tag, written by npm run setup:production. Until then it is empty,
+        // which the Worker rejects as misconfigured: every route answers 500 (fail closed).
+        "ACCESS_AUD": "",
         "LLM_PROVIDER": "workers-ai",
         "WORKERS_AI_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
         "AI_GATEWAY_ID": "peopledesk",
         "RETRIEVER": "ai-search",
-        "APP_HOSTNAME": "<production hostname>",
+        "APP_HOSTNAME": "peopledesk.nitish-ratakonda.workers.dev",
         "ACTION_TTL_SECONDS": "900",
         // true only during an eval window: npm run deploy:eval-window (README, deploy steps)
         "ALLOW_SERVICE_TOKENS": "false",
