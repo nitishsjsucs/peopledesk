@@ -43,10 +43,15 @@ const SHIM = [
   "export const exports = {};",
   "export function waitUntil() {}",
 ].join("\n");
+// Packages resolve as the Cloudflare Vite plugin bundles them for workerd: the "workerd", "worker",
+// "module" and "browser" export conditions, never "node". This matters: under "workerd" the MCP SDK
+// prepares its zod schemas at module load (preloadSchemas) and validates with @cfworker/json-schema
+// instead of Ajv.
 registerHooks({
   resolve(specifier, context, next) {
     if (specifier.startsWith("cloudflare:")) return { url: `data:text/javascript,${encodeURIComponent(SHIM)}`, shortCircuit: true };
-    return next(specifier, context);
+    const conditions = ["workerd", "worker", "module", "browser", ...(context.conditions ?? []).filter((c) => c !== "node" && c !== "node-addons")];
+    return next(specifier, { ...context, conditions });
   },
 });
 
@@ -63,6 +68,24 @@ const passes = Math.max(1, Number(values.passes));
 
 const { z } = await import("zod");
 z.config({ jitless: true });
+// Startup: evaluating the Worker's module graph (index.ts imports the app and the Durable Object), which
+// workerd does once per isolate under its own 1 s startup limit. Node also strips TypeScript and reads
+// files here, so this overstates workerd's startup.
+const startup0 = process.threadCpuUsage();
+await import("../src/worker/index.ts");
+const startupDelta = process.threadCpuUsage(startup0);
+const startupMs = (startupDelta.user + startupDelta.system) / 1000;
+
+/** A fixed pure-JavaScript workload, so runs on throttled or different machines can be compared. */
+function referenceMs(): number {
+  const c0 = process.threadCpuUsage();
+  let h = 2166136261;
+  for (let i = 0; i < 5_000_000; i++) h = Math.imul(h ^ (i & 0xff), 16777619) >>> 0;
+  if (h === 42) console.log("");
+  const d = process.threadCpuUsage(c0);
+  return (d.user + d.system) / 1000;
+}
+const reference = [referenceMs(), referenceMs(), referenceMs()].sort((a, b) => a - b)[1] as number;
 const { exportJWK, generateKeyPair, SignJWT } = await import("jose");
 const { generateDataset } = await import("../src/shared/synth/dataset.ts");
 const { generateEvalCases } = await import("../src/shared/synth/eval-cases.ts");
@@ -491,11 +514,15 @@ const report = {
   passes,
   cases: cases.length,
   config: { llm: cfg.llm.model, retriever: cfg.retriever, authMode: cfg.authMode },
+  startupMs: Number(startupMs.toFixed(1)),
+  referenceWorkloadMs: Number(reference.toFixed(2)),
   note: "Main-thread CPU ms (process.threadCpuUsage) excluding awaited I/O (D1, R2, AI Search, model, RPC transport); first = first call in this process (cold JIT and caches).",
   turnKinds: Object.fromEntries([...turnKinds.entries()].sort()),
   rows,
   cold: coldRows,
 };
+console.log(`Reference workload (5M FNV-1a steps, for comparing machines and power states): ${reference.toFixed(2)} ms CPU`);
+console.log(`Startup (module graph evaluation, includes Node's TypeScript stripping): ${startupMs.toFixed(1)} ms CPU`);
 console.log(`CPU per invocation, ms (asOf ${asOf}, ${passes} passes over ${cases.length} cases, ${process.version} on ${process.platform} ${process.arch})`);
 console.log("route".padEnd(58), "n".padStart(5), "first".padStart(7), "p50".padStart(7), "p95".padStart(7), "max".padStart(7), "D1 stmts".padStart(9));
 for (const r of rows) {
