@@ -2,7 +2,7 @@
 
 Historical design spec (revision 2, written before the build). Current status is in README.md and PROGRESS.md, and deviations from this spec are listed in PROGRESS.md; the scratchpad probes cited in the review log are not part of this repository.
 
-The resume text in section 0 is the target, not a description of what has run: Workers AI, AI Search, AI Gateway and Cloudflare Access have not run yet. Do not use it until the deploy steps in section 18 and a production eval have run; PROGRESS.md ("Resume claims") has interim wording that is true today.
+The resume text in section 0 is the target, not a description of what has run. PeopleDesk was deployed on 2026-10-15 (see README.md and PROGRESS.md, "Production deployment (2026-10-15)"), but the production eval so far is a 20-case sample run without `--gateway-report`, so section 0 is still not usable as is; PROGRESS.md ("Resume claims") says what production backs today, followed by the interim wording of 2026-10-09.
 
 Status: design spec, revision 2 (2026-10-08). Revision 2 resolves the review findings listed in section 24 (Review log). Nothing in this repository exists yet except this file.
 Repo: `~/Developer/projects/peopledesk`, to be pushed as `github.com/nitishsjsucs/peopledesk`.

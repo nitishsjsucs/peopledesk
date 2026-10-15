@@ -13,5 +13,5 @@ In production Cloudflare Access sits in front of the whole hostname, but authori
 ## Consequences
 
 - The production key path is tested offline: the `worker-access` Vitest project serves a JWK set through `outboundService` for `https://team.test/cdn-cgi/access/certs`.
-- Real Access has not been exercised until the owner deploys; until then the honest claim is Access-compatible JWT verification, tested offline.
+- Real Access was not exercised before the deploy on 2026-10-15, so until then the honest claim was Access-compatible JWT verification, tested offline. Since 2026-10-15 real Access sits in front of production, and the Worker has verified its JWTs on service-token requests during eval windows (`verify:production`, the `/mcp` checks of `verify:ai-search` and the 20-case production eval; README, Production setup). A user sign-in with a One-time PIN has no recorded production check yet.
 - Service tokens need a Service Auth policy on the Access application, and their JWT names the token by its Client ID in `common_name` (ADR 0005).
