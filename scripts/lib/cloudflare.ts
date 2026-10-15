@@ -6,12 +6,20 @@ import { join, resolve } from "node:path";
 
 export const repo = resolve(import.meta.dirname, "../..");
 
+/** wrangler runs on its OAuth login: an exported API token would replace it (README, Production setup). */
+function withoutApiTokens(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env, CI: "true" };
+  delete env["CLOUDFLARE_API_TOKEN"];
+  delete env["CF_API_TOKEN"];
+  return env;
+}
+
 export function wrangler(args: string[], opts: { capture?: boolean } = {}): string {
   return execFileSync(join(repo, "node_modules/.bin/wrangler"), args, {
     cwd: repo,
     encoding: "utf8",
     stdio: opts.capture ? ["ignore", "pipe", "inherit"] : "inherit",
-    env: { ...process.env, CI: "true" },
+    env: withoutApiTokens(),
     maxBuffer: 64 * 1024 * 1024,
   }) as unknown as string;
 }
@@ -76,6 +84,11 @@ export function productionEnv(): ProductionEnv & { name: string; account_id?: st
  * The repository's wrangler.jsonc stays local-first (no account-only bindings in the default env).
  */
 export function remoteProxyConfig(): string {
+  // getPlatformProxy runs wrangler in this process: keep it on the OAuth login too.
+  if (process.env["CLOUDFLARE_API_TOKEN"]) {
+    console.warn("Ignoring CLOUDFLARE_API_TOKEN: remote bindings use wrangler's OAuth login (npx wrangler login).");
+    delete process.env["CLOUDFLARE_API_TOKEN"];
+  }
   const p = productionEnv();
   if (p.d1_databases.some((d) => d.database_id.startsWith("<"))) {
     throw new Error("Set env.production.d1_databases[0].database_id in wrangler.jsonc first (npm run setup:production does).");

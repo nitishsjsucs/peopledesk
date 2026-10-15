@@ -100,9 +100,10 @@ step(2, `D1 database ${PROD.d1Name}`);
 let d1Id = state.d1Id;
 if (d1Id) skip(`exists (${d1Id})`);
 else {
-  would(`wrangler d1 create ${PROD.d1Name}`);
+  would(`wrangler d1 create ${PROD.d1Name} --location wnam --update-config=false`);
   if (!dry) {
-    wranglerRun(["d1", "create", PROD.d1Name]);
+    // This script writes the id into env.production itself; wrangler must not add a top-level binding.
+    wranglerRun(["d1", "create", PROD.d1Name, "--location", "wnam", "--update-config=false"]);
     const list = jsonIn<Array<{ uuid: string; name: string }>>(wranglerTry(["d1", "list", "--json"]).out) ?? [];
     d1Id = list.find((d) => d.name === PROD.d1Name)?.uuid ?? null;
     if (!d1Id) throw new Error("created the D1 database but cannot find its id in wrangler d1 list");
@@ -121,9 +122,9 @@ step(3, `R2 bucket ${PROD.bucket}`);
 let bucketCreated = false;
 if (state.bucketExists) skip("exists");
 else {
-  would(`wrangler r2 bucket create ${PROD.bucket}`);
+  would(`wrangler r2 bucket create ${PROD.bucket} --location wnam --update-config=false`);
   if (!dry) {
-    wranglerRun(["r2", "bucket", "create", PROD.bucket]);
+    wranglerRun(["r2", "bucket", "create", PROD.bucket, "--location", "wnam", "--update-config=false"]);
     bucketCreated = true;
   }
 }
