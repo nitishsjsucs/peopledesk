@@ -79,7 +79,7 @@
         "RETRIEVER": "ai-search",
         "APP_HOSTNAME": "peopledesk.nitish-ratakonda.workers.dev",
         "ACTION_TTL_SECONDS": "900",
-        // true only during an eval window: npm run deploy:eval-window (README, deploy steps)
+        // true only during an eval window: npm run deploy:eval-window (README, Production setup)
         "ALLOW_SERVICE_TOKENS": "false",
         // 6 turns a minute and 20 a day per user, and 30 a day for everyone together. A turn costs about
         // 66 Workers AI neurons at llama-3.3-70b prices, so 30 turns are about 2,000 of the Workers Free

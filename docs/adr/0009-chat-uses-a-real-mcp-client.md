@@ -13,5 +13,5 @@ The six tools serve two audiences: the chat agent and external MCP clients. Call
 ## Consequences
 
 - Chat, forms and external clients share one validation and authorization path; strict input schemas, output schemas and audit rows apply to all of them.
-- Each chat turn pays for MCP JSON-RPC encoding both ways inside the Worker. Module-scope caching keeps this small, but it adds CPU time, one reason Workers Paid is likely needed (SPEC section 17).
+- Each chat turn pays for MCP JSON-RPC encoding both ways inside the Worker. Module-scope caching keeps this small: measured with `npm run cpu:profile` (2026-10-15), a warm chat turn costs about 1 to 2 ms of CPU, under the Workers Free plan's 10 ms, but the first turn in a fresh Durable Object isolate costs about 15 ms, much of it first-use setup on this path (README, CPU time).
 - The MCP packages are pinned exactly at 2.0.0 because agents 0.27.0 pins them as peers.

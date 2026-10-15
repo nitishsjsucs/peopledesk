@@ -2,7 +2,7 @@
 
 PeopleDesk is an employee self-service and action agent for a synthetic company. It answers policy questions with citations that name the document, version, section and effective dates, and it completes approved tasks: creating support tickets, checking onboarding progress and scheduling orientation sessions. A chat interface and structured request forms share one set of zod schemas with the server. Six typed MCP tools serve both the chat agent (through an in-process MCP client) and external MCP clients, with server-side authorization from verified Access-format JWTs (tested against a locally served JWKS; Cloudflare Access itself has not run), user-scoped data access, permission-aware retrieval and an approval checkpoint that only the requesting user's identity can complete. A 200-case evaluation harness measures grounded answer accuracy, safety invariants, latency and token cost (a list-price estimate locally).
 
-The app, tests and evals run offline on a laptop; the production scripts need a Cloudflare account and have not been run. The Cloudflare services (Workers AI, AI Search, AI Gateway, Access) are implemented behind interfaces and tested against fakes or a locally served JWKS, and the production bundle and its bindings pass `wrangler deploy --dry-run`. They have not served real traffic yet (see [What runs where](#what-runs-where)).
+The app, tests and evals run offline on a laptop. Production targets the Cloudflare Workers Free plan, and one command, `npm run setup:production`, sets it up; it has been run only as a read-only dry run so far, so nothing is deployed yet. The Cloudflare services (Workers AI, AI Search, AI Gateway, Access) are implemented behind interfaces and tested against fakes or a locally served JWKS, and the production bundle and its bindings pass `wrangler deploy --dry-run`. They have not served real traffic yet (see [What runs where](#what-runs-where) and [Workers Free plan](#workers-free-plan)).
 
 All people, policies, tickets and numbers are synthetic, generated deterministically by `npm run generate`.
 
@@ -12,11 +12,12 @@ All people, policies, tickets and numbers are synthetic, generated deterministic
 |---|---|
 | **Works today, locally** | Every P0 item of [SPEC.md](SPEC.md) section 1 except the Cloudflare-only parts in the next row, including six recorded local eval runs with identical grades: the deterministic synthetic organization and versioned policy corpus, local D1 and R2 seeding, Access-format JWT authentication verified against a local JWKS, the authorization matrix, permission-aware retrieval with the D1 FTS5 retriever, the API, the six MCP tools at `/mcp`, the approval checkpoint, the OpenAI-compatible provider (with `llama-server`) and the two stub providers the tests use, the chat agent, the React UI and the 200-case eval harness. Also the P1 home page, manager onboarding view, ticket status filter, dark theme and policy version change list |
 | **Tested only against fakes, not yet run against Cloudflare** | The Workers AI provider (a fake `AI` binding), the AI Search retriever (a fake `AiSearchInstance`), both AI Gateway log readers (fake binding and fake REST responses) and Cloudflare Access itself (the production remote-JWKS code path is tested by serving a JWKS locally). They are written to the documented APIs and pass `wrangler deploy --dry-run`, but none has served a request on Cloudflare |
-| **Written, not yet run** | `seed:remote` (including the R2 S3 API fallback; its SigV4 signer is tested against AWS's documented example), `verify:ai-search`, `verify:gateway` and `link-identity --remote`. All need a Cloudflare account |
-| **Tests** | 508 tests in 66 files across five Vitest projects, all passing (`npm test`, 2026-10-09) |
-| **Not done yet** | A production deployment and a production eval run, both of which need a Cloudflare account |
-| **Deployed** | No. Nothing runs on Cloudflare yet; the deploy steps below need `npx wrangler login` |
-| **CI** | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs typecheck, dataset determinism, tests, build, an offline deploy dry run and a generated-types check. All six pass locally at this commit (2026-10-09) |
+| **Written, not yet run against Cloudflare** | `setup:production` (run once as `--dry-run` on 2026-10-15: its read-only inspection worked against the account, which has no PeopleDesk resources yet), `doctor`, `verify:production`, `seed:remote` (including the R2 S3 API fallback; its SigV4 signer is tested against AWS's documented example), `verify:ai-search`, `verify:gateway` and `link-identity --remote` |
+| **Measured locally** | CPU time per route and per chat turn, excluding awaited I/O (`npm run cpu:profile`; see [CPU time](#cpu-time)) |
+| **Tests** | 533 tests in 69 files across five Vitest projects, all passing (`npm test`, 2026-10-15) |
+| **Not done yet** | The production deployment, the production verification scripts and a production eval run |
+| **Deployed** | No. Nothing runs on Cloudflare yet; [Production setup](#production-setup) is one command |
+| **CI** | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs typecheck, dataset determinism, tests, build, an offline deploy dry run and a generated-types check. All six pass locally at this commit (2026-10-15) |
 
 [PROGRESS.md](PROGRESS.md) records where the build stands against the spec's commit plan and every deviation from the spec. [CONTEXT.md](CONTEXT.md) defines the domain vocabulary and [`docs/adr/`](docs/adr/) records the main design decisions.
 
@@ -81,9 +82,9 @@ An information-changing request (a ticket, a booking) never writes. The tool cre
 
 ## What runs where
 
-| Concern | Local (this repo, offline) | Production (after `wrangler login` and the deploy steps) |
+| Concern | Local (this repo, offline) | Production (after `npm run setup:production`; not deployed yet) |
 |---|---|---|
-| Worker runtime | workerd through `@cloudflare/vite-plugin` (`npm run dev`, `npm run preview`); tests in workerd through the Workers Vitest integration. `wrangler dev` is not supported with this config | Cloudflare Workers (Workers Paid is likely required for CPU time) |
+| Worker runtime | workerd through `@cloudflare/vite-plugin` (`npm run dev`, `npm run preview`); tests in workerd through the Workers Vitest integration. `wrangler dev` is not supported with this config | Cloudflare Workers, Free plan, at `https://peopledesk.nitish-ratakonda.workers.dev` (see [Workers Free plan](#workers-free-plan)) |
 | Static assets | Served by the Vite plugin and Miniflare | Workers static assets with SPA fallback |
 | D1 | Miniflare SQLite under `.wrangler/state` | D1 database `peopledesk` |
 | R2 | Miniflare R2 simulator | R2 bucket `peopledesk-policies` |
@@ -92,7 +93,7 @@ An information-changing request (a ticket, a booking) never writes. The tool cre
 | LLM | Qwen3-1.7B Q4_0 on a local `llama-server` (OpenAI-compatible) for evals; a deterministic stub for dev and tests; an adversarial stub in its own test project | Workers AI `@cf/meta/llama-3.3-70b-instruct-fp8-fast` through AI Gateway `peopledesk`. Tested only against a fake `AI` binding |
 | Latency | Measured by the eval runner and per-stage traces | Same, plus AI Gateway `duration` when logs are readable |
 | Cost | Token counts times the Workers AI list price, labeled as an estimate, never as a cost incurred | AI Gateway's own cost estimate only if every call's log is readable and has a numeric cost; otherwise a labeled list-price estimate |
-| Identity | RS256 JWTs from a local issuer, verified by the same jose code path against a local JWKS; the remote-JWKS path is tested offline by serving the JWKS through `outboundService` | Cloudflare Access at the edge plus Worker verification against the team JWKS. Not yet run |
+| Identity | RS256 JWTs from a local issuer, verified by the same jose code path against a local JWKS; the remote-JWKS path is tested offline by serving the JWKS through `outboundService` | Cloudflare Access (team `old-truth-a7dc`, One-time PIN only) at the edge plus Worker verification against the team JWKS. Not yet run |
 | Service tokens | Off (one test project turns them on) | Off, except during `npm run deploy:eval-window`; never able to approve |
 | Business date | `AS_OF_OVERRIDE=2026-10-01` | Real clock; the dataset is generated for the deploy date and is valid for 14 days |
 | MCP | `/mcp` and the in-process client | Same; external clients need an Access identity |
@@ -236,6 +237,7 @@ Every input schema is strict (`additionalProperties: false`), every tool has an 
 - In access mode the Worker answers 404 on any hostname other than `APP_HOSTNAME`, so a `workers.dev` or preview URL, which does not pass the Access application, cannot be used to skip what Access enforces only at the edge (session revocation, policy rules the JWT does not carry). Preview URLs are also turned off in `env.production`.
 - Test-only model providers are rejected in access mode, and no header, cookie or query parameter can change the auth mode, model provider or retriever.
 - Chat turns and new conversations are rate limited server-side, in D1 (`CHAT_RATE_LIMITS`, `src/worker/services/rate-limit.ts`): per user (production: 6 turns a minute and 20 a day) and account-wide (production: 30 turns a day for everyone together, about 2,000 Workers AI neurons, a fifth of the Workers Free plan's daily 10,000, which this Cloudflare account shares with three other apps; see [Workers Free plan](#workers-free-plan)). The check runs after authentication and the conversation ownership check and before the conversation's Durable Object is called. A request over any limit gets 429 `rate_limited` with `Retry-After` and is counted against no limit, so a user hammering their own limit cannot spend the shared budget. Windows are fixed and aligned to 00:00 UTC.
+- In production the Access application accepts only the account's One-time PIN identity provider and an Allow policy listing the owner's six addresses; the persona service tokens pass a separate Service Auth policy, and the Worker refuses them (403) except during an eval window, and never lets them approve. Until the setup script writes the application's AUD tag, the Worker answers 500 on every route.
 - Known limit: authorization is re-checked in code just before the approval batch, so a role change landing in the milliseconds between the two is not seen.
 
 ## Design decisions
@@ -253,42 +255,121 @@ The domain vocabulary is in [CONTEXT.md](CONTEXT.md). The decisions a reader wou
 9. [The chat agent calls tools through a real MCP client, in process](docs/adr/0009-chat-uses-a-real-mcp-client.md)
 10. [One Durable Object per conversation, reached over RPC only](docs/adr/0010-one-durable-object-per-conversation.md)
 
-## Deploy (production)
+## Workers Free plan
 
-These steps need a Cloudflare account and have not been run for this repository yet.
+Production runs on the Workers Free plan (Nitish's choice, 2026-10-10), on an account that three other apps share. Every limit below was read on developers.cloudflare.com on 2026-10-15, except the Zero Trust seat count, which comes from Cloudflare's blog. Nothing in `wrangler.jsonc` needs Workers Paid: there is no `limits.cpu_ms`, the Durable Object class is SQLite-backed, and no Paid-only product (Logpush, Queues, key-value Durable Objects) is used.
+
+| Feature | Free limit | Source | PeopleDesk usage | Verdict |
+|---|---|---|---|---|
+| Worker CPU time | 10 ms per invocation; "each isolate has some built-in flexibility" for infrequent overruns, termination (error 1102) when a Worker hits the limit consistently | [Workers limits](https://developers.cloudflare.com/workers/platform/limits/) | Warm: every Worker route p95 at most 1.3 ms, chat turn in the Durable Object p95 at most 1.9 ms. Cold (an isolate's first invocation): Worker routes about 3.5 ms, an isolate's first chat turn about 15 ms. See [CPU time](#cpu-time) | Fits, except the first chat turn in a fresh Durable Object isolate, which relies on the per-isolate flexibility. Measure in production with `npm run verify:production -- --cpu` |
+| Durable Object CPU | The Durable Objects page lists 30 s per request for SQLite-backed objects, and says "Workers Limits apply according to your Workers plan" | [Durable Objects limits](https://developers.cloudflare.com/durable-objects/platform/limits/) | As above (the chat turn runs in the Durable Object) | Planned against the stricter 10 ms; production measurement decides |
+| Startup | 1 s to parse and run global scope | [Workers limits](https://developers.cloudflare.com/workers/platform/limits/) | 97 ms in Node, which also strips TypeScript and reads files, so an overstatement | Fits |
+| Subrequests | 50 per invocation (fetch, R2, KV, D1) | [Workers limits](https://developers.cloudflare.com/workers/platform/limits/) | At most 12 D1 statements (approval); a chat turn makes at most 11 D1 statements, 1 AI Search query and 3 Workers AI calls; the Access JWKS is fetched once per isolate | Fits |
+| D1 queries per invocation | 50 | [D1 limits](https://developers.cloudflare.com/d1/platform/limits/) | At most 12 (`npm run cpu:profile` counts them) | Fits |
+| Requests | 100,000 a day (error 1027 beyond) | [Workers limits](https://developers.cloudflare.com/workers/platform/limits/) | A demo's traffic; chat turns are capped at 30 a day | Fits |
+| Static assets | "Requests to static assets are free and unlimited"; `run_worker_first` paths invoke the Worker | [Static assets billing](https://developers.cloudflare.com/workers/static-assets/billing-and-limitations/) | The SPA; `/api/*` and `/mcp` run the Worker first | Fits |
+| Durable Objects | SQLite backend only; 100,000 requests and 13,000 GB-s a day; 5 million rows read and 100,000 rows written a day; 5 GB stored | [Durable Objects pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/), [limits](https://developers.cloudflare.com/durable-objects/platform/limits/) | `new_sqlite_classes: ["ConversationAgent"]`; a few requests and transcript rows per chat turn | Fits |
+| D1 | 10 databases, 500 MB each, 5 GB in total; 5 million rows read and 100,000 rows written a day, then queries fail until 00:00 UTC | [D1 limits](https://developers.cloudflare.com/d1/platform/limits/), [D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/) | 1 database; a seed writes about 1,900 table rows plus their index and FTS5 rows (counted locally); reseeding is needed every 14 days | Fits |
+| R2 | 10 GB-month, 1 million Class A and 10 million Class B operations a month, free egress (Standard storage) | [R2 pricing](https://developers.cloudflare.com/r2/pricing/) | 155 objects, under 1 MB; 155 Class A writes per seed; a Class B read per policy view | Fits (R2 is already enabled on the account: `wrangler r2 bucket list` works) |
+| Workers AI | 10,000 neurons a day for the account, then calls fail until 00:00 UTC. Llama 3.3 70B: 26,668 neurons per million input tokens, 204,805 per million output tokens | [Workers AI pricing](https://developers.cloudflare.com/workers-ai/platform/pricing/) | About 66 neurons a chat turn (2,027 input and 56 output tokens on average in the local runs). `CHAT_RATE_LIMITS` caps chat at 30 turns a day for everyone (about 2,000 neurons, a fifth of the shared allowance) and 20 per user; the production eval is a 20-case sample capped at 2,000 neurons; AI Search query rewriting is off, so retrieval spends no neurons | Fits within its share; the other three apps can still exhaust the account's allowance, and then turns answer `llm_unavailable` |
+| AI Search | Available on Free: 100 instances, 100,000 files each, 5 custom metadata fields, 1,000 semantic (vector or hybrid) and 1,000 full-text queries a month included; billing starts 2026-11-01, and what Free accounts get past the included queries is not documented | [AI Search limits and pricing](https://developers.cloudflare.com/ai-search/platform/limits-pricing/) | 1 instance, 155 files, all 5 metadata fields; one hybrid query per policy turn (at most 900 a month at 30 turns a day), one per MCP `search_policies` call and about 20 per `verify:ai-search` run | Fits, with the monthly query allowance as the tightest limit. Embedding and reranking are included in AI Search, not billed as neurons |
+| AI Gateway | Free: analytics, caching, rate limiting; logs: 100,000 in total for accounts whose first gateway predates 2026-09-24, otherwise Workers Logs pricing and retention; Logpush is Paid only | [AI Gateway pricing](https://developers.cloudflare.com/ai-gateway/reference/pricing/) | 1 gateway, logging on, at most about 90 model calls a day | Fits; if logs are not readable back, the eval reports cost as a labeled list-price estimate (`verify:gateway` says which) |
+| Workers Logs | 200,000 events a day, kept 3 days | [Workers Logs](https://developers.cloudflare.com/workers/observability/logs/workers-logs/) | `observability.enabled`, sampling 1 | Fits |
+| Access (Zero Trust Free) | 50 seats; an Access login uses a seat, a service token does not; 500 applications, 500 reusable policies and 50 service tokens per account | [Seat management](https://developers.cloudflare.com/cloudflare-one/team-and-resources/users/seat-management/), [account limits](https://developers.cloudflare.com/cloudflare-one/account-limits/), [Cloudflare blog](https://blog.cloudflare.com/teams-plans) (50 seats) | 1 application, 2 reusable policies, 6 service tokens, at most 6 seats (the owner's addresses) | Fits |
+
+### CPU time
+
+Workers cannot measure their own CPU time locally (timers in workerd advance only on I/O), so `npm run cpu:profile` runs the Worker's own modules in Node with the production configuration (access mode, Workers AI provider, AI Search retriever), resolving packages with the same export conditions as the workerd bundle and with zod jitless, as in workerd. It sends every route a real RS256 Access JWT, and runs each of the 200 eval cases as a chat turn the way `ConversationAgent.sendMessage` does. It reports main-thread CPU time (`process.threadCpuUsage`), not wall-clock time, minus the CPU spent inside stand-ins for awaited I/O: D1 (`node:sqlite`), R2, AI Search (chunks of the policy files) and the model (the deterministic stub; the Workers AI provider's own request building and output parsing still count).
 
 ```bash
-npx wrangler login
-npx wrangler d1 create peopledesk                 # paste database_id into env.production in wrangler.jsonc
-npx wrangler r2 bucket create peopledesk-policies
-# Dashboard: AI > AI Gateway > create gateway "peopledesk" (logging on)
-npm run generate -- --as-of <deploy date>         # data/generated/asof-<date>/ and evals/dataset/asof-<date>/
-npm run seed:remote -- --as-of <deploy date>      # D1 migrations + seed, and 155 R2 objects with custom metadata
-# Dashboard: AI Search > create instance "peopledesk-policies" over bucket peopledesk-policies, include policies/**,
-#   vector + keyword, reranking on, AI Gateway "peopledesk", custom metadata: doc_id text, version number,
-#   audience_rank number, effective_from_ts number, effective_to_ts number
-npm run verify:ai-search -- --as-of <deploy date> # sync, then filter, exclusion and strict-failure checks
-# Zero Trust > Access > Applications: self-hosted app for the hostname; set ACCESS_TEAM_DOMAIN, ACCESS_AUD and
-#   APP_HOSTNAME; in the app's cookie settings set SameSite to Lax or Strict. With a custom domain as
-#   APP_HOSTNAME, add "workers_dev": false to env.production (preview URLs are already off)
-npm run deploy                                    # service tokens off
-npm run verify:gateway                            # which AI Gateway log reader works, and whether cost is numeric
-npm run link-identity -- --remote --email <your Access email> --employee <persona id>
+npm run cpu:profile -- --passes 3 --cold 10 --json cpu.json   # about 15 s on an M-series Mac
+npm run cpu:profile -- --passes 1 --cold 0 --cpuprofile turn.cpuprofile   # V8 profile of the first turn
 ```
 
-Production eval, inside the dataset's 14-day validity window: create one Access service token per persona, and add a policy with the action **Service Auth** that includes those tokens to the Access application (without it, Access answers service-token requests with an identity-provider login). The Access JWT for a service token carries the token's Client ID (`<hex>.access`) as `common_name` and an empty `sub`, so link each token by its Client ID with `npm run link-identity -- --remote --service-token <Client ID> --employee <id>`, then
+Recorded 2026-10-15 on this Mac at `2ce0508`, before the schema warm-up described below (Node 25.9, on AC power, reference workload 4.68 ms; on battery at 4%, or with other builds keeping the fast cores busy, the same workload took 12 to 14 ms and every number scaled with it, so compare runs only at similar reference values). Milliseconds of CPU per invocation:
+
+| Invocation | Warm p50 | Warm p95 | Cold (first in a fresh process), p50 of 10 |
+|---|---|---|---|
+| Durable Object chat turn, policy question (210 turns) | 1.15 | 1.81 | 15.78 |
+| Durable Object chat turn, action request (165 turns; cold: a tool call) | 0.51 | 1.10 | 14.82 |
+| Durable Object chat turn, unauthorized / outdated / ambiguous | 0.70 / 1.12 / 0.04 | 1.39 / 1.31 / 0.65 | |
+| Worker: `POST /api/conversations/:id/messages` (600) | 0.09 | 0.24 | 3.57 |
+| Worker: `GET /api/policies` | 0.07 | 0.10 | 3.22 |
+| Worker: `POST /mcp` `tools/call search_policies` | 0.76 | 0.94 | |
+| Worker: every other route | at most 0.16 | at most 1.24 | |
+
+What this says: a warm isolate stays far below 10 ms on every path. The first invocation in a fresh isolate costs more, because V8 compiles each function on first use and the MCP SDK, zod and Hono initialize lazily: about 3.5 ms for a Worker route and about 15 ms for the first chat turn in a Durable Object isolate. Part of that is Node-specific (Node implements `Request`, `Response` and streams in JavaScript; workerd implements them natively), so workerd should be somewhat lower, but the first turn can still pass 10 ms. Cloudflare documents per-isolate flexibility for infrequent overruns, and a warm isolate then serves turns at about 1 to 2 ms, so this should not hit error 1102, but that is an expectation, not a measurement. To reduce it, the tool schemas' JSON Schema conversion now runs at module evaluation (isolate startup, under its separate 1 s limit) instead of inside the first request: about 1.4 ms less on the first turn, measured back to back on the same machine. The in-process MCP client was also tried pinned to the stateless 2026-07-28 protocol revision (two requests per tool call instead of four); it measured no better, so it was not kept.
+
+Production check (after setup): `npm run verify:production -- --cpu --tail-seconds 120` runs `wrangler tail --format json` and prints each invocation's `cpuTime` (Worker requests and Durable Object calls apart), with how many exceeded 10 ms or ended `exceededCpu`; chat in the browser while it tails, or add `--chat 3` during an eval window. `--analytics` reads cpuTime p50 and p99 from the GraphQL Analytics API instead, which needs Account Analytics Read on the token. If first turns do end `exceededCpu`, the options are fewer per-turn objects on the in-process MCP path (one MCP server per Durable Object instead of one per request) or Workers Paid.
+
+## Production setup
+
+Not run yet (a read-only `--dry-run` worked on 2026-10-15). The account facts are fixed in [`scripts/lib/production.ts`](scripts/lib/production.ts) and `wrangler.jsonc`:
+
+| | |
+|---|---|
+| Cloudflare account | `dc93c3bc8aa4f9e09a0d7e7354a80873` (`account_id` in `wrangler.jsonc`) |
+| App URL | `https://peopledesk.nitish-ratakonda.workers.dev` (Worker `peopledesk` on the `nitish-ratakonda` workers.dev subdomain; preview URLs off) |
+| Zero Trust team | `https://old-truth-a7dc.cloudflareaccess.com`, Free plan, with the existing One-time PIN identity provider `743683e8-42d4-44e9-9991-ba57a1bb0dec` |
+| Resources | D1 `peopledesk`, R2 `peopledesk-policies`, AI Search `peopledesk-policies`, AI Gateway `peopledesk`, Access application `peopledesk`, policies `peopledesk-allow` and `peopledesk-service-auth`, service tokens `peopledesk-eval-<persona>` |
+
+Credentials: wrangler uses its OAuth login (`npx wrangler login`) for D1, R2, AI Search, Workers and deploys, and the scripts remove `CLOUDFLARE_API_TOKEN` and `CF_API_TOKEN` from every wrangler process, so never export `CLOUDFLARE_API_TOKEN`. The Access and AI Gateway API calls use an account API token in `CF_API_TOKEN` with Access: Apps and Policies Edit, Access: Service Tokens Edit, Access: Organizations, Identity Providers, and Groups Read, and AI Gateway Edit. Workers AI Edit, Workers Scripts Edit, Account Settings Read and Billing Read are not used by the scripts. No AI Search, D1 or R2 permission is needed (wrangler creates the AI Search instance on its OAuth login, and Cloudflare registers the instance's own service token the first time an R2-backed instance is created through wrangler or the dashboard). One optional extra: Account Analytics Read, only for `npm run verify:production -- --analytics`. The scripts never print a token or a client secret.
 
 ```bash
-npm run deploy:eval-window   # same build, ALLOW_SERVICE_TOKENS=true
-PEOPLEDESK_SERVICE_TOKENS='{"tenured_employee":{"clientId":"...","clientSecret":"..."}, ...}' \
-CLOUDFLARE_ACCOUNT_ID=... CLOUDFLARE_API_TOKEN=... \
-npm run eval -- --base-url https://<host> --auth service-tokens --gateway-report --run-id prod-llama-3.3-70b-<date> \
-  --dataset evals/dataset/asof-<deploy date>
-npm run deploy               # service tokens off again
-npm run eval:readme -- evals/results/prod-llama-3.3-70b-<date>/summary.json
+export CF_API_TOKEN=...                        # account API token; never CLOUDFLARE_API_TOKEN
+npm run setup:production -- --dry-run          # read-only: what exists, and every step it would take
+npm run setup:production                       # idempotent: rerun it after a failure
 ```
 
-Reseeding (local or remote) clears conversations and pending actions; employees are upserted so linked Access identities survive.
+What it does, skipping whatever already exists:
+
+1. Generates the dataset for today's date (UTC; `--as-of YYYY-MM-DD` to choose), valid for 14 days.
+2. Finds or creates D1 `peopledesk` (location hint `wnam`) and writes its id into `env.production` in `wrangler.jsonc` itself (`--update-config=false`, so wrangler adds no top-level binding).
+3. Finds or creates R2 `peopledesk-policies` (location hint `wnam`).
+4. Applies migrations, seeds D1 and uploads the 155 policy files with their custom metadata (`npm run seed:remote`), when D1 holds a different dataset, the bucket is new, or `--reseed`. Reseeding clears conversations and pending actions; linked identities survive.
+5. Finds or creates AI Gateway `peopledesk`, logging on, no cache, no gateway rate limit.
+6. Finds or creates AI Search `peopledesk-policies` over the bucket: `wrangler ai-search create peopledesk-policies --type r2 --source peopledesk-policies --include-items "policies/**" --hybrid-search --reranking` and the five custom metadata fields (`doc_id` text; `version`, `audience_rank`, `effective_from_ts`, `effective_to_ts` number). If wrangler's create ever fails on the instance's service token, create the instance once in the dashboard (AI Search, Create instance, R2 source `peopledesk-policies`, the same name, options and metadata fields) and rerun the script; it picks the instance up.
+7. Deploys with `ACCESS_AUD` empty. The Worker accepts only a 64-character hexadecimal AUD tag, so until step 9 every route answers 500 `misconfigured` (fail closed).
+8. Creates one Access service token per persona (one year), saving each client secret to `~/.config/peopledesk/service-tokens.json` (mode 0600, outside the repository; `PEOPLEDESK_SECRETS_DIR` moves it); the reusable policies `peopledesk-allow` (Allow: the owner's addresses below) and `peopledesk-service-auth` (Service Auth: the six tokens); and the self-hosted application `peopledesk` for the hostname, limited to the One-time PIN identity provider, SameSite Lax, HttpOnly, hidden from the App Launcher. A token whose secret is not saved is reported; `--rotate-missing-secrets` rotates it.
+9. Writes the application's AUD into `wrangler.jsonc` and deploys again.
+10. Links each persona's sign-in address and service token to its employee in D1.
+
+The script edits two values in `wrangler.jsonc` (`database_id` and `ACCESS_AUD`, neither a secret); commit them, so a later `npm run deploy` keeps them. It also generates `data/generated/asof-<date>/` and `evals/dataset/asof-<date>/`, which the production eval reads.
+
+Sign-in addresses (Gmail delivers plus-addresses to the owner's inbox; each is a separate Access identity):
+
+| Persona | Address | Employee |
+|---|---|---|
+| Tenured employee | `nitishsancs@gmail.com` | E0023 |
+| New hire, booked | `nitishsancs+newhire@gmail.com` | E0022 |
+| New hire, not booked | `nitishsancs+newhire2@gmail.com` | E0025 |
+| Manager with new hires | `nitishsancs+manager@gmail.com` | E0007 |
+| Manager without new hires | `nitishsancs+manager2@gmail.com` | E0014 |
+| HR administrator | `nitishsancs+hr@gmail.com` | E0016 |
+
+Verification after setup:
+
+```bash
+npm run doctor                                   # read-only: every resource, wrangler.jsonc, and two HTTP probes
+npm run verify:ai-search -- --as-of <date>       # sync, filters, exclusions, strict failures (about 20 AI Search queries)
+npm run verify:gateway                           # the gateway exists and a model call carries a gateway log id
+npm run verify:production -- --cpu               # Access in front, the Worker behind it, CPU time per invocation
+```
+
+Production eval, inside the dataset's 14-day window and the Free plan's daily allowance (one eval a day at most):
+
+```bash
+npm run deploy:eval-window                       # ALLOW_SERVICE_TOKENS=true; service tokens still cannot approve
+npm run verify:ai-search -- --as-of <date>       # now also checks search_policies through the deployed /mcp
+npm run verify:production -- --chat 3 --cpu      # three chat turns (about 200 neurons) with their CPU time
+npm run eval -- --base-url https://peopledesk.nitish-ratakonda.workers.dev --auth service-tokens \
+  --dataset evals/dataset/asof-<date> --run-id prod-llama-3.3-70b-<date> --sample 20 --max-neurons 2000 --concurrency 1
+npm run deploy                                   # service tokens off again
+```
+
+The 20-case sample is stratified (7 answerable, 3 outdated-document, 2 ambiguous, 3 unauthorized and 5 action cases) and the run stops before any case that could take it past 2,000 neurons; its turns also count against the 30-a-day chat limit. It is a partial run, so `eval:readme` refuses to put it in the Results block; quote its `summary.json` as a 20-case production sample. A full 200-case run would need about 13,000 neurons, more than the whole account's daily allowance.
+
+Reseeding (local or remote) clears conversations and pending actions; employees are upserted so linked Access identities survive. To move the business date, run `npm run setup:production -- --as-of <new date>`.
 
 `wrangler types` reads `.dev.vars`, so move `.dev.vars` aside before `npm run types`; the committed `worker-configuration.d.ts` is generated without it, which is what CI checks.
 
@@ -300,7 +381,9 @@ Reseeding (local or remote) clears conversations and pending actions; employees 
 - One tool call per chat turn, no streaming, no real HR system integrations (tickets and bookings live in D1), no notifications.
 - Approval proves the requester's Access user identity, not a human click: an MCP client holding the user's Access JWT can call the approve endpoint. Putting `/mcp` behind its own Access application with its own audience, verified separately, would stop a token handed to an MCP client from approving; that is not built.
 - The account-wide chat budget is shared: no single user can spend more than two thirds of it in a day (20 of 30 turns), but signed-in users together can, and then every chat turn answers 429 until 00:00 UTC. The production eval's turns count against the same budget. MCP requests from external clients are not rate limited; each `search_policies` call spends one AI Search query (1,000 a month are included). (Only the eval runner's service tokens, or local dev mode, may set the eval header that turns off the AI Gateway cache.)
-- The Workers Free plan's 10 ms CPU limit per request is likely too tight for a chat turn (JWT verification, zod, MCP JSON-RPC in-process); Workers Paid is likely required. Module-scope caching reduces but does not remove this, and it cannot be measured locally.
+- CPU time is measured in Node on a laptop, not on Cloudflare. Warm invocations stay under 2 ms, but the first chat turn in a fresh Durable Object isolate measured about 15 ms against the Free plan's 10 ms, and relies on the per-isolate flexibility Cloudflare documents for infrequent overruns. `npm run verify:production -- --cpu` is the production check (see [CPU time](#cpu-time)).
+- On the Free plan the account's 10,000 daily Workers AI neurons are shared with three other apps, so a busy day elsewhere can make chat turns fail with `llm_unavailable` even under PeopleDesk's own limits, and a production eval can only be a small sample (20 cases), not the full 200.
+- AI Gateway logs may not be readable back: gateways created on or after 2026-09-24 keep logs in Workers Logs, with no logs API documented. Cost is then reported as a labeled list-price estimate from token counts.
 
 ## License
 
