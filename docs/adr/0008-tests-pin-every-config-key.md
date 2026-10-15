@@ -8,7 +8,7 @@ The Workers Vitest integration loads `.dev.vars` into the test runtime, so a dev
 
 ## Decision
 
-`parseConfig` reads only the keys in `src/worker/config-keys.ts` and ignores everything else. Every workerd Vitest project sets every one of those keys through `miniflare.bindings` from `BASE_TEST_VARS` (`test/pool-vars.ts`, typed `satisfies Record<ConfigKey, string>`, so a new key without a pin is a type error). Config variants get their own project: `worker` (dev auth, stub model), `worker-access` (Access mode, remote JWKS served by `outboundService`, service tokens on) and `worker-adversarial` (adversarial model), next to `node` and `web` (happy-dom). The integration is `@cloudflare/vitest-plugin`, the renamed successor, pinned exactly at 1.3.7.
+`parseConfig` reads only the keys in `src/worker/config-keys.ts` and ignores everything else. Every workerd Vitest project sets every one of those keys through `miniflare.bindings` from `BASE_TEST_VARS` (`test/pool-vars.ts`, typed `satisfies Record<ConfigKey, string>`, so a new key without a pin is a type error). Config variants get their own project: `worker` (dev auth, stub model), `worker-access` (Access mode, remote JWKS served by `outboundService`, service tokens on) and `worker-adversarial` (adversarial model), next to `node` and `web` (happy-dom). The integration is `@cloudflare/vitest-plugin`, the renamed successor, pinned exactly (1.3.7 when this was decided, 1.4.3 since `b115b71`).
 
 ## Consequences
 
