@@ -448,11 +448,15 @@ describe("ChatPage", () => {
       fireEvent.change(await screen.findByLabelText("Message"), { target: { value: "How much PTO do I get?" } });
       fireEvent.click(screen.getByRole("button", { name: "Send" }));
       await screen.findByText("Internal error.");
-      fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+      const retry = screen.getByRole("button", { name: "Retry" });
+      retry.focus();
+      fireEvent.click(retry);
       await screen.findByText("Second try worked.");
       expect(screen.queryByText("Internal error.")).toBeNull();
       const bubbles = [...container.querySelectorAll(".message-user")].map((b) => b.textContent);
       expect(bubbles).toEqual(["How much PTO do I get?"]);
+      // The Retry button is gone, so focus comes back to the message box, not to the page.
+      await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText("Message")));
     });
 
     it("waits for a previous reply after a 409, shows it when it arrives, then stops asking", async () => {
@@ -566,6 +570,46 @@ describe("ChatPage", () => {
       expect(toggle.getAttribute("aria-expanded")).toBe("false");
       fireEvent.click(toggle);
       expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    });
+
+    describe("picking a conversation from the list", () => {
+      const routes = () => [
+        { path: "/api/conversations", body: list },
+        { path: "/api/conversations/c1", body: transcriptOf("c1", "First question") },
+        { path: "/api/conversations/c2", body: transcriptOf("c2", "Second question") },
+      ];
+      const pick = async () => {
+        const toggle = await screen.findByRole("button", { name: "Conversations (2)" });
+        fireEvent.click(toggle);
+        const link = screen.getByRole("link", { name: "Second question" });
+        link.focus();
+        fireEvent.click(link);
+        await screen.findByText("Reply in c2.");
+        return { toggle, link };
+      };
+
+      it("moves focus to the list's toggle when the folded list hides the link that had focus (narrow screens)", async () => {
+        // The narrow-screen rule from styles.css that hides a folded list.
+        const style = document.createElement("style");
+        style.textContent = ".conversation-list.collapsed .conversation-items { display: none; }";
+        document.head.append(style);
+        try {
+          installFetch(routes());
+          renderChat();
+          const { toggle } = await pick();
+          expect(toggle.getAttribute("aria-expanded")).toBe("false");
+          expect(document.activeElement).toBe(toggle);
+        } finally {
+          style.remove();
+        }
+      });
+
+      it("keeps focus on the link where the list stays visible (wide screens)", async () => {
+        installFetch(routes());
+        renderChat();
+        const { link } = await pick();
+        expect(document.activeElement).toBe(link);
+      });
     });
   });
 });

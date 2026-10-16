@@ -274,6 +274,9 @@ export function ChatPage() {
 
   function onRetry(entry: ChatEntry) {
     if (!conversationId || entry.role === "user" || entry.role === "system") return;
+    // A failure's Retry button is removed (and an error reply's is disabled) while the message is sent
+    // again, so focus comes to the message box when the turn ends, as after a suggestion.
+    setFocusRequest((n) => n + 1);
     if (entry.role === "failure") {
       // The message never reached a reply, so it is sent again under its own bubble.
       setEntries((e) => e.filter((x) => x.key !== entry.key));

@@ -884,6 +884,10 @@ label {
   .conversation-list.collapsed .conversation-items {
     display: none;
   }
+  /* One column: only the chat grows to fill the height, so the folded list stays as tall as its head. */
+  .chat-layout {
+    grid-template-rows: auto 1fr;
+  }
   .message,
   .message-assistant {
     max-width: 100%;
