@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
-import type { OnboardingOverview, OnboardingOverviewPerson } from "../../shared/api-types.ts";
+import type { OnboardingOverview, OnboardingOverviewPerson, OnboardingOverviewStep } from "../../shared/api-types.ts";
 import { EmptyState } from "../components/EmptyState.tsx";
 import { ErrorBanner } from "../components/ErrorBanner.tsx";
 import { OwnBooking } from "../components/OrientationForm.tsx";
 import { StatTiles } from "../components/StatTiles.tsx";
+import { StuckSteps } from "../components/StuckSteps.tsx";
 import type { Tile } from "../components/StatTiles.tsx";
 import { TaskBar, TaskBarLegend } from "../components/TaskBar.tsx";
 import { OnboardingChecklist } from "../components/ToolResultCard.tsx";
@@ -63,9 +64,11 @@ function OwnChecklist() {
 
 /**
  * Managers see their direct reports in onboarding; HR sees everyone with a plan (GET /api/team/onboarding).
- * Tiles count people and filter the list; each row has the person's task bar against due dates. The
- * filter, the sort and the selected person live in the URL (?show=, ?sort=, ?person=), written with
- * replace, so a reload, Back and links from Home keep them; invalid values are ignored.
+ * Tiles count people and filter the list; "Where onboarding is stuck" lists the checklist steps with
+ * blocked or overdue tasks, and a step filters the list to its people; each row has the person's task
+ * bar against due dates. The filter, the step, the sort and the selected person live in the URL
+ * (?show=, ?step=, ?sort=, ?person=), written with replace, so a reload, Back and links from Home keep
+ * them; invalid values are ignored. A step and a tile filter replace each other.
  */
 function TeamOnboarding() {
   const me = useMe();
@@ -83,6 +86,8 @@ function TeamOnboarding() {
   const rawSort = params.get("sort") ?? "";
   const sort: SortOrder = rawSort === "name" || rawSort === "start" ? rawSort : "attention";
   const personParam = params.get("person");
+  const stepParam = params.get("step");
+  const step = (data?.steps ?? []).find((x) => String(x.stepKey) === stepParam) ?? null;
   const update = (changes: Record<string, string | null>) =>
     setParams(
       (p) => {
@@ -103,7 +108,7 @@ function TeamOnboarding() {
     overdue: people.filter((p) => matchesShow(p, "overdue")).length,
   };
   const shown = sortPeople(
-    people.filter((p) => matchesShow(p, show)),
+    people.filter((p) => (step ? step.employeeIds.includes(p.employeeId) : matchesShow(p, show))),
     sort,
   );
   const current = shown.find((m) => m.employeeId === personParam) ?? shown[0] ?? null;
@@ -142,11 +147,23 @@ function TeamOnboarding() {
     if (document.activeElement === checklistHeading.current) alignChecklist();
   }, [checklist, progress.error]);
 
-  // Show everyone removes the empty message and its button, so focus goes to the In onboarding tile.
+  // Show everyone removes the message and its button, so focus goes to the In onboarding tile.
   const showEveryone = () => {
-    update({ show: null });
+    update({ show: null, step: null });
     allTile.current?.focus();
   };
+  // A step filters the list to its people, and focus moves to the line that says so.
+  const stepLine = useRef<HTMLParagraphElement>(null);
+  const focusStepLine = useRef(false);
+  const showStep = (s: OnboardingOverviewStep) => {
+    focusStepLine.current = true;
+    update({ step: String(s.stepKey), show: null });
+  };
+  useEffect(() => {
+    if (!focusStepLine.current || !step) return;
+    focusStepLine.current = false;
+    stepLine.current?.focus();
+  }, [step]);
 
   const tiles: Tile[] = [
     { key: "all", count: counts.all, label: "in onboarding", icon: "people" },
@@ -173,13 +190,24 @@ function TeamOnboarding() {
             mode="filter"
             label="Show"
             tiles={tiles}
-            selected={show}
-            onSelect={(key) => update({ show: key === "all" ? null : key })}
+            selected={step ? "" : show}
+            onSelect={(key) => update({ show: key === "all" ? null : key, step: null })}
             buttonRefs={{ all: allTile }}
           />
+          <StuckSteps steps={data?.steps ?? []} viewer={me.role === "hr_admin" ? "hr_admin" : "manager"} selectedKey={step?.stepKey ?? null} onShow={showStep} />
+          {step ? (
+            <div className="banner banner-info step-filter" data-testid="step-filter">
+              <p className="step-filter-text" tabIndex={-1} ref={stepLine} style={{ margin: 0 }}>
+                Showing {step.employeeIds.length === 1 ? "1 person" : `${step.employeeIds.length} people`} stuck on {step.title}
+              </p>
+              <button type="button" className="btn" onClick={showEveryone}>
+                Show everyone
+              </button>
+            </div>
+          ) : null}
           {shown.length === 0 ? (
             <div className="banner" data-testid="filter-empty">
-              <span>{EMPTY_FILTER_TEXT[show as Exclude<ShowFilter, "all">]}</span>
+              <span>{step || show === "all" ? "No one is stuck on this step." : EMPTY_FILTER_TEXT[show]}</span>
               <button type="button" className="btn" onClick={showEveryone}>
                 Show everyone
               </button>

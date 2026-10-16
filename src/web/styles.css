@@ -1403,3 +1403,133 @@ main h1[tabindex="-1"]:focus {
     padding: 8px 10px;
   }
 }
+
+/* Where onboarding is stuck: a real table whose bars share one scale (96px, 48px on a phone). Blocked
+   and overdue bars sit in separate columns and are named by their headers, never by color alone. */
+.stuck-steps {
+  margin-bottom: 14px;
+}
+
+.stuck-title {
+  font-size: 15px;
+  margin: 0 0 4px;
+}
+
+.stuck-summary {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.stuck-table th {
+  white-space: nowrap;
+}
+
+.stuck-table td {
+  vertical-align: middle;
+}
+
+.th-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.th-icon .stat-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.step-name {
+  border: 0;
+  background: none;
+  padding: 2px 0;
+  font: inherit;
+  color: var(--primary);
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.step-name[aria-pressed="true"] {
+  font-weight: 700;
+}
+
+.step-sub {
+  display: none;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.stuck-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.stuck-bar-box {
+  display: inline-block;
+  width: 96px;
+  height: 10px;
+}
+
+.stuck-bar {
+  display: block;
+  height: 10px;
+  min-width: 2px;
+  border-radius: 0 4px 4px 0;
+}
+
+.stuck-bar-blocked {
+  background: var(--danger);
+}
+
+.stuck-bar-overdue {
+  background: var(--chart-overdue);
+}
+
+.stuck-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.step-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.step-filter-text:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+@media (forced-colors: active) {
+  .stuck-bar {
+    forced-color-adjust: none;
+    background: CanvasText;
+  }
+}
+
+/* On a phone the table stays a table: Owner and Due fold into the step's second line, bars halve. */
+@media (max-width: 480px) {
+  .stuck-table .col-owner,
+  .stuck-table .col-due {
+    display: none;
+  }
+  .step-sub {
+    display: block;
+  }
+  .stuck-bar-box {
+    width: 48px;
+  }
+  .stuck-table th,
+  .stuck-table td {
+    padding: 6px 4px;
+  }
+  .stuck-table th {
+    white-space: normal;
+  }
+}

@@ -179,6 +179,53 @@ describe("OnboardingPage team overview", () => {
     expect(rowIds()).toHaveLength(5);
   });
 
+  it("filters the list to a stuck step's people, writes ?step= and moves focus to the line that says so", async () => {
+    installFetch(teamRoutes([], overviewFor(everyoneIds)));
+    renderAs(kenji, "/onboarding?show=blocked");
+    const step = await screen.findByRole("button", { name: "Show the 9 people stuck on Enroll in multi-factor authentication" });
+    fireEvent.click(step);
+    expect(location()).toBe("/onboarding?step=3");
+    const line = await screen.findByText("Showing 9 people stuck on Enroll in multi-factor authentication");
+    await waitFor(() => expect(document.activeElement).toBe(line));
+    expect(rowIds()).toEqual(["E0044", "E0085", "E0107", "E0047", "E0022", "E0060", "E0030", "E0059", "E0119"]);
+    // A step replaces the tile filter: no tile is pressed while it applies.
+    expect(within(screen.getByRole("group", { name: "Show" })).getAllByRole("button").map((b) => b.getAttribute("aria-pressed"))).toEqual(["false", "false", "false", "false"]);
+    fireEvent.click(within(screen.getByTestId("step-filter")).getByRole("button", { name: "Show everyone" }));
+    expect(location()).toBe("/onboarding");
+    expect(document.activeElement).toBe(tile(/in onboarding$/));
+    expect(rowIds()).toHaveLength(30);
+  });
+
+  it("clears ?step when a tile is pressed, and ignores an unknown step", async () => {
+    installFetch(teamRoutes());
+    renderAs(deepa, "/onboarding?step=6");
+    expect((await screen.findByTestId("step-filter")).textContent).toContain("Showing 1 person stuck on First one-on-one with your manager");
+    expect(rowIds()).toEqual(["E0036"]);
+    fireEvent.click(tile(/not booked$/));
+    expect(location()).toBe("/onboarding?show=unbooked");
+    expect(screen.queryByTestId("step-filter")).toBeNull();
+    expect(rowIds()).toEqual(["E0036", "E0024", "E0033"]);
+  });
+
+  it("ignores ?step= for a step with nothing stuck", async () => {
+    installFetch(teamRoutes());
+    renderAs(deepa, "/onboarding?step=99");
+    await screen.findByRole("list", { name: "People in onboarding" });
+    expect(screen.queryByTestId("step-filter")).toBeNull();
+    expect(rowIds()).toHaveLength(5);
+    expect(tile(/in onboarding$/).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("shows where a manager's reports are stuck, with her own step as You", async () => {
+    installFetch(teamRoutes());
+    renderAs(deepa);
+    expect((await screen.findByTestId("stuck-summary")).textContent).toBe("7 stuck tasks: 1 blocked, 6 overdue. Owners: New hire 6, You 1");
+    const table = screen.getByRole("table", { name: "Where onboarding is stuck" });
+    const stuckRows = within(table).getAllByRole("row").slice(1);
+    expect(stuckRows).toHaveLength(6);
+    expect(stuckRows.find((r) => r.textContent?.includes("First one-on-one"))?.querySelector(".col-owner")?.textContent).toBe("You");
+  });
+
   it("puts the people list before the checklist in the DOM, as on screen", async () => {
     installFetch(teamRoutes());
     renderAs(deepa);
