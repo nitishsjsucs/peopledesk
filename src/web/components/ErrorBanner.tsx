@@ -11,13 +11,17 @@ export function errorMessage(error: unknown): string {
   return "Something went wrong.";
 }
 
-type Props = { error: unknown; onRetry?: () => void };
+/** `context` says what could not be loaded, before the error's own message. */
+type Props = { error: unknown; onRetry?: () => void; context?: string };
 
 /** An error and what to do next: Try again, or Reload when the session has ended (trying again cannot help). */
-export function ErrorBanner({ error, onRetry }: Props) {
+export function ErrorBanner({ error, onRetry, context }: Props) {
   return (
     <div className="banner banner-error" role="alert">
-      <span>{errorMessage(error)}</span>
+      <span>
+        {context ? `${context} ` : ""}
+        {errorMessage(error)}
+      </span>
       {isUnauthenticated(error) ? (
         <button type="button" className="btn btn-danger" onClick={() => window.location.reload()}>
           Reload

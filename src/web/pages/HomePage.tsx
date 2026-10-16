@@ -14,7 +14,8 @@ const people = (n: number) => (n === 1 ? "1 person needs an orientation session"
 /**
  * Greeting, the number of requests waiting for the user's approval, and quick actions that fit the
  * person: orientation only when someone they can book for still needs a session, onboarding only when
- * there is a checklist to see.
+ * there is a checklist to see. When the booking or the team cannot be checked, an error with Try again
+ * says so, instead of the orientation card quietly missing.
  */
 export function HomePage() {
   const me = useMe();
@@ -85,6 +86,10 @@ export function HomePage() {
             </Link>
           ) : null}
         </div>
+      ) : null}
+      {booking.error ? <ErrorBanner context="Could not check your orientation booking." error={booking.error} onRetry={booking.reload} /> : null}
+      {team.error ? (
+        <ErrorBanner context="Could not check who you support still needs an orientation session." error={team.error} onRetry={team.reload} />
       ) : null}
       <div className="quick-actions">
         {quick.map(({ to, title, hint, testId }) => (

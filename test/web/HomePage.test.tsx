@@ -129,6 +129,44 @@ describe("HomePage", () => {
     expect(screen.queryByTestId("quick-book-orientation")).toBeNull();
   });
 
+  it("says when a manager's team cannot be checked, with Try again, instead of quietly dropping Book orientation", async () => {
+    let fail = true;
+    const calls = installFetch([
+      noPending,
+      {
+        path: "/api/team",
+        status: () => (fail ? 500 : 200),
+        body: () => (fail ? { error: { code: "internal", message: "Internal error.", requestId: "r" } } : { members: [member("E0031", true, false)] }),
+      },
+    ]);
+    renderHome(manager);
+    expect((await screen.findByRole("alert")).textContent).toBe("Could not check who you support still needs an orientation session. Internal error.Try again");
+    expect(screen.queryByTestId("quick-book-orientation")).toBeNull();
+    fail = false;
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect((await screen.findByTestId("quick-book-orientation")).textContent).toContain("1 person needs an orientation session.");
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(calls.filter((c) => c.path === "/api/team")).toHaveLength(2);
+  });
+
+  it("says when a new hire's booking cannot be checked, with Try again", async () => {
+    let fail = true;
+    installFetch([
+      noPending,
+      { path: "/api/onboarding", body: progress(60) },
+      {
+        path: "/api/orientation-booking",
+        status: () => (fail ? 500 : 200),
+        body: () => (fail ? { error: { code: "internal", message: "Internal error.", requestId: "r" } } : { booking }),
+      },
+    ]);
+    renderHome({ ...newHire, employeeId: "E0022", fullName: "Gabriel Kowalski" });
+    expect((await screen.findByRole("alert")).textContent).toContain("Could not check your orientation booking. Internal error.");
+    fail = false;
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect((await screen.findByTestId("quick-own-orientation")).textContent).toContain("New Hire Orientation (US, in person)");
+  });
+
   it("describes HR's onboarding scope as everyone in onboarding", async () => {
     installFetch([noPending, { path: "/api/team", body: { members: [member("E0031", true, false)] } }]);
     renderHome(hrAdmin);
