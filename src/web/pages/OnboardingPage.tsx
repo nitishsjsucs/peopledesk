@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import type { Team } from "../../shared/api-types.ts";
 import { EmptyState } from "../components/EmptyState.tsx";
@@ -65,7 +65,9 @@ function TeamOnboarding() {
   const members = (team.data?.members ?? []).filter((m) => m.inOnboarding);
   const [filter, setFilter] = useState<Filter>("all");
   const [selected, setSelected] = useState<string | null>(null);
-  const checklistRef = useRef<HTMLDivElement>(null);
+  const checklistHeading = useRef<HTMLHeadingElement>(null);
+  const focusChecklist = useRef(false);
+  const [selections, setSelections] = useState(0);
   const unbooked = members.filter((m) => !m.booked);
   const blocked = members.filter((m) => m.blockedTasks > 0);
   const shown = filter === "unbooked" ? unbooked : filter === "blocked" ? blocked : members;
@@ -76,11 +78,29 @@ function TeamOnboarding() {
 
   function select(m: Member) {
     setSelected(m.employeeId);
-    // On a narrow screen the list sits above the checklist, so bring the checklist into view.
-    if (typeof window.matchMedia === "function" && window.matchMedia("(max-width: 800px)").matches) {
-      checklistRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
-    }
+    // On a narrow screen the checklist sits below the whole list, out of view: focus moves to its
+    // heading (which scrolls it into view), so a keyboard user reads on from there instead of being
+    // sent back up the list by the next Tab. Wide screens show it beside the list; focus stays put.
+    focusChecklist.current = typeof window.matchMedia === "function" && window.matchMedia("(max-width: 800px)").matches;
+    setSelections((n) => n + 1);
   }
+  // After the selection renders, so the heading already names the person. The checklist is scrolled
+  // to the top of the screen, and again once it has loaded, when the page may have grown enough to.
+  const alignOnLoad = useRef(false);
+  const alignChecklist = () => checklistHeading.current?.closest(".onboarding-checklist")?.scrollIntoView?.({ block: "start" });
+  useEffect(() => {
+    if (!focusChecklist.current) return;
+    focusChecklist.current = false;
+    checklistHeading.current?.focus({ preventScroll: true });
+    alignChecklist();
+    alignOnLoad.current = !checklist;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selections]);
+  useEffect(() => {
+    if (!alignOnLoad.current || (!checklist && !progress.error)) return;
+    alignOnLoad.current = false;
+    if (document.activeElement === checklistHeading.current) alignChecklist();
+  }, [checklist, progress.error]);
 
   const filterButton = (value: Filter, label: string, count: number) => (
     <button type="button" className={`btn filter-btn${filter === value ? " active" : ""}`} aria-pressed={filter === value} onClick={() => setFilter(value)}>
@@ -110,20 +130,8 @@ function TeamOnboarding() {
             {filterButton("unbooked", "Not booked", unbooked.length)}
             {filterButton("blocked", "Has blocked tasks", blocked.length)}
           </div>
+          {/* The list comes first in the DOM, as on screen (beside the checklist, or above it on a phone). */}
           <div className="onboarding-grid">
-            <div className="card onboarding-checklist" ref={checklistRef}>
-              {progress.error ? (
-                <ErrorBanner error={progress.error} onRetry={progress.reload} />
-              ) : checklist ? (
-                <OnboardingChecklist progress={checklist} />
-              ) : current ? (
-                <p className="thinking" role="status">
-                  Loading {current.fullName}'s checklist...
-                </p>
-              ) : (
-                <p className="message-meta">No one matches this filter.</p>
-              )}
-            </div>
             <ul className="policy-list card onboarding-people" aria-label="People in onboarding">
               {shown.map((m) => (
                 <li key={m.employeeId} className="person-row">
@@ -152,6 +160,22 @@ function TeamOnboarding() {
                 </li>
               ))}
             </ul>
+            <div className="card onboarding-checklist">
+              <h3 className="onboarding-checklist-title" tabIndex={-1} ref={checklistHeading}>
+                {current ? `${current.fullName}'s checklist` : "Checklist"}
+              </h3>
+              {progress.error ? (
+                <ErrorBanner error={progress.error} onRetry={progress.reload} />
+              ) : checklist ? (
+                <OnboardingChecklist progress={checklist} />
+              ) : current ? (
+                <p className="thinking" role="status">
+                  Loading {current.fullName}'s checklist...
+                </p>
+              ) : (
+                <p className="message-meta">No one matches this filter.</p>
+              )}
+            </div>
           </div>
         </>
       ) : null}

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { OnboardingProgress } from "../../src/shared/api-types.ts";
 import { MeContext } from "../../src/web/lib/session.tsx";
 import { OnboardingPage } from "../../src/web/pages/OnboardingPage.tsx";
@@ -55,7 +55,55 @@ const teamRoutes = (extra: Route[] = []): Route[] => [
 
 const people = () => within(screen.getByRole("list", { name: "People in onboarding" }));
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+/** Makes window.matchMedia answer as a screen of this width would for max-width queries. */
+function screenWidth(px: number) {
+  vi.spyOn(window, "matchMedia").mockImplementation((query: string) => {
+    const max = /max-width:\s*(\d+)px/.exec(query);
+    return { matches: max ? px <= Number(max[1]) : false, media: query, onchange: null, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent: () => false } as unknown as MediaQueryList;
+  });
+}
+
 describe("OnboardingPage manager view", () => {
+  it("puts the people list before the checklist in the DOM, as on screen", async () => {
+    installFetch(teamRoutes());
+    renderAs(manager);
+    await screen.findByText(/50% complete · 6 done/);
+    const list = screen.getByRole("list", { name: "People in onboarding" });
+    const heading = screen.getByRole("heading", { level: 3, name: "Priya Patel's checklist" });
+    expect(list.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("moves focus to the checklist's heading after a selection on a narrow screen, where it is below the list", async () => {
+    screenWidth(375);
+    installFetch(teamRoutes());
+    renderAs(manager);
+    await screen.findByText(/50% complete · 6 done/);
+    const button = people().getByRole("button", { name: "Rahul Mehta" });
+    button.focus();
+    fireEvent.click(button);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { level: 3, name: "Rahul Mehta's checklist" })));
+    // Selecting the same person again brings focus back to the checklist too.
+    button.focus();
+    fireEvent.click(button);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { level: 3, name: "Rahul Mehta's checklist" })));
+  });
+
+  it("keeps focus on the selected name on a wide screen, where the checklist is beside the list", async () => {
+    screenWidth(1280);
+    installFetch(teamRoutes());
+    renderAs(manager);
+    await screen.findByText(/50% complete · 6 done/);
+    const button = people().getByRole("button", { name: "Rahul Mehta" });
+    button.focus();
+    fireEvent.click(button);
+    expect(await screen.findByText(/75% complete · 6 done/)).toBeTruthy();
+    expect(document.activeElement).toBe(button);
+  });
+
   it("summarizes the people in onboarding and shows the selected person's checklist", async () => {
     installFetch(teamRoutes());
     renderAs(manager);

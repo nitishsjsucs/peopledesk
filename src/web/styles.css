@@ -1110,7 +1110,8 @@ main h1[tabindex="-1"]:focus {
   box-shadow: none;
 }
 
-/* Onboarding team view: the checklist beside the people list; on a narrow screen the list comes first. */
+/* Onboarding team view: the people list, then the selected person's checklist (beside it on a wide
+   screen, below it on a narrow one), in the same order as the DOM. */
 .onboarding-summary {
   margin: 0 0 10px;
   color: var(--text-muted);
@@ -1130,9 +1131,24 @@ main h1[tabindex="-1"]:focus {
 
 .onboarding-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 320px);
+  grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
   gap: 20px;
   align-items: start;
+}
+
+/* The grid's gap spaces the two cards, beside each other or stacked. */
+.onboarding-grid > .card + .card {
+  margin-top: 0;
+}
+
+.onboarding-checklist-title {
+  font-size: 15px;
+  margin: 0 0 8px;
+}
+
+.onboarding-checklist-title:focus {
+  outline: none;
+  box-shadow: none;
 }
 
 .person-row {
@@ -1170,8 +1186,5 @@ main h1[tabindex="-1"]:focus {
 @media (max-width: 800px) {
   .onboarding-grid {
     grid-template-columns: minmax(0, 1fr);
-  }
-  .onboarding-people {
-    order: -1;
   }
 }
