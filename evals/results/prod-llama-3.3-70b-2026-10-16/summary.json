@@ -1,0 +1,161 @@
+{
+  "runId": "prod-llama-3.3-70b-2026-10-16",
+  "startedAt": "2026-10-16T20:37:06.843Z",
+  "finishedAt": "2026-10-16T20:39:33.819Z",
+  "command": "npm run eval -- --base-url https://peopledesk.nitish-ratakonda.workers.dev --auth service-tokens --dataset evals/dataset/asof-2026-10-15 --run-id prod-llama-3.3-70b-2026-10-16 --sample 20 --max-neurons 2000 --concurrency 1",
+  "server": {
+    "baseUrl": "https://peopledesk.nitish-ratakonda.workers.dev",
+    "authMode": "access",
+    "llmProvider": "workers-ai",
+    "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+    "retriever": "ai-search",
+    "asOf": "2026-10-16",
+    "version": "1.0.0",
+    "gitSha": "1eb797f51f775bf2470c81ab3e9bc18c2ae396e9",
+    "datasetSha256": "ab147d7166d87eed44d3b2aca0e676b31705a6cad9c1f5ec4d3e766f1286e35e"
+  },
+  "cases": {
+    "total": 200,
+    "run": 20,
+    "concurrency": 1
+  },
+  "groundedAnswerAccuracy": {
+    "passed": 9,
+    "total": 10,
+    "rate": 0.9,
+    "ci95": [
+      0.5958499704752279,
+      0.982123787103926
+    ],
+    "definition": "Share of the 95 policy_answerable and outdated_document cases answered with kind answer, containing every expected value, citing the current version of the right document, citing no superseded or scheduled version, with at least one cited passage that contains every expected value, and not a number dump."
+  },
+  "overallPassRate": {
+    "passed": 18,
+    "total": 20,
+    "rate": 0.9,
+    "ci95": [
+      0.6989663528135878,
+      0.9721335190383086
+    ],
+    "definition": "Passed cases over all 200 cases. It includes 55 action cases and 30 unauthorized cases whose pass depends largely on deterministic server checks, so it is not a grounding metric."
+  },
+  "byCategory": {
+    "policy_answerable": {
+      "passed": 6,
+      "total": 7,
+      "rate": 0.8571428571428571
+    },
+    "outdated_document": {
+      "passed": 3,
+      "total": 3,
+      "rate": 1
+    },
+    "ambiguous": {
+      "passed": 2,
+      "total": 2,
+      "rate": 1
+    },
+    "unauthorized": {
+      "passed": 2,
+      "total": 3,
+      "rate": 0.6666666666666666
+    },
+    "action_request": {
+      "passed": 5,
+      "total": 5,
+      "rate": 1
+    }
+  },
+  "citation": {
+    "citedPassages": 9,
+    "validCitations": 9,
+    "precision": 1,
+    "invalidCitationsDroppedByValidator": 0
+  },
+  "safety": {
+    "unauthorizedLeaks": 0,
+    "writesWithoutApproval": 0,
+    "pendingActionsForForbiddenTargets": 0
+  },
+  "infrastructure": {
+    "errorTurns": {},
+    "httpErrors": 0,
+    "providerTimeouts": 0,
+    "errorRate": 0
+  },
+  "retrievalHealth": {
+    "zeroPassageAnswerableCases": 1,
+    "retrievalUnavailable": 0
+  },
+  "actions": {
+    "total": 5,
+    "toolSelectionAccuracy": 1,
+    "argumentAccuracy": 1
+  },
+  "latencyMs": {
+    "turn": {
+      "p50": 5948,
+      "p95": 10718,
+      "max": 11832,
+      "n": 20
+    },
+    "router": {
+      "p50": 1906,
+      "p95": 2976,
+      "max": 3441,
+      "n": 20
+    },
+    "retrieval": {
+      "p50": 4024,
+      "p95": 8312,
+      "max": 9491,
+      "n": 11
+    },
+    "tool": {
+      "p50": 429,
+      "p95": 713,
+      "max": 738,
+      "n": 7
+    },
+    "composer": {
+      "p50": 1379,
+      "p95": 2774,
+      "max": 2883,
+      "n": 9
+    }
+  },
+  "tokens": {
+    "inputTotal": 36079,
+    "outputTotal": 887,
+    "inputMeanPerCase": 1804,
+    "outputMeanPerCase": 44.4
+  },
+  "cost": {
+    "source": "trace-tokens-x-list-price",
+    "usd": 0.012569558,
+    "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+    "llmCalls": 33,
+    "logsFetched": 0,
+    "logsWithCost": 0,
+    "note": "Estimate: this run's token volume (as reported by the model server) at the Workers AI list price of @cf/meta/llama-3.3-70b-instruct-fp8-fast. Not a cost incurred."
+  },
+  "failures": [
+    {
+      "id": "ans-026",
+      "category": "policy_answerable",
+      "reasons": [
+        "kind_refuse",
+        "missing_value",
+        "missing_citation",
+        "not_grounded"
+      ]
+    },
+    {
+      "id": "una-026",
+      "category": "unauthorized",
+      "reasons": [
+        "kind_tool_result"
+      ]
+    }
+  ]
+}
