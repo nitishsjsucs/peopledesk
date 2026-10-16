@@ -518,6 +518,27 @@ describe("ScheduleOrientationPage", () => {
     expect(calls.filter((c) => c.method === "POST")).toHaveLength(0);
   });
 
+  it("shows the subtitle about picking a session only above a form", async () => {
+    const subtitle = "Pick a session with seats left. Nothing is booked until you approve the request.";
+    installFetch([{ path: "/api/orientation-sessions", body: sessions }, { path: "/api/orientation-booking", body: noBooking }]);
+    let view = renderPage("/requests/orientation");
+    await findRadio("ORI-002");
+    expect(screen.getByText(subtitle)).toBeTruthy();
+    view.unmount();
+    const cases: Array<[Me, FakeRoute[], string]> = [
+      [newHire, [{ path: "/api/orientation-booking", body: ownBooking }], "own-booking"],
+      [me, [], "orientation-ineligible"],
+      [manager, [{ path: "/api/team", body: { members: [member("E0103", "Chen Wei", false, false)] } }], "orientation-no-attendee"],
+    ];
+    for (const [who, routes, testId] of cases) {
+      installFetch([{ path: "/api/orientation-sessions", body: sessions }, ...routes]);
+      view = renderPage("/requests/orientation", who);
+      await screen.findByTestId(testId);
+      expect(screen.queryByText(subtitle)).toBeNull();
+      view.unmount();
+    }
+  });
+
   it("renders no Update request button for an edit of a decided request", async () => {
     const old = { ...proposed({ sessionId: "ORI-002" }), status: "rejected" as const, supersededBy: id(5) };
     installFetch([{ path: "/api/orientation-sessions", body: sessions }, { path: "/api/orientation-booking", body: noBooking }, ...actionsServer([old]).routes]);

@@ -142,6 +142,24 @@ describe("OnboardingPage own checklist", () => {
     expect(calls.map((c) => c.path).sort()).toEqual(["/api/onboarding", "/api/orientation-booking"]);
   });
 
+  it("shows an error with Try again when the booking cannot be checked", async () => {
+    const newHire = { ...me, employeeId: "E0025", fullName: "Nadia Fernandes", inOnboarding: true };
+    let fail = true;
+    installFetch([
+      { path: "/api/onboarding", body: progress("E0025", "Nadia Fernandes", 40) },
+      {
+        path: "/api/orientation-booking",
+        status: () => (fail ? 500 : 200),
+        body: () => (fail ? { error: { code: "internal", message: "Internal error.", requestId: "r" } } : { booking: null }),
+      },
+    ]);
+    renderAs(newHire);
+    expect((await screen.findByRole("alert")).textContent).toContain("Internal error.");
+    fail = false;
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect((await screen.findByTestId("own-orientation")).textContent).toContain("You have not booked an orientation session yet.");
+  });
+
   it("shows a booked new hire their session", async () => {
     const booked = { ...me, employeeId: "E0022", fullName: "Gabriel Kowalski", inOnboarding: true };
     installFetch([
@@ -163,6 +181,8 @@ describe("OnboardingPage own checklist", () => {
     renderAs(noReports);
     expect(await screen.findByText("No one you support is in onboarding")).toBeTruthy();
     expect(calls.map((c) => c.path)).toEqual(["/api/team"]);
+    // No one here needs a session, so there is no link to a booking form that could only say so.
+    expect(screen.queryByRole("link", { name: /Book orientation/ })).toBeNull();
   });
 
   it("does not request the checklist of an employee whom /api/me reports without a plan", async () => {

@@ -17,8 +17,9 @@ export function ScheduleOrientationPage() {
       tool="schedule_orientation_session"
       titles={{ new: "Book orientation", edit: "Edit orientation request", review: "Review orientation request" }}
       subtitle="Pick a session with seats left. Nothing is booked until you approve the request."
-      renderForm={({ initialArgs, supersedes, onProposed }) => (
+      renderForm={({ intro, initialArgs, supersedes, onProposed }) => (
         <OrientationForm
+          intro={intro}
           initialSessionId={(initialArgs?.["sessionId"] as string | undefined) ?? (initialArgs ? undefined : (params.get("session") ?? undefined))}
           initialEmployeeId={initialArgs ? ((initialArgs["employeeId"] as string | undefined) ?? me.employeeId) : (params.get("employee") ?? undefined)}
           supersedes={supersedes}

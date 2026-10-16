@@ -9,8 +9,11 @@ export function NewTicketPage() {
       tool="create_support_ticket"
       titles={{ new: "New support ticket", edit: "Edit ticket request", review: "Review ticket request" }}
       subtitle="Nothing is created until you approve the request on the next step."
-      renderForm={({ initialArgs, supersedes, onProposed }) => (
-        <TicketForm initial={initialArgs as Partial<TicketValues> | undefined} supersedes={supersedes} onProposed={onProposed} />
+      renderForm={({ intro, initialArgs, supersedes, onProposed }) => (
+        <>
+          {intro}
+          <TicketForm initial={initialArgs as Partial<TicketValues> | undefined} supersedes={supersedes} onProposed={onProposed} />
+        </>
       )}
     />
   );

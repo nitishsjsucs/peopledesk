@@ -13,6 +13,11 @@ import { ApprovalCard } from "./ApprovalCard.tsx";
 import { ErrorBanner } from "./ErrorBanner.tsx";
 
 export type RequestFormProps = {
+  /**
+   * The step's subtitle (what happens next). The form renders it only when it shows a form: a person
+   * the page cannot book for gets the reason instead, without a subtitle about picking a session.
+   */
+  intro: ReactNode;
   /** Arguments of the request this form starts from (?edit= or ?from=); undefined on a new form. */
   initialArgs?: Record<string, unknown>;
   /** The request this form replaces (only on ?edit=). */
@@ -73,8 +78,7 @@ function Steps({ tool, titles, subtitle, renderForm }: Props) {
     return (
       <>
         <StepTitle focus={focusStep}>{titles.new}</StepTitle>
-        <p className="page-subtitle">{subtitle}</p>
-        {renderForm({ onProposed })}
+        {renderForm({ intro: <p className="page-subtitle">{subtitle}</p>, onProposed })}
       </>
     );
   }
@@ -136,8 +140,7 @@ function Steps({ tool, titles, subtitle, renderForm }: Props) {
     return (
       <>
         <StepTitle focus={focusStep}>{heading}</StepTitle>
-        <p className="page-subtitle">Prefilled from an earlier request. {subtitle}</p>
-        {renderForm({ initialArgs: args, onProposed })}
+        {renderForm({ intro: <p className="page-subtitle">Prefilled from an earlier request. {subtitle}</p>, initialArgs: args, onProposed })}
       </>
     );
   }
@@ -198,13 +201,17 @@ function EditStep({
   return (
     <>
       <StepTitle focus={focusHeading}>{heading}</StepTitle>
-      <p className="page-subtitle">{subtitle} Updating replaces the request you are editing.</p>
-      {expiredWhileEditing ? (
-        <div className="banner banner-info" role="status">
-          The request you were editing expired, so submitting this form creates a new request.
-        </div>
-      ) : null}
       {renderForm({
+        intro: (
+          <>
+            <p className="page-subtitle">{subtitle} Updating replaces the request you are editing.</p>
+            {expiredWhileEditing ? (
+              <div className="banner banner-info" role="status">
+                The request you were editing expired, so submitting this form creates a new request.
+              </div>
+            ) : null}
+          </>
+        ),
         initialArgs: (action.arguments ?? {}) as Record<string, unknown>,
         ...(expiredWhileEditing ? {} : { supersedes: action.actionId }),
         onProposed,

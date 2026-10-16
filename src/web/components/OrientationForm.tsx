@@ -4,7 +4,7 @@
 // themself; a manager or HR admin books for the people they support who have none. The server still
 // decides every proposal (ActionService.propose); this only avoids offering a form that cannot succeed.
 import { useRef, useState } from "react";
-import type { FormEvent } from "react";
+import type { FormEvent, ReactNode } from "react";
 import { Link } from "react-router";
 import type { Me, OrientationBooking, PendingActionView, Session, Team } from "../../shared/api-types.ts";
 import { ScheduleOrientationSessionInput } from "../../shared/tool-schemas.ts";
@@ -16,6 +16,8 @@ import { ErrorBanner } from "./ErrorBanner.tsx";
 import { SubmitError } from "./SubmitError.tsx";
 
 type Props = {
+  /** The page's subtitle, shown only above a form (never above "you're booked" or why you cannot book). */
+  intro?: ReactNode;
   /** The session of the request this form starts from, or of ?session=; never kept if it is full now. */
   initialSessionId?: string;
   /**
@@ -67,7 +69,7 @@ export function OwnBooking({ booking }: { booking: OrientationBooking }) {
   );
 }
 
-function BookingForm({ initialSessionId, initialEmployeeId, supersedes, onProposed }: Props) {
+function BookingForm({ intro, initialSessionId, initialEmployeeId, supersedes, onProposed }: Props) {
   const me = useMe();
   const sessions = useAsync(() => api.sessions(), []);
   const team = useAsync(() => (me.role === "employee" ? Promise.resolve({ members: [] }) : api.team()), [me.role]);
@@ -191,6 +193,7 @@ function BookingForm({ initialSessionId, initialEmployeeId, supersedes, onPropos
 
   return (
     <>
+      {intro}
       {bookedLine}
       <form className="card" onSubmit={submit} aria-label="Book an orientation session" noValidate>
         {me.role !== "employee" ? (

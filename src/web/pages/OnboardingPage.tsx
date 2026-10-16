@@ -21,6 +21,7 @@ function OwnChecklist() {
       <h2 id="own-onboarding" style={{ fontSize: 17 }}>
         My checklist
       </h2>
+      {booking.error ? <ErrorBanner error={booking.error} onRetry={booking.reload} /> : null}
       {booking.data ? (
         <div className="banner banner-info" data-testid="own-orientation">
           {booking.data.booking ? (
@@ -163,15 +164,9 @@ export function OnboardingPage() {
   return (
     <>
       <h1 className="page-title">Onboarding</h1>
-      <p className="page-subtitle">
-        Checklists and progress.
-        {me.inOnboarding || me.role !== "employee" ? (
-          <>
-            {" "}
-            <Link to="/requests/orientation">Book orientation</Link>
-          </>
-        ) : null}
-      </p>
+      {/* Booking links appear where someone still needs a session: beside your own checklist, and on
+          each unbooked person in the team list. */}
+      <p className="page-subtitle">Checklists and progress.</p>
       {/* /api/me already says whether the caller has a plan; asking for a missing one is a known 404. */}
       {me.inOnboarding ? <OwnChecklist /> : null}
       {me.role === "employee" && !me.inOnboarding ? (
