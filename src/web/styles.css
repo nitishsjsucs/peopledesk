@@ -1357,10 +1357,25 @@ main h1[tabindex="-1"]:focus {
   border-color: var(--primary);
 }
 
+/* The pressed tile has a real 2px border (one pixel taken from the padding, so nothing moves) and a
+   bolder label, as well as the tint. Forced colors replace the tint and the border color and drop
+   box-shadow, so the border width and the label weight are what still mark the selection there. */
 .stat-tile[aria-pressed="true"] {
-  border-color: var(--primary);
-  box-shadow: inset 0 0 0 1px var(--primary);
+  border: 2px solid var(--primary);
+  padding: 9px 11px;
   background: var(--primary-soft);
+}
+
+.stat-tile[aria-pressed="true"] .stat-label {
+  font-weight: 600;
+  color: var(--text);
+}
+
+@media (forced-colors: active) {
+  .stat-tile[aria-pressed="true"] {
+    border: 3px solid Highlight;
+    padding: 8px 10px;
+  }
 }
 
 .stat-top {
