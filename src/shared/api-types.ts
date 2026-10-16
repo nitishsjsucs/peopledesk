@@ -168,7 +168,17 @@ export type OnboardingProgress = z.infer<typeof OnboardingProgressSchema>;
 // Team (the same directory slice the chat router sees)
 
 export const TeamSchema = z.object({
-  members: z.array(z.object({ employeeId: z.string(), fullName: z.string(), inOnboarding: z.boolean(), booked: z.boolean() })),
+  members: z.array(
+    z.object({
+      employeeId: z.string(),
+      fullName: z.string(),
+      inOnboarding: z.boolean(),
+      booked: z.boolean(),
+      /** null for a member without an onboarding plan. */
+      percentComplete: z.number().int().min(0).max(100).nullable(),
+      blockedTasks: z.number().int().min(0),
+    }),
+  ),
 });
 export type Team = z.infer<typeof TeamSchema>;
 

@@ -45,7 +45,14 @@ export function OnboardingChecklist({ progress }: { progress: OnboardingProgress
       <div>
         <strong>{progress.fullName}</strong> · started {formatDate(progress.startDate)} · target {formatDate(progress.targetCompletionDate)}
       </div>
-      <div className="progress" role="progressbar" aria-valuenow={progress.percentComplete} aria-valuemin={0} aria-valuemax={100}>
+      <div
+        className="progress"
+        role="progressbar"
+        aria-label={`Onboarding progress for ${progress.fullName}`}
+        aria-valuenow={progress.percentComplete}
+        aria-valuemin={0}
+        aria-valuemax={100}
+      >
         <span style={{ width: `${progress.percentComplete}%` }} />
       </div>
       <div className="message-meta">

@@ -1105,3 +1105,69 @@ main h1[tabindex="-1"]:focus {
   outline: none;
   box-shadow: none;
 }
+
+/* Onboarding team view: the checklist beside the people list; on a narrow screen the list comes first. */
+.onboarding-summary {
+  margin: 0 0 10px;
+  color: var(--text-muted);
+}
+
+.filter-buttons > * {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.filter-btn.active {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.onboarding-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 320px);
+  gap: 20px;
+  align-items: start;
+}
+
+.person-row {
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.person-main,
+.person-side {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.person-side {
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.person-name {
+  border: 0;
+  background: none;
+  padding: 4px 0;
+  font: inherit;
+  color: var(--primary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.person-name.active {
+  font-weight: 700;
+}
+
+@media (max-width: 800px) {
+  .onboarding-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .onboarding-people {
+    order: -1;
+  }
+}

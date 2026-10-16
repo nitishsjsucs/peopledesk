@@ -98,6 +98,16 @@ describe("read routes", () => {
     expect(hr.members).toHaveLength(30);
     expect(hr.members.filter((m) => !m.booked)).toHaveLength(12);
     await expectError(await api("/api/team", { as: "tenured_employee" }), 403, "forbidden");
+
+    // Each member's progress matches their own onboarding view; members without a plan have none.
+    for (const m of team.members.filter((x) => !x.inOnboarding)) expect(m).toMatchObject({ percentComplete: null, blockedTasks: 0 });
+    const sampled = [...team.members.filter((x) => x.inOnboarding).slice(0, 2), hr.members[0]!, hr.members[29]!];
+    for (const m of sampled) {
+      const progress = await expectJson(await api(`/api/onboarding/${m.employeeId}`, { as: "hr_admin" }), OnboardingProgressSchema);
+      expect(m.percentComplete, m.employeeId).toBe(progress.percentComplete);
+      expect(m.blockedTasks, m.employeeId).toBe(progress.counts.blocked);
+    }
+    expect(hr.members.some((m) => m.blockedTasks > 0)).toBe(true);
   });
 
   it("GET /api/orientation-sessions reports seats remaining", async () => {

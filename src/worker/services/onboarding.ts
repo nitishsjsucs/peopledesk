@@ -9,6 +9,11 @@ type TaskRow = {
   status: OnboardingProgress["tasks"][number]["status"];
 };
 
+/** Percent of a plan's tasks that are done, as every onboarding view reports it. */
+export function percentComplete(done: number, total: number): number {
+  return total === 0 ? 0 : Math.round((done / total) * 100);
+}
+
 export class OnboardingService {
   private readonly db: D1Database;
   constructor(db: D1Database) {
@@ -49,7 +54,7 @@ export class OnboardingService {
       fullName: p.full_name,
       startDate: p.start_date,
       targetCompletionDate: p.target_completion_date,
-      percentComplete: rows.length === 0 ? 0 : Math.round((counts.done / rows.length) * 100),
+      percentComplete: percentComplete(counts.done, rows.length),
       counts,
       tasks: rows.map((t) => ({
         id: t.id,

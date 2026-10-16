@@ -904,7 +904,7 @@ type ApiError = { error: { code: "unauthenticated" | "forbidden" | "human_approv
 | GET | `/api/tickets` | any | `?status=` | `{ tickets: Ticket[] }` (own only) |
 | GET | `/api/onboarding` | any | none | `OnboardingProgress` for self; 404 if no plan |
 | GET | `/api/onboarding/:employeeId` | self, manager of, hr_admin | none | `OnboardingProgress`; 404 otherwise |
-| GET | `/api/team` | manager, hr_admin | none | `{ members: Array<{ employeeId, fullName, inOnboarding, booked: boolean }> }` (the same directory slice the router sees: direct reports, or all onboarding hires for hr_admin) |
+| GET | `/api/team` | manager, hr_admin | none | `{ members: Array<{ employeeId, fullName, inOnboarding, booked: boolean, percentComplete: number \| null, blockedTasks: number }> }` (the same directory slice the router sees: direct reports, or all onboarding hires for hr_admin; `percentComplete` and `blockedTasks`, added 2026-10-15, come from one aggregate query over the slice's ids, with the same rounding as `OnboardingProgress`, and `percentComplete` is null without a plan) |
 | GET | `/api/orientation-sessions` | any | `?from=&to=&format=&region=` | `{ sessions: Array<Session & { seatsRemaining: number }> }` |
 | GET | `/api/orientation-booking` | any (self only) | none (any query string is ignored) | `{ booking: { sessionId, title, startsAt, durationMin, format, region, location } \| null }`, the principal's own booking (added 2026-10-15, so a booked new hire can see their session) |
 | POST | `/api/actions` | any | `{ tool: "create_support_ticket" \| "schedule_orientation_session", arguments: unknown, supersedes?: uuid }` | 201 `PendingActionView` (forms path, same `ActionService.propose`) |
@@ -1480,14 +1480,14 @@ React 19, `react-router` 8.4.0 (`createBrowserRouter`, `RouterProvider`), plain 
 
 | Route | Page | Contents |
 |---|---|---|
-| `/` | HomePage (P1) | P0: redirect to `/chat`. P1: greeting with role badge; quick actions (Ask a question, New ticket, Schedule orientation, My onboarding); count of actions awaiting approval |
+| `/` | HomePage (P1) | P0: redirect to `/chat`. P1: greeting with role badge; quick actions (Ask a question, New ticket, Schedule orientation, My onboarding); count of actions awaiting approval. Since 2026-10-15 the quick actions fit the person: Ask a question, Policies, New ticket and My tickets always; Book orientation only for someone in onboarding without a booking, or for a manager or HR admin when someone they support is unbooked (with the count); a booked new hire's session; onboarding with the person's percent, or the manager's or HR's scope, and none for an employee without a plan |
 | `/chat`, `/chat/:conversationId` | ChatPage | ConversationList, MessageList, ChatComposer; message variants: answer (CitationChip list, SourceDrawer), clarify, refuse, error (with a retry button), ToolResultCard, ApprovalCard |
 | `/policies` | PoliciesPage | Category filter, search box, list of accessible documents with current version and EffectiveDateBadge |
 | `/policies/:docId`, `/policies/:docId/v/:version` | PolicyDocumentPage | Rendered markdown, VersionTimeline with current, superseded, scheduled badges; superseded versions visibly marked |
 | `/requests/ticket` | NewTicketPage | TicketForm, then review step that shows the ApprovalCard. The steps are addressed by the URL (2026-10-15): `?review=<actionId>` shows that request's card in its current state, `?edit=<actionId>` the prefilled form that supersedes it (no form once it is decided or expired), `?from=<actionId>` a prefilled form that proposes a new request; a successful propose replaces the history entry with `?review=<newId>` |
 | `/requests/orientation` | ScheduleOrientationPage | Session table with seats remaining; for managers, a direct-report selector from `/api/team`; review step with ApprovalCard; the same URL-addressed steps as `/requests/ticket`. Since 2026-10-15 the form appears only for someone who could book (an employee without a plan, a booked new hire, and a manager or HR admin with no unbooked person in onboarding get a short explanation and a link instead; a booked person sees their session from `/api/orientation-booking`); a region filter defaults to the attendee's region plus Global for a self booking; `?session=` and `?employee=` preselect |
 | `/tickets` | TicketsPage | Own tickets (status filter is P1) |
-| `/onboarding` | OnboardingPage | Own checklist and percent complete (the manager view of direct reports in onboarding is P1) |
+| `/onboarding` | OnboardingPage | Own checklist and percent complete (the manager view of direct reports in onboarding is P1). Since 2026-10-15 the team view has a summary (in onboarding, without orientation, with blocked tasks), filters (All, Not booked, Has blocked tasks), each person's percent and blocked count, and a Book orientation link per unbooked person (`/requests/orientation?employee=`); a new hire sees whether their orientation is booked |
 | `/actions` | ActionsPage | Own pending and past actions; `?focus=<id>` highlights one (target of `approvalUrl`) |
 | `*` | NotFoundPage | |
 
