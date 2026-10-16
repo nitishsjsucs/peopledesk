@@ -153,26 +153,107 @@ describe("OrientationForm", () => {
     expect(posts()[0]!.body).toEqual({ tool: "schedule_orientation_session", arguments: { sessionId: "ORI-003", employeeId: "E0101" } });
   });
 
-  it("lets HR choose among everyone in onboarding without a booking", async () => {
+  it("lets HR choose among everyone in onboarding without a booking, and asks for a choice instead of picking the first", async () => {
     const team = { members: [member("E0101", "Ana Lima", true, false), member("E0104", "Dina Haddad", true, false)] };
     const { posts } = renderForm(hrAdmin, { team });
     const select = (await screen.findByLabelText("Attendee")) as HTMLSelectElement;
     await screen.findByRole("option", { name: "Dina Haddad (E0104)" });
-    expect(select.value).toBe("E0101");
+    expect(select.value).toBe("");
+    expect([...select.options].map((o) => o.textContent)).toEqual(["Choose an attendee", "Ana Lima (E0101)", "Dina Haddad (E0104)"]);
+    fireEvent.click(screen.getByLabelText("New hire orientation ORI-002, ORI-002"));
+    fireEvent.click(screen.getByRole("button", { name: "Review request" }));
+    expect((await screen.findByRole("alert")).textContent).toBe("Choose an attendee.");
+    expect(select.getAttribute("aria-invalid")).toBe("true");
+    expect(select.getAttribute("aria-describedby")).toBe("attendee-error");
+    expect(document.activeElement).toBe(select);
+    expect(posts()).toHaveLength(0);
     fireEvent.change(select, { target: { value: "E0104" } });
+    expect(screen.queryByRole("alert")).toBeNull();
     fireEvent.click(screen.getByLabelText("New hire orientation ORI-002, ORI-002"));
     fireEvent.click(screen.getByRole("button", { name: "Review request" }));
     await waitFor(() => expect(posts()).toHaveLength(1));
     expect(posts()[0]!.body).toEqual({ tool: "schedule_orientation_session", arguments: { sessionId: "ORI-002", employeeId: "E0104" } });
   });
 
-  it("preselects the attendee named by ?employee= only when that person is listed", async () => {
+  it("preselects the attendee named by ?employee= when that person is listed", async () => {
     const team = { members: [member("E0101", "Ana Lima", true, false), member("E0104", "Dina Haddad", true, false)] };
     renderForm(hrAdmin, { team, props: { initialEmployeeId: "E0104" } });
     expect(((await screen.findByLabelText("Attendee")) as HTMLSelectElement).value).toBe("E0104");
-    cleanup();
-    renderForm(hrAdmin, { team, props: { initialEmployeeId: "E0999" } });
-    expect(((await screen.findByLabelText("Attendee")) as HTMLSelectElement).value).toBe("E0101");
+    expect(screen.queryByText(/Choose an attendee/, { selector: "p" })).toBeNull();
+  });
+
+  it("never swaps a named attendee who cannot be booked for someone else: it says why and asks for a choice", async () => {
+    const team = { members: [member("E0101", "Ana Lima", true, false), member("E0102", "Ben Cole", true, true), member("E0103", "Chen Wei", false, false)] };
+    for (const [initialEmployeeId, why] of [
+      ["E0102", "Ben Cole (E0102) already has an orientation session."],
+      ["E0103", "Chen Wei (E0103) is not in onboarding."],
+      ["E0999", "E0999 is not one of the people you can book for."],
+    ] as const) {
+      const { posts, onProposed } = renderForm(manager, { team, props: { initialEmployeeId } });
+      const select = (await screen.findByLabelText("Attendee")) as HTMLSelectElement;
+      // Ana Lima is the only person listed, yet she is not chosen in place of the person named.
+      expect(select.value).toBe("");
+      expect(select.getAttribute("aria-describedby")).toBe("attendee-error");
+      expect(screen.getByText(why).id).toBe("attendee-error");
+      fireEvent.click(screen.getByLabelText("New hire orientation ORI-002, ORI-002"));
+      fireEvent.click(screen.getByRole("button", { name: "Review request" }));
+      expect((await screen.findByRole("alert")).textContent).toBe(`${why} Choose an attendee.`);
+      expect(posts()).toHaveLength(0);
+      fireEvent.change(select, { target: { value: "E0101" } });
+      expect(screen.queryByText(why, { exact: false })).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Review request" }));
+      await waitFor(() => expect(onProposed).toHaveBeenCalledTimes(1));
+      expect(posts()[0]!.body).toEqual({ tool: "schedule_orientation_session", arguments: { sessionId: "ORI-002", employeeId: "E0101" } });
+      cleanup();
+    }
+  });
+
+  it("does not keep a preselected session that is full now: it says so, checks nothing and sends nothing", async () => {
+    const { posts } = renderForm(newHire, { props: { initialSessionId: "ORI-001" } });
+    const full = (await screen.findByLabelText("New hire orientation ORI-001, ORI-001")) as HTMLInputElement;
+    expect(full.checked).toBe(false);
+    expect(full.disabled).toBe(true);
+    const note = screen.getByText("ORI-001 is full now. Choose another session.");
+    expect(screen.getByRole("group", { name: "Session" }).getAttribute("aria-describedby")).toBe(note.id);
+    fireEvent.click(screen.getByRole("button", { name: "Review request" }));
+    expect((await screen.findByRole("alert")).textContent).toBe("ORI-001 is full now. Choose another session.");
+    expect(document.activeElement).toBe(screen.getByLabelText("New hire orientation ORI-002, ORI-002"));
+    expect(posts()).toHaveLength(0);
+    fireEvent.click(screen.getByLabelText("New hire orientation ORI-002, ORI-002"));
+    expect(screen.queryByText(/is full now/)).toBeNull();
+  });
+
+  it("says a preselected session that is no longer listed cannot be booked", async () => {
+    const { posts } = renderForm(newHire, { props: { initialSessionId: "ORI-099" } });
+    expect(await screen.findByText("ORI-099 is no longer open for booking. Choose another session.")).toBeTruthy();
+    expect(screen.queryAllByRole("radio").some((r) => (r as HTMLInputElement).checked)).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Review request" }));
+    await screen.findByRole("alert");
+    expect(posts()).toHaveLength(0);
+  });
+
+  it("re-reads the sessions when the server says the chosen one filled up, and unchecks it", async () => {
+    let filled = false;
+    const { posts } = renderForm(newHire, {
+      extra: [
+        { path: "/api/orientation-sessions", body: () => ({ sessions: [session("ORI-001", 0, 6), session("ORI-002", filled ? 0 : 4), session("ORI-003", 9)] }) },
+        {
+          method: "POST",
+          path: "/api/actions",
+          status: 409,
+          body: () => {
+            filled = true;
+            return { error: { code: "conflict", message: "That session is full.", requestId: "r", details: { reason: "session_full" } } };
+          },
+        },
+      ],
+    });
+    fireEvent.click(await screen.findByLabelText("New hire orientation ORI-002, ORI-002"));
+    fireEvent.click(screen.getByRole("button", { name: "Review request" }));
+    expect(await screen.findByText("ORI-002 is full now. Choose another session.")).toBeTruthy();
+    expect((screen.getByLabelText("New hire orientation ORI-002, ORI-002") as HTMLInputElement).checked).toBe(false);
+    expect(screen.getByRole("alert").textContent).toContain("That session is full.");
+    expect(posts()).toHaveLength(1);
   });
 
   it("lists a manager who is in onboarding first, as themself, and proposes without an employee id", async () => {
@@ -322,10 +403,10 @@ describe("OrientationForm", () => {
 
 describe("ScheduleOrientationPage", () => {
   const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
-  const renderPage = (url: string) =>
+  const renderPage = (url: string, who: Me = newHire) =>
     render(
       <MemoryRouter initialEntries={[url]}>
-        <MeContext.Provider value={newHire}>
+        <MeContext.Provider value={who}>
           <Routes>
             <Route path="/requests/orientation" element={<ScheduleOrientationPage />} />
           </Routes>
@@ -386,6 +467,43 @@ describe("ScheduleOrientationPage", () => {
       { tool: "schedule_orientation_session", arguments: { sessionId: "ORI-002" } },
     ]);
     expect(location()).toBe(`/requests/orientation?review=${id(1)}`);
+  });
+
+  it("offers another session from a request that failed because its session filled up, never the full one", async () => {
+    const failed = { ...proposed({ sessionId: "ORI-001" }), status: "failed" as const, errorCode: "session_full" };
+    const calls = installFetch([{ path: "/api/orientation-sessions", body: sessions }, { path: "/api/orientation-booking", body: noBooking }, ...actionsServer([failed]).routes]);
+    renderPage(`/requests/orientation?from=${failed.actionId}`);
+    expect(await screen.findByText("ORI-001 is full now. Choose another session.")).toBeTruthy();
+    expect((screen.getByLabelText("New hire orientation ORI-001, ORI-001") as HTMLInputElement).checked).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Review request" }));
+    await screen.findByRole("alert");
+    expect(calls.filter((c) => c.method === "POST")).toHaveLength(0);
+    fireEvent.click(screen.getByLabelText("New hire orientation ORI-003, ORI-003"));
+    fireEvent.click(screen.getByRole("button", { name: "Review request" }));
+    await screen.findByTestId("approval-card");
+    expect(calls.filter((c) => c.method === "POST").map((c) => c.body)).toEqual([{ tool: "schedule_orientation_session", arguments: { sessionId: "ORI-003" } }]);
+  });
+
+  it("keeps the attendee of the request being edited, and asks for a choice when that person was booked since", async () => {
+    const team = { members: [member("E0101", "Ana Lima", true, false), member("E0102", "Ben Cole", true, false), member("E0103", "Chen Wei", true, true)] };
+    const routes = (old: PendingActionView) => [
+      { path: "/api/orientation-sessions", body: sessions },
+      { path: "/api/team", body: team },
+      ...actionsServer([old]).routes,
+    ];
+    const stillOpen = proposed({ sessionId: "ORI-002", employeeId: "E0102" });
+    installFetch(routes(stillOpen));
+    const view = renderPage(`/requests/orientation?edit=${stillOpen.actionId}`, manager);
+    await waitFor(() => expect((screen.getByLabelText("Attendee") as HTMLSelectElement).value).toBe("E0102"));
+    view.unmount();
+    const bookedSince = proposed({ sessionId: "ORI-002", employeeId: "E0103" });
+    const calls = installFetch(routes(bookedSince));
+    renderPage(`/requests/orientation?edit=${bookedSince.actionId}`, manager);
+    expect(await screen.findByText("Chen Wei (E0103) already has an orientation session.")).toBeTruthy();
+    expect((screen.getByLabelText("Attendee") as HTMLSelectElement).value).toBe("");
+    fireEvent.click(screen.getByRole("button", { name: "Update request" }));
+    expect((await screen.findByRole("alert")).textContent).toBe("Chen Wei (E0103) already has an orientation session. Choose an attendee.");
+    expect(calls.filter((c) => c.method === "POST")).toHaveLength(0);
   });
 
   it("renders no Update request button for an edit of a decided request", async () => {

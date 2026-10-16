@@ -6,7 +6,7 @@
 import { useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link } from "react-router";
-import type { OrientationBooking, PendingActionView, Session } from "../../shared/api-types.ts";
+import type { Me, OrientationBooking, PendingActionView, Session, Team } from "../../shared/api-types.ts";
 import { ScheduleOrientationSessionInput } from "../../shared/tool-schemas.ts";
 import { api, ApiClientError } from "../lib/api.ts";
 import { formatDateTime } from "../lib/format.ts";
@@ -16,7 +16,13 @@ import { ErrorBanner } from "./ErrorBanner.tsx";
 import { SubmitError } from "./SubmitError.tsx";
 
 type Props = {
+  /** The session of the request this form starts from, or of ?session=; never kept if it is full now. */
   initialSessionId?: string;
+  /**
+   * The attendee of the request this form starts from (the viewer's own id for a request without an
+   * employeeId), or of ?employee=. Kept only while that person can still be booked for; otherwise the
+   * form says why and asks for a choice instead of picking someone else.
+   */
   initialEmployeeId?: string;
   supersedes?: string;
   onProposed: (view: PendingActionView) => void;
@@ -42,6 +48,16 @@ export function OrientationForm(props: Props) {
   return <BookingForm {...props} />;
 }
 
+/** Why a person named by the link or the request being edited is not among the attendees. */
+function unavailableAttendee(id: string, me: Me, ownBooking: OrientationBooking | null, members: Team["members"]): string {
+  if (id === me.employeeId) return ownBooking ? "You already have an orientation session." : "You are not in onboarding, so you cannot book a session for yourself.";
+  const m = members.find((x) => x.employeeId === id);
+  if (!m) return `${id} is not one of the people you can book for.`;
+  if (m.booked) return `${m.fullName} (${id}) already has an orientation session.`;
+  if (!m.inOnboarding) return `${m.fullName} (${id}) is not in onboarding.`;
+  return `${m.fullName} (${id}) cannot be booked here.`;
+}
+
 /** "You're booked into ..." for the viewer's own booking. */
 export function OwnBooking({ booking }: { booking: OrientationBooking }) {
   return (
@@ -57,12 +73,15 @@ function BookingForm({ initialSessionId, initialEmployeeId, supersedes, onPropos
   const team = useAsync(() => (me.role === "employee" ? Promise.resolve({ members: [] }) : api.team()), [me.role]);
   const own = useAsync(() => (me.inOnboarding ? api.orientationBooking() : Promise.resolve({ booking: null })), [me.inOnboarding]);
   const [sessionId, setSessionId] = useState(initialSessionId ?? "");
-  const [employeeId, setEmployeeId] = useState(initialEmployeeId ?? "");
+  /** The attendee picked in the select; null until the person picks one. */
+  const [picked, setPicked] = useState<string | null>(null);
   const [region, setRegion] = useState<RegionChoice | null>(null);
   const [choose, setChoose] = useState(false);
+  const [chooseAttendee, setChooseAttendee] = useState(false);
   const [submitError, setSubmitError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const tableRef = useRef<HTMLTableElement>(null);
+  const attendeeRef = useRef<HTMLSelectElement>(null);
 
   const failed = [own, team, sessions].filter((x) => x.error);
   if (failed.length > 0) {
@@ -113,28 +132,49 @@ function BookingForm({ initialSessionId, initialEmployeeId, supersedes, onPropos
       </>
     );
   }
-  // The attendee is always one of the listed options. A manager or HR admin who is not in onboarding
-  // is not an option, so the default is the first listed attendee: exactly what the select shows.
-  const attendee = attendees.some((a) => a.employeeId === employeeId) ? employeeId : (attendees[0] as { employeeId: string }).employeeId;
+  // The attendee shown is always the one proposed for, and is never swapped for someone else: a person
+  // named by the link or by the request being edited who can no longer be booked for (booked since, for
+  // example) leaves the select on "Choose an attendee" with the reason beside it. Without a name, the
+  // viewer (when listed) or the only person listed is chosen; otherwise the person chooses.
+  const listed = (id: string) => attendees.some((a) => a.employeeId === id);
+  const first = (attendees[0] as { employeeId: string }).employeeId;
+  const initialListed = initialEmployeeId !== undefined && listed(initialEmployeeId);
+  const fallback = initialEmployeeId !== undefined ? (initialListed ? initialEmployeeId : "") : first === me.employeeId || attendees.length === 1 ? first : "";
+  const attendee = me.role === "employee" ? me.employeeId : (picked ?? fallback);
+  const attendeeNote =
+    me.role !== "employee" && picked === null && initialEmployeeId !== undefined && !initialListed
+      ? unavailableAttendee(initialEmployeeId, me, booking, team.data.members)
+      : null;
   const forSelf = attendee === me.employeeId;
   const regionChoice: RegionChoice = region ?? (forSelf && !initialSessionId ? "mine" : "all");
   const matches = (s: Session) =>
     regionChoice === "all" ? true : regionChoice === "mine" ? s.region === me.region || s.region === "GLOBAL" : s.region === regionChoice;
   const shown = sessions.data.sessions.filter((s) => s.id === sessionId || matches(s));
+  // A chosen session that is full now, or no longer listed (it started, or was removed), is not a
+  // choice: it is never checked or proposed, and the form says to choose another.
+  const chosen = sessions.data.sessions.find((s) => s.id === sessionId);
+  const chosenOpen = chosen !== undefined && chosen.seatsRemaining > 0;
+  const sessionNote = sessionId && !chosenOpen ? `${sessionId} ${chosen ? "is full now" : "is no longer open for booking"}. Choose another session.` : null;
+  const sessionProblem = choose ? (sessionNote ?? "Choose a session.") : sessionNote;
+  const attendeeProblem = chooseAttendee ? `${attendeeNote ? `${attendeeNote} ` : ""}Choose an attendee.` : attendeeNote;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (busy) return;
+    const noAttendee = attendee === "";
     const parsed = ScheduleOrientationSessionInput.safeParse({
-      sessionId,
+      sessionId: chosenOpen ? sessionId : "",
       ...(attendee !== me.employeeId ? { employeeId: attendee } : {}),
     });
-    if (!parsed.success) {
-      setChoose(true);
-      tableRef.current?.querySelector<HTMLInputElement>('input[type="radio"]:not(:disabled)')?.focus();
+    if (noAttendee || !parsed.success) {
+      setChooseAttendee(noAttendee);
+      setChoose(!chosenOpen);
+      if (noAttendee) attendeeRef.current?.focus();
+      else tableRef.current?.querySelector<HTMLInputElement>('input[type="radio"]:not(:disabled)')?.focus();
       return;
     }
     setChoose(false);
+    setChooseAttendee(false);
     setSubmitError(null);
     setBusy(true);
     try {
@@ -156,13 +196,29 @@ function BookingForm({ initialSessionId, initialEmployeeId, supersedes, onPropos
         {me.role !== "employee" ? (
           <div className="field">
             <label htmlFor="attendee">Attendee</label>
-            <select id="attendee" value={attendee} onChange={(e) => setEmployeeId(e.target.value)}>
+            <select
+              id="attendee"
+              ref={attendeeRef}
+              value={attendee}
+              onChange={(e) => {
+                setPicked(e.target.value);
+                if (e.target.value) setChooseAttendee(false);
+              }}
+              aria-invalid={chooseAttendee || undefined}
+              aria-describedby={attendeeProblem ? "attendee-error" : undefined}
+            >
+              {attendee === "" ? <option value="">Choose an attendee</option> : null}
               {attendees.map((a) => (
                 <option key={a.employeeId} value={a.employeeId}>
                   {a.fullName} ({a.employeeId})
                 </option>
               ))}
             </select>
+            {attendeeProblem ? (
+              <p className="field-error" id="attendee-error" key={chooseAttendee ? "alert" : "note"} role={chooseAttendee ? "alert" : undefined}>
+                {attendeeProblem}
+              </p>
+            ) : null}
           </div>
         ) : null}
         <div className="field" style={{ maxWidth: 280 }}>
@@ -176,8 +232,13 @@ function BookingForm({ initialSessionId, initialEmployeeId, supersedes, onPropos
             ))}
           </select>
         </div>
-        <fieldset className="session-fieldset" aria-describedby={choose ? "session-error" : undefined}>
+        <fieldset className="session-fieldset" aria-describedby={sessionProblem ? "session-error" : undefined}>
           <legend>Session</legend>
+          {sessionProblem ? (
+            <p className="field-error" id="session-error" key={choose ? "alert" : "note"} role={choose ? "alert" : undefined}>
+              {sessionProblem}
+            </p>
+          ) : null}
           {shown.length === 0 ? (
             <div className="banner" data-testid="no-sessions-in-region">
               <span>No sessions in this region.</span>
@@ -207,7 +268,7 @@ function BookingForm({ initialSessionId, initialEmployeeId, supersedes, onPropos
                           id={`session-${s.id}`}
                           name="session"
                           value={s.id}
-                          checked={sessionId === s.id}
+                          checked={chosenOpen && sessionId === s.id}
                           disabled={s.seatsRemaining === 0}
                           onChange={() => {
                             setSessionId(s.id);
@@ -232,11 +293,6 @@ function BookingForm({ initialSessionId, initialEmployeeId, supersedes, onPropos
               </table>
             </div>
           )}
-          {choose ? (
-            <p className="field-error" id="session-error" role="alert">
-              Choose a session.
-            </p>
-          ) : null}
         </fieldset>
         {submitError ? <SubmitError error={submitError} /> : null}
         <button type="submit" className="btn btn-primary" aria-disabled={busy || undefined}>
