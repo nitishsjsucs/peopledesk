@@ -1446,7 +1446,7 @@ Verified for this design in my probe (`scratchpad/pd-verify`, plugin 1.3.7): two
 
 | File | Priority | What it proves |
 |---|---|---|
-| `ChatPage.test.tsx` | P0 | Renders answers with citation chips (title, doc id, version, effective date) and opens the source drawer; renders clarify, refuse and error states |
+| `ChatPage.test.tsx` | P0 | Renders answers with citation chips (title, doc id, version, effective date) and opens the source drawer; renders clarify, refuse and error states. Since 2026-10-15 also: one conversation per start, switching and not-found states, retry, rate limit countdown, 409 handling, focus return, the drawer's focus trap, and that only new replies are announced |
 | `ApprovalCard.test.tsx` | P0 | Shows preview fields and expiry; Approve and Reject call the right endpoints; after a decision the buttons give way to the outcome and its next step (2026-10-15: My tickets, onboarding, another session, the replacement, or "Start again with these details"), and focus moves to the outcome; a 409 or 410 re-reads the current state; the countdown is announced only at one minute left and at expiry; "Edit" opens the prefilled form at `?edit=<actionId>` |
 | `TicketForm.test.tsx` | P0 | Client validation uses the shared zod schema; submit goes to `/api/actions`; review step shows the pending action |
 | `markdown.test.tsx` | P0 (kept although the review listed it under P1: it is the only check that R2 markdown never reaches the DOM as raw HTML) | Restricted renderer outputs headings, lists and paragraphs and never injects raw HTML |
@@ -1476,7 +1476,7 @@ Verified for this design in my probe (`scratchpad/pd-verify`, plugin 1.3.7): two
 
 ## 15. UI pages and components
 
-React 19, `react-router` 8.4.0 (`createBrowserRouter`, `RouterProvider`), plain CSS with variables (light theme in P0; dark theme P1), no CSS framework. Data fetching through `lib/api.ts` with shared zod schemas. Accessible by default: semantic landmarks, labeled form controls, visible focus, `aria-live="polite"` on the message list.
+React 19, `react-router` 8.4.0 (`createBrowserRouter`, `RouterProvider`), plain CSS with variables (light theme in P0; dark theme P1), no CSS framework. Data fetching through `lib/api.ts` with shared zod schemas. Accessible by default: semantic landmarks, labeled form controls, visible focus, and one polite status region in chat that announces each new reply (since 2026-10-15 the message list itself is not a live region, so loading a stored transcript or a countdown inside a card is not read out).
 
 | Route | Page | Contents |
 |---|---|---|
@@ -1491,7 +1491,7 @@ React 19, `react-router` 8.4.0 (`createBrowserRouter`, `RouterProvider`), plain 
 | `/actions` | ActionsPage | Own pending and past actions; `?focus=<id>` highlights one (target of `approvalUrl`) |
 | `*` | NotFoundPage | |
 
-Components: `AppShell` (nav, `UserBadge`), `ConversationList`, `MessageList`, `ChatComposer` (2000-char counter, disabled while a turn runs), `CitationChip` (title, `POL-014 v3`, "effective 2026-01-01"), `SourceDrawer` (passage quote, effective range, link to the version page), `EffectiveDateBadge`, `ApprovalCard` (preview fields, expiry countdown, Approve, Reject, Edit; a replayed approve shows the stored outcome; a decided card shows its outcome and the next step instead of the buttons), `ToolResultCard` (TicketTable, OnboardingChecklist, SessionTable), `TicketForm`, `OrientationForm`, `VersionTimeline`, `ErrorBanner`, `EmptyState`.
+Components: `AppShell` (nav, `UserBadge`), `ConversationList`, `MessageList`, `ChatComposer` (2000-char counter, disabled while a turn runs; focus returns to it when the turn ends if the send started there), `CitationChip` (title, `POL-014 v3`, "effective 2026-01-01"), `SourceDrawer` (passage quote, effective range, link to the version page; a modal dialog outside the app root that keeps Tab inside, makes the page behind it inert and returns focus to the chip), `EffectiveDateBadge`, `ApprovalCard` (preview fields, expiry countdown, Approve, Reject, Edit; a replayed approve shows the stored outcome; a decided card shows its outcome and the next step instead of the buttons), `ToolResultCard` (TicketTable, OnboardingChecklist, SessionTable), `TicketForm`, `OrientationForm`, `VersionTimeline`, `ErrorBanner`, `EmptyState`.
 
 Dev login is not part of the SPA: the Worker serves a minimal HTML persona picker at `/dev/login` in dev mode only, which posts to `/dev/token` and redirects to `/`.
 

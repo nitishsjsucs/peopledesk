@@ -137,19 +137,99 @@ describe("ChatPage", () => {
     expect(post?.body).toEqual({ text: "And sick leave?" });
   });
 
-  it("sends from the composer and shows the reply; the list is a polite live region", async () => {
+  it("sends from the composer, announces only the new reply, and returns focus to the composer", async () => {
     installFetch([
       { path: "/api/conversations", body: { conversations: [] } },
-      { path: "/api/conversations/c1", body: { id: "c1", title: "t", messages: [] } },
+      { path: "/api/conversations/c1", body: { id: "c1", title: "t", messages: transcript.slice(0, 2) } },
       { method: "POST", path: "/api/conversations/c1/messages", body: turn({ kind: "refuse", text: "I can help with company policies, support tickets, onboarding and orientation sessions." }) },
     ]);
     const { container } = renderChat();
-    const input = await screen.findByLabelText("Message");
+    await screen.findByText("Paid time off accrues at 1.5 days per month.");
+    const announcer = screen.getByTestId("chat-announcer");
+    // A stored transcript is not read out: the list is not a live region and the status is empty.
+    expect(container.querySelector(".message-list")?.hasAttribute("aria-live")).toBe(false);
+    expect(announcer.textContent).toBe("");
+    const input = screen.getByLabelText("Message") as HTMLTextAreaElement;
+    input.focus();
     fireEvent.change(input, { target: { value: "Tell me a joke" } });
     expect(screen.getByText("14 / 2000")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(announcer.textContent).toBe("PeopleDesk is working on it"));
     await screen.findByText(/I can help with company policies/);
-    expect(container.querySelector(".message-list")?.getAttribute("aria-live")).toBe("polite");
+    expect(announcer.textContent).toBe("I can help with company policies, support tickets, onboarding and orientation sessions.");
+    await waitFor(() => expect(document.activeElement).toBe(input));
+  });
+
+  it("announces an answer without its source line, and focuses the composer after a suggestion's turn", async () => {
+    const answer = "Paid time off accrues at 1.5 days per month.\n\nSource: PTO Accrual (POL-014 v3, effective 2026-01-01).";
+    installFetch([
+      { path: "/api/conversations", body: { conversations: [] } },
+      { method: "POST", path: "/api/conversations", status: 201, body: { id: "c7" } },
+      { path: "/api/conversations/c7", body: { id: "c7", title: "t", messages: [] } },
+      { method: "POST", path: "/api/conversations/c7/messages", body: turn({ kind: "answer", text: answer, citations: [ptoCitation] }) },
+    ]);
+    renderChat("/chat");
+    fireEvent.click(await screen.findByRole("button", { name: "How fast does paid time off accrue?" }));
+    await screen.findByText("Paid time off accrues at 1.5 days per month.");
+    expect(screen.getByTestId("chat-announcer").textContent).toBe("Paid time off accrues at 1.5 days per month.");
+    await waitFor(() => expect(document.activeElement?.id).toBe("chat-input"));
+  });
+
+  describe("source drawer", () => {
+    const routes = [
+      { path: "/api/conversations", body: { conversations: [] } },
+      { path: "/api/conversations/c1", body: { id: "c1", title: "t", messages: transcript.slice(0, 2) } },
+    ];
+
+    it("keeps Tab inside, closes on Escape and Close, and returns focus to the chip", async () => {
+      installFetch(routes);
+      renderChat();
+      const chip = await screen.findByRole("button", { name: /Source: PTO Accrual/ });
+      chip.focus();
+      fireEvent.click(chip);
+      const drawer = await screen.findByRole("dialog");
+      const close = within(drawer).getByRole("button", { name: "Close" });
+      const link = within(drawer).getByRole("link");
+      expect(document.activeElement).toBe(close);
+      // The page behind the dialog is inert while it is open.
+      expect(document.querySelector("#chat-input")?.closest("[inert]")).not.toBeNull();
+      link.focus();
+      fireEvent.keyDown(document, { key: "Tab" });
+      expect(document.activeElement).toBe(close);
+      fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
+      expect(document.activeElement).toBe(link);
+      fireEvent.keyDown(document, { key: "Escape" });
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      expect(document.activeElement).toBe(chip);
+      expect(document.querySelector("[inert]")).toBeNull();
+
+      fireEvent.click(chip);
+      fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Close" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      expect(document.activeElement).toBe(chip);
+    });
+
+    it("does not move focus back to Close when the chat re-renders while it is open", async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"] });
+      let release: () => void = () => {};
+      const held = new Promise<void>((r) => (release = r));
+      installFetch([...routes, { method: "POST", path: "/api/conversations/c1/messages", body: async () => (await held, turn({ kind: "refuse", text: "Later reply." })) }]);
+      renderChat();
+      await settle();
+      fireEvent.change(screen.getByLabelText("Message"), { target: { value: "A slow question" } });
+      fireEvent.click(screen.getByRole("button", { name: "Send" }));
+      await settle();
+      fireEvent.click(screen.getByRole("button", { name: /Source: PTO Accrual/ }));
+      await settle();
+      const link = within(screen.getByRole("dialog")).getByRole("link");
+      link.focus();
+      // The elapsed-time ticker re-renders the chat page every second.
+      await settle(3000);
+      expect(document.activeElement).toBe(link);
+      release();
+      await settle();
+      expect(document.activeElement).toBe(link);
+    });
   });
 
   it("shows the server's rate limit message when a send answers 429, and keeps the text for a retry", async () => {

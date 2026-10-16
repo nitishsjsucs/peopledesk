@@ -5,7 +5,7 @@ import { ChatComposer } from "../components/ChatComposer.tsx";
 import { ConversationList } from "../components/ConversationList.tsx";
 import { EmptyState } from "../components/EmptyState.tsx";
 import { ErrorBanner, errorMessage } from "../components/ErrorBanner.tsx";
-import { MessageList } from "../components/MessageList.tsx";
+import { answerBody, MessageList } from "../components/MessageList.tsx";
 import type { ChatEntry } from "../components/MessageList.tsx";
 import { SourceDrawer } from "../components/SourceDrawer.tsx";
 import { api, ApiClientError } from "../lib/api.ts";
@@ -101,6 +101,10 @@ export function ChatPage() {
   const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
   const [citation, setCitation] = useState<Citation | null>(null);
   const [listCollapsed, setListCollapsed] = useState(Boolean(conversationId));
+  /** What the status region reads out: the working notice, then the newest reply of this session. */
+  const [announcement, setAnnouncement] = useState("");
+  const [focusRequest, setFocusRequest] = useState(0);
+  const [turnsSettled, setTurnsSettled] = useState(0);
   const queued = useRef<{ id: string; text: string } | null>(null);
   const creatingRef = useRef(false);
   const active = useRef<string | null>(conversationId ?? null);
@@ -148,15 +152,15 @@ export function ChatPage() {
           transcriptCount.current = grown.length;
           const shown = await withCurrentActions(toEntries(grown));
           if (active.current !== id) return;
-          setEntries([
-            ...shown,
-            { key: key(), role: "user", text: failure.retryText },
-            { ...failure, pending: false, message: "PeopleDesk has finished your previous message, so this one was not sent. Retry to send it." },
-          ]);
+          const message = "PeopleDesk has finished your previous message, so this one was not sent. Retry to send it.";
+          setEntries([...shown, { key: key(), role: "user", text: failure.retryText }, { ...failure, pending: false, message }]);
+          setAnnouncement(message);
           return;
         }
         if (count >= TURN_POLL_MAX) {
-          settle("PeopleDesk is still answering your previous message. Try again in a moment.");
+          const message = "PeopleDesk is still answering your previous message. Try again in a moment.";
+          settle(message);
+          setAnnouncement(message);
           return;
         }
         poll.current = setTimeout(() => void tick(), TURN_POLL_MS);
@@ -170,12 +174,14 @@ export function ChatPage() {
     async (id: string, text: string, opts: { bubble?: boolean } = {}) => {
       setSendingFor(id);
       setSendingSince(Date.now());
+      setAnnouncement("PeopleDesk is working on it");
       if (opts.bubble !== false) setEntries((e) => [...e, { key: key(), role: "user", text }]);
       try {
         const result = await api.sendMessage(id, text);
         if (active.current !== id) return;
         transcriptCount.current += 2;
         setEntries((e) => [...e, { key: key(), role: "assistant", result, retryText: text }]);
+        setAnnouncement(result.kind === "answer" ? answerBody(result.text) : result.text);
         conversations.reload();
       } catch (err) {
         if (active.current !== id) return;
@@ -184,13 +190,17 @@ export function ChatPage() {
         if (err instanceof ApiClientError && err.code === "turn_in_progress") {
           const failure = { key: key(), role: "failure" as const, message: "Still answering your previous message...", retryText: text, pending: true };
           setEntries((e) => [...e, failure]);
+          setAnnouncement(failure.message);
           waitForPreviousReply(id, failure);
         } else {
-          setEntries((e) => [...e, { key: key(), role: "failure", message: errorMessage(err), retryText: text }]);
+          const message = errorMessage(err);
+          setEntries((e) => [...e, { key: key(), role: "failure", message, retryText: text }]);
+          setAnnouncement(message);
         }
       } finally {
         setSendingFor((s) => (s === id ? null : s));
         setSendingSince(null);
+        setTurnsSettled((n) => n + 1);
       }
     },
     [conversations, waitForPreviousReply],
@@ -205,6 +215,7 @@ export function ChatPage() {
     // The previous conversation's messages never show under this one, and nothing can be sent until
     // its own transcript arrives.
     setEntries([]);
+    setAnnouncement("");
     transcriptCount.current = 0;
     if (!conversationId) {
       setPhase("ready");
@@ -309,7 +320,16 @@ export function ChatPage() {
               <p>Answers cite the policy version they come from. Actions wait for your approval.</p>
               <div className="citations" style={{ justifyContent: "center" }}>
                 {SUGGESTIONS.map((s) => (
-                  <button key={s} type="button" className="btn" onClick={() => void onSend(s)} disabled={creating || cooldownLeft > 0}>
+                  <button
+                    key={s}
+                    type="button"
+                    className="btn"
+                    onClick={() => {
+                      setFocusRequest((n) => n + 1);
+                      void onSend(s);
+                    }}
+                    disabled={creating || cooldownLeft > 0}
+                  >
                     {s}
                   </button>
                 ))}
@@ -326,7 +346,10 @@ export function ChatPage() {
             retryDisabled={sending || cooldownLeft > 0}
           />
         ) : null}
-        <ChatComposer onSend={(t) => void onSend(t)} disabled={composerDisabled} blockedReason={blockedReason} />
+        <div className="visually-hidden" role="status" data-testid="chat-announcer">
+          {announcement}
+        </div>
+        <ChatComposer onSend={(t) => void onSend(t)} disabled={composerDisabled} blockedReason={blockedReason} focusRequest={focusRequest} settled={turnsSettled} />
       </section>
       {citation ? <SourceDrawer citation={citation} onClose={() => setCitation(null)} /> : null}
     </div>

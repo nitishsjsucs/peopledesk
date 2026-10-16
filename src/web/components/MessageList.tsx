@@ -37,7 +37,9 @@ export function MessageList({ entries, sending, elapsedSeconds, onOpenCitation, 
     </button>
   );
   return (
-    <div className="message-list" aria-live="polite" aria-busy={sending}>
+    // Not a live region: loading a stored transcript, or a countdown inside a card, would be read out.
+    // ChatPage announces each new reply through one status region instead.
+    <div className="message-list">
       {entries.map((e) => {
         if (e.role === "user") {
           return (
