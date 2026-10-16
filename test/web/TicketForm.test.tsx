@@ -26,17 +26,93 @@ const location = () => screen.getByTestId("location").textContent;
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
 describe("TicketForm", () => {
-  it("validates on the client with the shared zod schema and sends nothing when invalid", () => {
+  it("validates on the client with the shared zod schema, in plain words, and sends nothing when invalid", async () => {
     const calls = installFetch([]);
     renderPage();
     fill("Subject", "Hi");
     fill("Description", "short");
     fireEvent.click(screen.getByRole("button", { name: "Review request" }));
-    const alerts = screen.getAllByRole("alert").map((a) => a.textContent);
-    expect(alerts.some((t) => /at least 5|>=5|5 character/i.test(t ?? ""))).toBe(true);
-    expect(alerts.some((t) => /at least 10|>=10|10 character/i.test(t ?? ""))).toBe(true);
-    expect(screen.getByLabelText("Subject").getAttribute("aria-invalid")).toBe("true");
-    expect(calls).toHaveLength(0);
+    // One summary alert, not one per field.
+    const alerts = screen.getAllByRole("alert");
+    expect(alerts.map((a) => a.textContent)).toEqual(["Check 2 fields: Subject, Description."]);
+    expect(screen.getByText("Subject needs at least 5 characters.")).toBeTruthy();
+    expect(screen.getByText("Description needs at least 10 characters.")).toBeTruthy();
+    const subject = screen.getByLabelText("Subject");
+    expect(subject.getAttribute("aria-invalid")).toBe("true");
+    expect(subject.getAttribute("aria-describedby")).toBe("ticket-subject-hint ticket-subject-error");
+    expect(screen.getByLabelText("Description").getAttribute("aria-invalid")).toBe("true");
+    expect(screen.getByLabelText("Category").getAttribute("aria-invalid")).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(subject));
+    expect(calls.filter((c) => c.path === "/api/actions")).toHaveLength(0);
+  });
+
+  it("checks the related policy id on the client, tied to its field", async () => {
+    installFetch([]);
+    renderPage();
+    fill("Subject", "Laptop will not boot");
+    fill("Description", "Black screen after the logo every time.");
+    fill("Related policy (optional)", "policy 14");
+    fireEvent.click(screen.getByRole("button", { name: "Review request" }));
+    expect(screen.getByRole("alert").textContent).toBe("Check 1 field: Related policy.");
+    const policy = screen.getByLabelText("Related policy (optional)");
+    expect(policy.getAttribute("aria-invalid")).toBe("true");
+    expect(policy.getAttribute("aria-describedby")).toContain("ticket-relatedPolicyId-error");
+    expect(screen.getByText("Use a policy id like POL-014.").id).toBe("ticket-relatedPolicyId-error");
+    await waitFor(() => expect(document.activeElement).toBe(policy));
+  });
+
+  it("puts the server's related policy refusal under Related policy, not as a raw string", async () => {
+    installFetch([
+      {
+        method: "POST",
+        path: "/api/actions",
+        status: 400,
+        body: { error: { code: "validation_error", message: "relatedPolicyId: must be a policy you can read.", requestId: "r", details: { reason: "validation_error" } } },
+      },
+    ]);
+    renderPage();
+    fill("Subject", "Laptop will not boot");
+    fill("Description", "Black screen after the logo every time.");
+    fill("Related policy (optional)", "POL-099");
+    fireEvent.click(screen.getByRole("button", { name: "Review request" }));
+    expect(await screen.findByText("Choose a policy you can read, for example POL-014.")).toBeTruthy();
+    expect(screen.queryByText(/must be a policy you can read/)).toBeNull();
+    expect(screen.getByLabelText("Related policy (optional)").getAttribute("aria-invalid")).toBe("true");
+  });
+
+  it("links to My requests when too many requests are pending", async () => {
+    installFetch([
+      {
+        method: "POST",
+        path: "/api/actions",
+        status: 429,
+        body: { error: { code: "rate_limited", message: "You already have 5 requests awaiting approval. Approve or reject one first.", requestId: "r", details: { reason: "rate_limited" } } },
+      },
+    ]);
+    renderPage();
+    fill("Subject", "Laptop will not boot");
+    fill("Description", "Black screen after the logo every time.");
+    fireEvent.click(screen.getByRole("button", { name: "Review request" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("You already have 5 requests awaiting approval.");
+    expect(screen.getByRole("link", { name: "Review your requests" }).getAttribute("href")).toBe("/actions");
+  });
+
+  it("labels priorities in words and suggests the policies the person can read", async () => {
+    installFetch([
+      {
+        path: "/api/policies",
+        body: { documents: [{ docId: "POL-014", title: "Wellness Stipend", category: "benefits", audience: "all", currentVersion: 2, effectiveFrom: "2026-06-01", updatedAt: "2026-06-01" }] },
+      },
+    ]);
+    renderPage();
+    expect([...(screen.getByLabelText("Priority") as HTMLSelectElement).options].map((o) => [o.value, o.textContent])).toEqual([
+      ["low", "Low"],
+      ["normal", "Normal"],
+      ["high", "High"],
+    ]);
+    const options = await screen.findByTestId("ticket-policy-options");
+    expect(screen.getByLabelText("Related policy (optional)").getAttribute("list")).toBe(options.id);
+    expect([...options.querySelectorAll("option")].map((o) => [o.getAttribute("value"), o.textContent])).toEqual([["POL-014", "Wellness Stipend"]]);
   });
 
   it("submits to /api/actions, then addresses the review step by URL and shows the card from GET /api/actions", async () => {
@@ -51,8 +127,9 @@ describe("TicketForm", () => {
     await screen.findByTestId("approval-card");
     expect(location()).toBe(`/requests/ticket?review=${id(1)}`);
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Review ticket request");
-    expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual(["POST /api/actions", "GET /api/actions"]);
-    expect(calls[0]!.body).toEqual({
+    const actionCalls = calls.filter((c) => c.path === "/api/actions");
+    expect(actionCalls.map((c) => `${c.method} ${c.path}`)).toEqual(["POST /api/actions", "GET /api/actions"]);
+    expect(actionCalls[0]!.body).toEqual({
       tool: "create_support_ticket",
       arguments: {
         category: "facilities",

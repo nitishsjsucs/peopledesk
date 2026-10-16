@@ -1,26 +1,53 @@
 // Structured ticket form. Client validation uses the same zod schema as the MCP tool and the server
 // (CreateSupportTicketInput), and the submit goes through POST /api/actions, so the form path proposes
-// a pending action exactly like chat and MCP do.
-import { useState } from "react";
+// a pending action exactly like chat and MCP do. The schema's issues are shown in plain words, tied to
+// their fields, with one summary and focus on the first field to fix.
+import { useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { PendingActionView } from "../../shared/api-types.ts";
 import { TICKET_CATEGORIES, TICKET_PRIORITIES } from "../../shared/domain.ts";
 import { CreateSupportTicketInput } from "../../shared/tool-schemas.ts";
-import { api } from "../lib/api.ts";
-import { errorMessage } from "./ErrorBanner.tsx";
-
-const CATEGORY_LABEL: Record<(typeof TICKET_CATEGORIES)[number], string> = {
-  it: "IT",
-  payroll: "Payroll",
-  benefits: "Benefits",
-  facilities: "Facilities",
-  hr_general: "HR (general)",
-  access_request: "Access request",
-};
+import { api, ApiClientError } from "../lib/api.ts";
+import { TICKET_CATEGORY_LABEL, TICKET_PRIORITY_LABEL } from "../lib/labels.ts";
+import { useAsync } from "../lib/use-async.ts";
+import { SubmitError } from "./SubmitError.tsx";
 
 export type TicketValues = { category: string; subject: string; description: string; priority: string; relatedPolicyId: string };
+type Field = keyof TicketValues;
 
 const EMPTY: TicketValues = { category: "it", subject: "", description: "", priority: "normal", relatedPolicyId: "" };
+
+/** Field order on the form: the summary lists, and focus goes to, the first one with a problem. */
+const FIELDS: Field[] = ["category", "subject", "description", "priority", "relatedPolicyId"];
+const FIELD_LABEL: Record<Field, string> = {
+  category: "Category",
+  subject: "Subject",
+  description: "Description",
+  priority: "Priority",
+  relatedPolicyId: "Related policy",
+};
+
+/** Plain words for a schema issue on a field (zod's own messages read like "Too small: expected string to have >=5 characters"). */
+function issueText(field: Field, code: string): string {
+  switch (field) {
+    case "subject":
+      return code === "too_big" ? "Subject can be at most 120 characters." : "Subject needs at least 5 characters.";
+    case "description":
+      return code === "too_big" ? "Description can be at most 2000 characters." : "Description needs at least 10 characters.";
+    case "relatedPolicyId":
+      return "Use a policy id like POL-014.";
+    case "category":
+      return "Choose a category.";
+    case "priority":
+      return "Choose a priority.";
+  }
+}
+
+const HINT: Partial<Record<Field, string>> = {
+  subject: "5 to 120 characters.",
+  description: "What happened, and what you need. At least 10 characters.",
+  relatedPolicyId: "Optional. A policy id such as POL-014; suggestions list the policies you can read.",
+};
 
 type Props = {
   initial?: Partial<TicketValues>;
@@ -30,14 +57,24 @@ type Props = {
 
 export function TicketForm({ initial, supersedes, onProposed }: Props) {
   const [values, setValues] = useState<TicketValues>({ ...EMPTY, ...initial });
-  const [errors, setErrors] = useState<Partial<Record<keyof TicketValues, string>>>({});
+  const [errors, setErrors] = useState<Partial<Record<Field, string>>>({});
   const [submitError, setSubmitError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  // Readable policies for the Related policy suggestions; the form works without them.
+  const policies = useAsync(() => api.policies(), []);
 
-  const set = (k: keyof TicketValues) => (e: { target: { value: string } }) => setValues((v) => ({ ...v, [k]: e.target.value }));
+  const set = (k: Field) => (e: { target: { value: string } }) => setValues((v) => ({ ...v, [k]: e.target.value }));
+
+  function showErrors(next: Partial<Record<Field, string>>) {
+    setErrors(next);
+    const first = FIELDS.find((f) => next[f]);
+    if (first) requestAnimationFrameSafe(() => formRef.current?.querySelector<HTMLElement>(`#ticket-${first}`)?.focus());
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
+    if (busy) return;
     setSubmitError(null);
     const candidate = {
       category: values.category,
@@ -48,12 +85,12 @@ export function TicketForm({ initial, supersedes, onProposed }: Props) {
     };
     const parsed = CreateSupportTicketInput.safeParse(candidate);
     if (!parsed.success) {
-      const next: Partial<Record<keyof TicketValues, string>> = {};
+      const next: Partial<Record<Field, string>> = {};
       for (const issue of parsed.error.issues) {
-        const field = String(issue.path[0] ?? "") as keyof TicketValues;
-        next[field] ??= issue.message;
+        const field = String(issue.path[0] ?? "") as Field;
+        if (FIELDS.includes(field)) next[field] ??= issueText(field, issue.code);
       }
-      setErrors(next);
+      showErrors(next);
       return;
     }
     setErrors({});
@@ -61,27 +98,52 @@ export function TicketForm({ initial, supersedes, onProposed }: Props) {
     try {
       onProposed(await api.propose("create_support_ticket", parsed.data, supersedes));
     } catch (err) {
-      setSubmitError(err);
+      // The server checks what the client cannot: a related policy above the person's clearance.
+      if (err instanceof ApiClientError && err.code === "validation_error" && err.message.startsWith("relatedPolicyId")) {
+        showErrors({ relatedPolicyId: "Choose a policy you can read, for example POL-014." });
+      } else {
+        setSubmitError(err);
+      }
     } finally {
       setBusy(false);
     }
   }
 
-  const err = (k: keyof TicketValues) =>
+  const invalid = FIELDS.filter((f) => errors[f]);
+  const describedBy = (k: Field) => [HINT[k] ? `ticket-${k}-hint` : null, errors[k] ? `ticket-${k}-error` : null].filter(Boolean).join(" ") || undefined;
+  const fieldProps = (k: Field) => ({
+    id: `ticket-${k}`,
+    value: values[k],
+    onChange: set(k),
+    "aria-invalid": errors[k] ? true : undefined,
+    "aria-describedby": describedBy(k),
+  });
+  const hint = (k: Field) =>
+    HINT[k] ? (
+      <span className="field-hint" id={`ticket-${k}-hint`}>
+        {HINT[k]}
+      </span>
+    ) : null;
+  const err = (k: Field) =>
     errors[k] ? (
-      <span className="field-error" id={`ticket-${k}-error`} role="alert">
+      <span className="field-error" id={`ticket-${k}-error`}>
         {errors[k]}
       </span>
     ) : null;
 
   return (
-    <form className="card" onSubmit={submit} noValidate aria-label="New support ticket">
+    <form className="card" onSubmit={submit} noValidate aria-label="New support ticket" ref={formRef}>
+      {invalid.length > 0 ? (
+        <p className="banner banner-error" role="alert" data-testid="ticket-error-summary">
+          Check {invalid.length} {invalid.length === 1 ? "field" : "fields"}: {invalid.map((f) => FIELD_LABEL[f]).join(", ")}.
+        </p>
+      ) : null}
       <div className="field">
         <label htmlFor="ticket-category">Category</label>
-        <select id="ticket-category" value={values.category} onChange={set("category")}>
+        <select {...fieldProps("category")}>
           {TICKET_CATEGORIES.map((c) => (
             <option key={c} value={c}>
-              {CATEGORY_LABEL[c]}
+              {TICKET_CATEGORY_LABEL[c]}
             </option>
           ))}
         </select>
@@ -89,54 +151,52 @@ export function TicketForm({ initial, supersedes, onProposed }: Props) {
       </div>
       <div className="field">
         <label htmlFor="ticket-subject">Subject</label>
-        <input
-          id="ticket-subject"
-          value={values.subject}
-          onChange={set("subject")}
-          maxLength={120}
-          aria-invalid={!!errors.subject}
-          aria-describedby={errors.subject ? "ticket-subject-error" : undefined}
-        />
-        <span className="field-hint">5 to 120 characters.</span>
+        <input {...fieldProps("subject")} maxLength={120} />
+        {hint("subject")}
         {err("subject")}
       </div>
       <div className="field">
         <label htmlFor="ticket-description">Description</label>
-        <textarea
-          id="ticket-description"
-          value={values.description}
-          onChange={set("description")}
-          rows={5}
-          maxLength={2000}
-          aria-invalid={!!errors.description}
-          aria-describedby={errors.description ? "ticket-description-error" : undefined}
-        />
-        <span className="field-hint">What happened, and what you need. At least 10 characters.</span>
+        <textarea {...fieldProps("description")} rows={5} maxLength={2000} />
+        {hint("description")}
         {err("description")}
       </div>
       <div className="field">
         <label htmlFor="ticket-priority">Priority</label>
-        <select id="ticket-priority" value={values.priority} onChange={set("priority")}>
+        <select {...fieldProps("priority")}>
           {TICKET_PRIORITIES.map((p) => (
             <option key={p} value={p}>
-              {p}
+              {TICKET_PRIORITY_LABEL[p]}
             </option>
           ))}
         </select>
+        {err("priority")}
       </div>
       <div className="field">
-        <label htmlFor="ticket-policy">Related policy (optional)</label>
-        <input id="ticket-policy" value={values.relatedPolicyId} onChange={set("relatedPolicyId")} placeholder="POL-014" />
+        <label htmlFor="ticket-relatedPolicyId">Related policy (optional)</label>
+        <input {...fieldProps("relatedPolicyId")} placeholder="POL-014" list="ticket-policy-options" autoComplete="off" />
+        {policies.data ? (
+          <datalist id="ticket-policy-options" data-testid="ticket-policy-options">
+            {policies.data.documents.map((d) => (
+              <option key={d.docId} value={d.docId}>
+                {d.title}
+              </option>
+            ))}
+          </datalist>
+        ) : null}
+        {hint("relatedPolicyId")}
         {err("relatedPolicyId")}
       </div>
-      {submitError ? (
-        <p className="field-error" role="alert">
-          {errorMessage(submitError)}
-        </p>
-      ) : null}
-      <button type="submit" className="btn btn-primary" disabled={busy}>
+      {submitError ? <SubmitError error={submitError} /> : null}
+      <button type="submit" className="btn btn-primary" aria-disabled={busy || undefined}>
         {supersedes ? "Update request" : "Review request"}
       </button>
     </form>
   );
+}
+
+/** Focus after React has rendered the error text, so a screen reader reads the field with its error. */
+function requestAnimationFrameSafe(run: () => void) {
+  if (typeof requestAnimationFrame === "function") requestAnimationFrame(run);
+  else setTimeout(run, 0);
 }

@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import type { OnboardingProgress, Session } from "../../shared/api-types.ts";
 import type { ToolName } from "../../shared/domain.ts";
 import { formatDate, formatDateTime } from "../lib/format.ts";
+import { labelOf, TICKET_CATEGORY_LABEL, TICKET_PRIORITY_LABEL, TICKET_STATUS_LABEL } from "../lib/labels.ts";
 
 type TicketRow = { id: string; subject: string; category: string; status: string; priority: string; createdAt: string };
 
@@ -25,10 +26,10 @@ export function TicketTable({ tickets }: { tickets: TicketRow[] }) {
             <tr key={t.id}>
               <td>{t.id}</td>
               <td>{t.subject}</td>
-              <td>{t.category.replace(/_/g, " ")}</td>
-              <td>{t.priority}</td>
+              <td>{labelOf(TICKET_CATEGORY_LABEL, t.category)}</td>
+              <td>{labelOf(TICKET_PRIORITY_LABEL, t.priority)}</td>
               <td>
-                <span className={`status-pill ${t.status}`}>{t.status.replace(/_/g, " ")}</span>
+                <span className={`status-pill ${t.status}`}>{labelOf(TICKET_STATUS_LABEL, t.status)}</span>
               </td>
               <td>{formatDate(t.createdAt)}</td>
             </tr>

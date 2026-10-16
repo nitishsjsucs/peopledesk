@@ -12,7 +12,8 @@ import { api, ApiClientError } from "../lib/api.ts";
 import { formatDateTime } from "../lib/format.ts";
 import { useMe } from "../lib/session.tsx";
 import { useAsync } from "../lib/use-async.ts";
-import { ErrorBanner, errorMessage } from "./ErrorBanner.tsx";
+import { ErrorBanner } from "./ErrorBanner.tsx";
+import { SubmitError } from "./SubmitError.tsx";
 
 type Props = {
   initialSessionId?: string;
@@ -243,21 +244,5 @@ function BookingForm({ initialSessionId, initialEmployeeId, supersedes, onPropos
         </button>
       </form>
     </>
-  );
-}
-
-/** A refused proposal, with the next step when there is one (too many pending requests: review them). */
-export function SubmitError({ error }: { error: unknown }) {
-  const reason = error instanceof ApiClientError ? ((error.details as { reason?: string } | undefined)?.reason ?? error.code) : undefined;
-  return (
-    <p className="field-error" role="alert">
-      {errorMessage(error)}
-      {reason === "rate_limited" || reason === "conflict" ? (
-        <>
-          {" "}
-          <Link to="/actions">Review your requests</Link>
-        </>
-      ) : null}
-    </p>
   );
 }
