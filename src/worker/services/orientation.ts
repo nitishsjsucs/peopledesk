@@ -1,4 +1,4 @@
-import type { Session } from "../../shared/api-types.ts";
+import type { OrientationBooking, Session } from "../../shared/api-types.ts";
 import type { SessionFormat, SessionRegion } from "../../shared/domain.ts";
 import { addDaysIso } from "../../shared/dates.ts";
 
@@ -58,6 +58,29 @@ export class OrientationService {
   async get(sessionId: string): Promise<Session | null> {
     const row = await this.db.prepare(`${SELECT} WHERE s.id = ?1`).bind(sessionId).first<Row>();
     return row ? toSession(row) : null;
+  }
+
+  /** The session an employee is booked into, or null. An employee holds at most one booking. */
+  async bookingOf(employeeId: string): Promise<OrientationBooking | null> {
+    const row = await this.db
+      .prepare(
+        `SELECT s.id, s.title, s.starts_at, s.duration_min, s.format, s.region, s.location
+           FROM orientation_bookings b JOIN orientation_sessions s ON s.id = b.session_id
+          WHERE b.employee_id = ?1`,
+      )
+      .bind(employeeId)
+      .first<Omit<Row, "capacity" | "booked">>();
+    return row
+      ? {
+          sessionId: row.id,
+          title: row.title,
+          startsAt: row.starts_at,
+          durationMin: row.duration_min,
+          format: row.format,
+          region: row.region,
+          location: row.location,
+        }
+      : null;
   }
 
   async isBooked(employeeId: string): Promise<boolean> {

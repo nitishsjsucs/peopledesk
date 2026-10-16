@@ -187,6 +187,22 @@ export const SessionSchema = z.object({
 });
 export type Session = z.infer<typeof SessionSchema>;
 export const SessionListSchema = z.object({ sessions: z.array(SessionSchema) });
+/** GET /api/orientation-booking: the caller's own booking (no parameters, so no wider scope). */
+export const OrientationBookingSchema = z.object({
+  booking: z
+    .object({
+      sessionId: z.string(),
+      title: z.string(),
+      startsAt: z.string(),
+      durationMin: z.number().int(),
+      format: z.enum(SESSION_FORMATS),
+      region: z.enum(SESSION_REGIONS),
+      location: z.string(),
+    })
+    .nullable(),
+});
+export type OrientationBooking = NonNullable<z.infer<typeof OrientationBookingSchema>["booking"]>;
+
 export const SessionListQuerySchema = z.object({
   from: z.iso.date().optional(),
   to: z.iso.date().optional(),

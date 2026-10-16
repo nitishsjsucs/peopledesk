@@ -977,3 +977,37 @@ label {
   flex-wrap: wrap;
   gap: 8px;
 }
+
+/* Orientation session picker: the title cell is the radio's label, with a tall click target. */
+.session-fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0 0 12px;
+  min-width: 0;
+}
+
+.session-fieldset legend {
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 6px;
+}
+
+.session-table input[type="radio"] {
+  width: 20px;
+  height: 20px;
+  margin: 12px 4px;
+}
+
+.session-label {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 44px;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.session-full .session-label {
+  cursor: not-allowed;
+  color: var(--text-muted);
+}

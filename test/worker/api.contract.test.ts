@@ -14,6 +14,7 @@ import {
   HealthSchema,
   MeSchema,
   OnboardingProgressSchema,
+  OrientationBookingSchema,
   PendingActionViewSchema,
   PersonasSchema,
   PolicyDocumentSchema,
@@ -109,6 +110,33 @@ describe("read routes", () => {
     const virtual = await expectJson(await api("/api/orientation-sessions?format=virtual&to=2026-12-31", { as: "hr_admin" }), SessionListSchema);
     expect(virtual.sessions.every((s) => s.format === "virtual")).toBe(true);
     await expectError(await api("/api/orientation-sessions?from=yesterday", { as: "hr_admin" }), 400, "validation_error");
+  });
+});
+
+describe("own orientation booking", () => {
+  it("GET /api/orientation-booking returns the caller's own booking or null, ignores any query, and needs auth", async () => {
+    const p = persona("new_hire_booked");
+    const seeded = org.bookings.find((b) => b.employeeId === p.employeeId)!;
+    const session = org.sessions.find((s) => s.id === seeded.sessionId)!;
+    const own = await expectJson(await api("/api/orientation-booking", { as: p.key }), OrientationBookingSchema);
+    expect(own.booking).toEqual({
+      sessionId: session.id,
+      title: session.title,
+      startsAt: session.startsAt,
+      durationMin: session.durationMin,
+      format: session.format,
+      region: session.region,
+      location: session.location,
+    });
+    for (const key of ["new_hire_unbooked", "tenured_employee"] as const) {
+      expect((await expectJson(await api("/api/orientation-booking", { as: key }), OrientationBookingSchema)).booking).toBeNull();
+    }
+    // No parameter widens the scope: another person's id in the query string is ignored.
+    for (const key of ["hr_admin", "new_hire_unbooked"] as const) {
+      const res = await api(`/api/orientation-booking?employeeId=${p.employeeId}`, { as: key });
+      expect((await expectJson(res, OrientationBookingSchema)).booking).toBeNull();
+    }
+    await expectError(await api("/api/orientation-booking"), 401, "unauthenticated");
   });
 });
 
@@ -353,6 +381,7 @@ describe("route inventory", () => {
     "GET /api/onboarding",
     "GET /api/onboarding/:employeeId",
     "GET /api/orientation-sessions",
+    "GET /api/orientation-booking",
     "GET /api/team",
     "POST /api/actions",
     "GET /api/actions",

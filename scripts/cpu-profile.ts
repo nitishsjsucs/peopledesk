@@ -471,6 +471,7 @@ for (let pass = 0; pass < passes; pass++) {
     await call("GET /api/onboarding", p.email, "GET", "/api/onboarding");
     await call("GET /api/team", p.email, "GET", "/api/team");
     await call("GET /api/orientation-sessions", p.email, "GET", "/api/orientation-sessions");
+    await call("GET /api/orientation-booking", p.email, "GET", "/api/orientation-booking");
     await call("GET /api/actions", p.email, "GET", "/api/actions");
     const proposed = await call("POST /api/actions (form propose)", p.email, "POST", "/api/actions", {
       tool: "create_support_ticket",
