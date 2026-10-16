@@ -125,6 +125,7 @@ export const PolicyListQuerySchema = z.object({
   q: z.string().max(100).optional(),
 });
 
+
 // Tickets
 
 export const TicketSchema = z.object({
@@ -181,6 +182,52 @@ export const TeamSchema = z.object({
   ),
 });
 export type Team = z.infer<typeof TeamSchema>;
+
+/**
+ * GET /api/team/onboarding: where the people a manager or HR admin supports stand against their task
+ * due dates (the same slice as /api/team, limited to people with a plan). Definitions, at asOf:
+ * overdue = not done and due strictly before asOf (a task due today is not overdue); dueNext7 = not
+ * done and asOf <= due <= asOf + 7 days; blocked = status blocked. A step is "stuck" when one of its
+ * tasks is blocked, or not done and past due.
+ */
+export const OnboardingOverviewSchema = z.object({
+  asOf: z.string(),
+  people: z.array(
+    z.object({
+      employeeId: z.string(),
+      fullName: z.string(),
+      startDate: z.string(),
+      targetCompletionDate: z.string(),
+      tasks: z.object({
+        total: z.number().int().min(0),
+        done: z.number().int().min(0),
+        overdue: z.number().int().min(0),
+        blocked: z.number().int().min(0),
+        dueNext7: z.number().int().min(0),
+      }),
+      orientation: z.object({ sessionId: z.string(), startsAt: z.string() }).nullable(),
+      /** The due date of the plan's orientation task, or null without one. */
+      orientationTaskDue: z.string().nullable(),
+    }),
+  ),
+  /** Checklist steps with stuck tasks, most stuck first (at most 20). */
+  steps: z.array(
+    z.object({
+      /** The step's position in the checklist template (the lowest ordinal of its tasks). */
+      stepKey: z.number().int(),
+      title: z.string(),
+      ownerRole: z.enum(ONBOARDING_OWNER_ROLES),
+      blocked: z.number().int().min(0),
+      overdueNotBlocked: z.number().int().min(0),
+      dueNext7: z.number().int().min(0),
+      /** The people with a stuck task in this step; always a subset of people. */
+      employeeIds: z.array(z.string()),
+    }),
+  ),
+});
+export type OnboardingOverview = z.infer<typeof OnboardingOverviewSchema>;
+export type OnboardingOverviewPerson = OnboardingOverview["people"][number];
+export type OnboardingOverviewStep = OnboardingOverview["steps"][number];
 
 // Orientation sessions
 

@@ -13,6 +13,7 @@ import {
   GatewayLogsSchema,
   HealthSchema,
   MeSchema,
+  OnboardingOverviewSchema,
   OnboardingProgressSchema,
   OrientationBookingSchema,
   PendingActionViewSchema,
@@ -108,6 +109,17 @@ describe("read routes", () => {
       expect(m.blockedTasks, m.employeeId).toBe(progress.counts.blocked);
     }
     expect(hr.members.some((m) => m.blockedTasks > 0)).toBe(true);
+  });
+
+  it("GET /api/team/onboarding returns the overview for managers and HR, 403 for an employee", async () => {
+    const mgr = persona("manager_with_new_hires");
+    const mine = await expectJson(await api("/api/team/onboarding", { as: mgr.key }), OnboardingOverviewSchema);
+    expect(mine.people.map((p) => p.employeeId)).toEqual(reportsOf(mgr.employeeId).filter((e) => planned.has(e.id)).map((e) => e.id));
+    expect(mine.steps.length).toBeGreaterThan(0);
+    const hr = await expectJson(await api("/api/team/onboarding", { as: "hr_admin" }), OnboardingOverviewSchema);
+    expect(hr.people).toHaveLength(30);
+    expect(await expectJson(await api("/api/team/onboarding", { as: "manager_no_new_hires" }), OnboardingOverviewSchema)).toMatchObject({ people: [], steps: [] });
+    await expectError(await api("/api/team/onboarding", { as: "tenured_employee" }), 403, "forbidden");
   });
 
   it("GET /api/orientation-sessions reports seats remaining", async () => {
@@ -336,6 +348,7 @@ describe("error envelope", () => {
   it("uses one shape for 400, 401, 403, 404, 409, 410, 429 and unknown routes", async () => {
     await expectError(await api("/api/me"), 401, "unauthenticated");
     await expectError(await api("/api/team", { as: "tenured_employee" }), 403, "forbidden");
+    await expectError(await api("/api/team/onboarding", { as: "tenured_employee" }), 403, "forbidden");
     await expectError(await api("/api/nope", { as: "tenured_employee" }), 404, "not_found");
     await expectError(await api("/api/actions", { as: "tenured_employee", body: { tool: "delete_everything", arguments: {} } }), 400, "validation_error");
     await expectError(await api("/api/actions", { as: "tenured_employee", body: {}, origin: "https://evil.example" }), 403, "forbidden");
@@ -393,6 +406,7 @@ describe("route inventory", () => {
     "GET /api/orientation-sessions",
     "GET /api/orientation-booking",
     "GET /api/team",
+    "GET /api/team/onboarding",
     "POST /api/actions",
     "GET /api/actions",
     "POST /api/actions/:id/approve",

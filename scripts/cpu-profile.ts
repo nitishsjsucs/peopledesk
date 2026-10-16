@@ -470,6 +470,7 @@ for (let pass = 0; pass < passes; pass++) {
     await call("GET /api/tickets", p.email, "GET", "/api/tickets");
     await call("GET /api/onboarding", p.email, "GET", "/api/onboarding");
     await call("GET /api/team", p.email, "GET", "/api/team");
+    await call("GET /api/team/onboarding", p.email, "GET", "/api/team/onboarding");
     await call("GET /api/orientation-sessions", p.email, "GET", "/api/orientation-sessions");
     await call("GET /api/orientation-booking", p.email, "GET", "/api/orientation-booking");
     await call("GET /api/actions", p.email, "GET", "/api/actions");

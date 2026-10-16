@@ -11,6 +11,7 @@ import {
   ConversationSchema,
   HealthSchema,
   MeSchema,
+  OnboardingOverviewSchema,
   OnboardingProgressSchema,
   OrientationBookingSchema,
   PendingActionViewSchema,
@@ -121,6 +122,7 @@ export const api = {
   onboarding: () => request("GET", "/api/onboarding", OnboardingProgressSchema),
   onboardingFor: (employeeId: string) => request("GET", `/api/onboarding/${encodeURIComponent(employeeId)}`, OnboardingProgressSchema),
   team: () => request("GET", "/api/team", TeamSchema),
+  teamOnboarding: () => request("GET", "/api/team/onboarding", OnboardingOverviewSchema),
   orientationBooking: () => request("GET", "/api/orientation-booking", OrientationBookingSchema),
   sessions: (filter: { from?: string; to?: string; format?: string; region?: string } = {}) =>
     request("GET", `/api/orientation-sessions${qs(filter)}`, SessionListSchema),
