@@ -4,13 +4,15 @@
 // themself; a manager or HR admin books for the people they support who have none. The server still
 // decides every proposal (ActionService.propose); this only avoids offering a form that cannot succeed.
 import { useRef, useState } from "react";
-import type { FormEvent, ReactNode } from "react";
+import type { FormEvent, ReactNode, RefObject } from "react";
 import { Link } from "react-router";
 import type { Me, OrientationBooking, PendingActionView, Session, Team } from "../../shared/api-types.ts";
 import { ScheduleOrientationSessionInput } from "../../shared/tool-schemas.ts";
 import { api, ApiClientError } from "../lib/api.ts";
-import { relativeDays } from "../lib/dates.ts";
-import { formatDateTime } from "../lib/format.ts";
+import { useBusinessDate } from "../lib/business-date.tsx";
+import { dayOf, relativeDays } from "../lib/dates.ts";
+import { addDaysIso } from "../../shared/dates.ts";
+import { formatDate, formatDateTime } from "../lib/format.ts";
 import { useMe } from "../lib/session.tsx";
 import { useAsync } from "../lib/use-async.ts";
 import { ErrorBanner } from "./ErrorBanner.tsx";
@@ -73,6 +75,7 @@ export function OwnBooking({ booking, asOf = null }: { booking: OrientationBooki
 
 function BookingForm({ intro, initialSessionId, initialEmployeeId, supersedes, onProposed }: Props) {
   const me = useMe();
+  const { asOf } = useBusinessDate();
   const sessions = useAsync(() => api.sessions(), []);
   const team = useAsync(() => (me.role === "employee" ? Promise.resolve({ members: [] }) : api.team()), [me.role]);
   const own = useAsync(() => (me.inOnboarding ? api.orientationBooking() : Promise.resolve({ booking: null })), [me.inOnboarding]);
@@ -197,7 +200,7 @@ function BookingForm({ intro, initialSessionId, initialEmployeeId, supersedes, o
     <>
       {intro}
       {bookedLine}
-      <form className="card" onSubmit={submit} aria-label="Book an orientation session" noValidate>
+      <form className="card booking-form" onSubmit={submit} aria-label="Book an orientation session" noValidate>
         {me.role !== "employee" ? (
           <div className="field">
             <label htmlFor="attendee">Attendee</label>
@@ -252,52 +255,17 @@ function BookingForm({ intro, initialSessionId, initialEmployeeId, supersedes, o
               </button>
             </div>
           ) : (
-            <div className="table-wrap">
-              <table className="table session-table" ref={tableRef}>
-                <thead>
-                  <tr>
-                    <th scope="col">
-                      <span className="visually-hidden">Choose</span>
-                    </th>
-                    <th scope="col">Session</th>
-                    <th scope="col">Starts</th>
-                    <th scope="col">Seats left</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {shown.map((s) => (
-                    <tr key={s.id} className={s.seatsRemaining === 0 ? "session-full" : undefined}>
-                      <td>
-                        <input
-                          type="radio"
-                          id={`session-${s.id}`}
-                          name="session"
-                          value={s.id}
-                          checked={chosenOpen && sessionId === s.id}
-                          disabled={s.seatsRemaining === 0}
-                          onChange={() => {
-                            setSessionId(s.id);
-                            setChoose(false);
-                          }}
-                          // Several sessions share a title, so the name also gives the id, place and start.
-                          aria-labelledby={`session-${s.id}-title session-${s.id}-meta session-${s.id}-starts`}
-                        />
-                      </td>
-                      <td>
-                        <label htmlFor={`session-${s.id}`} className="session-label">
-                          <span id={`session-${s.id}-title`}>{s.title}</span>
-                          <span className="message-meta" id={`session-${s.id}-meta`}>
-                            {s.id} · {s.location}
-                          </span>
-                        </label>
-                      </td>
-                      <td id={`session-${s.id}-starts`}>{formatDateTime(s.startsAt)}</td>
-                      <td>{s.seatsRemaining === 0 ? "Full" : `${s.seatsRemaining} of ${s.capacity}`}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <SessionChooser
+              shown={shown}
+              checkedId={chosenOpen ? sessionId : ""}
+              onChoose={(id) => {
+                setSessionId(id);
+                setChoose(false);
+              }}
+              tableRef={tableRef}
+              attendee={attendee === "" ? null : { id: attendee, self: attendee === me.employeeId, fullName: attendee === me.employeeId ? me.fullName : (attendees.find((a) => a.employeeId === attendee)?.fullName ?? attendee) }}
+              asOf={asOf}
+            />
           )}
         </fieldset>
         {submitError ? <SubmitError error={submitError} /> : null}
@@ -305,6 +273,189 @@ function BookingForm({ intro, initialSessionId, initialEmployeeId, supersedes, o
           {supersedes ? "Update request" : "Review request"}
         </button>
       </form>
+    </>
+  );
+}
+
+/** The Monday (UTC) of the week a date falls in. */
+export function weekOf(date: string): string {
+  const day = dayOf(date);
+  const dow = new Date(`${day}T00:00:00Z`).getUTCDay();
+  return addDaysIso(day, -((dow + 6) % 7));
+}
+
+/** "Full", "Only 2 left" (1 to 3), or "17 of 18 left". */
+export function seatText(s: Pick<Session, "seatsRemaining" | "capacity">): string {
+  if (s.seatsRemaining <= 0) return "Full";
+  if (s.seatsRemaining <= 3) return `Only ${s.seatsRemaining} left`;
+  return `${s.seatsRemaining} of ${s.capacity} left`;
+}
+
+type Row = { kind: "session"; session: Session; afterDue: boolean } | { kind: "due"; date: string };
+
+/**
+ * The shown sessions grouped by week (Monday start, UTC), with the attendee's orientation task due
+ * date as its own row at its place in time when it is today or later. A session on the due date is
+ * before it; every later session is "after the due date".
+ */
+export function sessionWeeks(shown: readonly Session[], due: string | null): Array<{ week: string; rows: Row[] }> {
+  const rows: Row[] = [];
+  let placed = due === null;
+  for (const s of shown) {
+    const after = due !== null && dayOf(s.startsAt) > due;
+    if (after && !placed) {
+      rows.push({ kind: "due", date: due as string });
+      placed = true;
+    }
+    rows.push({ kind: "session", session: s, afterDue: after });
+  }
+  if (!placed && due !== null) rows.push({ kind: "due", date: due });
+  const weeks: Array<{ week: string; rows: Row[] }> = [];
+  for (const r of rows) {
+    const week = weekOf(r.kind === "due" ? r.date : r.session.startsAt);
+    const last = weeks[weeks.length - 1];
+    if (last && last.week === week) last.rows.push(r);
+    else weeks.push({ week, rows: [r] });
+  }
+  return weeks;
+}
+
+function LockIcon() {
+  return (
+    <svg className="seat-lock" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M6 11h12v9H6Z M8.5 11V8a3.5 3.5 0 0 1 7 0v3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+type ChooserProps = {
+  shown: Session[];
+  /** The checked radio's session id, or "" for none. */
+  checkedId: string;
+  onChoose: (sessionId: string) => void;
+  tableRef: RefObject<HTMLTableElement | null>;
+  /** Who the booking is for; null until a manager or HR admin picks someone. */
+  attendee: { id: string; self: boolean; fullName: string } | null;
+  asOf: string | null;
+};
+
+/**
+ * The session table: sessions by week, seats as text, the soonest open session with Choose it, and
+ * the attendee's orientation task due date (read from their checklist, which the viewer may already
+ * read) placed among the sessions. The due date is information only: every open session stays
+ * selectable, and the server decides every proposal.
+ */
+function SessionChooser({ shown, checkedId, onChoose, tableRef, attendee, asOf }: ChooserProps) {
+  const checklist = useAsync(
+    () => (attendee && asOf ? (attendee.self ? api.onboarding() : api.onboardingFor(attendee.id)) : Promise.resolve(null)),
+    [attendee?.id, attendee?.self, asOf],
+  );
+  const noPlan = checklist.error instanceof ApiClientError && checklist.error.status === 404;
+  const checkFailed = Boolean(checklist.error) && !noPlan;
+  const taskDue = checklist.data && !checklist.loading && attendee && checklist.data.employeeId === attendee.id
+    ? (checklist.data.tasks.find((t) => t.category === "orientation")?.dueDate ?? null)
+    : null;
+  const upcomingDue = taskDue !== null && asOf !== null && taskDue >= asOf ? taskDue : null;
+  const pastDue = taskDue !== null && asOf !== null && taskDue < asOf ? taskDue : null;
+  const soonest = shown.find((s) => s.seatsRemaining > 0) ?? null;
+  const weeks = sessionWeeks(shown, upcomingDue);
+  const chooseSoonest = () => {
+    if (!soonest) return;
+    onChoose(soonest.id);
+    tableRef.current?.querySelector<HTMLInputElement>(`#session-${soonest.id}`)?.focus();
+  };
+  return (
+    <>
+      {pastDue && attendee ? (
+        <p className="due-note" data-testid="due-past">
+          {attendee.self ? `Your orientation task was due ${formatDate(pastDue)}.` : `${attendee.fullName}'s orientation task was due ${formatDate(pastDue)}, so every session is after it.`}
+        </p>
+      ) : null}
+      {checkFailed ? (
+        <p className="field-hint due-check" data-testid="due-check-failed">
+          Could not check the orientation due date.{" "}
+          <button type="button" className="btn-link" onClick={checklist.reload}>
+            Try again
+          </button>
+        </p>
+      ) : null}
+      {soonest ? (
+        <p className="soonest" data-testid="soonest-open">
+          <span>
+            Soonest open session: {soonest.title} ({soonest.id}), {formatDateTime(soonest.startsAt)}
+            {asOf ? `, ${relativeDays(soonest.startsAt, asOf)}` : ""}
+          </span>
+          <button type="button" className="btn" onClick={chooseSoonest}>
+            Choose it
+          </button>
+        </p>
+      ) : null}
+      <table className="table session-table" ref={tableRef}>
+        <thead>
+          <tr>
+            <th scope="col">
+              <span className="visually-hidden">Choose</span>
+            </th>
+            <th scope="col">Session</th>
+            <th scope="col">Seats</th>
+          </tr>
+        </thead>
+        {weeks.map((w) => (
+          <tbody key={w.week}>
+            <tr className="week-row">
+              <th scope="rowgroup" colSpan={3}>
+                Week of {formatDate(w.week)}
+              </th>
+            </tr>
+            {w.rows.map((r) =>
+              r.kind === "due" ? (
+                <tr key="due" className="due-row" data-testid="due-row">
+                  <td colSpan={3}>
+                    {attendee?.self ? `Your orientation task is due ${formatDate(r.date)}` : `Orientation task due ${formatDate(r.date)} for ${attendee?.fullName ?? ""}`}
+                  </td>
+                </tr>
+              ) : (
+                <tr key={r.session.id} className={r.session.seatsRemaining === 0 ? "session-full" : undefined} data-session={r.session.id}>
+                  <td>
+                    <input
+                      type="radio"
+                      id={`session-${r.session.id}`}
+                      name="session"
+                      value={r.session.id}
+                      checked={checkedId === r.session.id}
+                      disabled={r.session.seatsRemaining === 0}
+                      onChange={() => onChoose(r.session.id)}
+                      // Several sessions share a title, so the name also gives the id, place and start.
+                      aria-labelledby={`session-${r.session.id}-title session-${r.session.id}-meta session-${r.session.id}-starts`}
+                      aria-describedby={`session-${r.session.id}-seats${r.afterDue ? ` session-${r.session.id}-due` : ""}`}
+                    />
+                  </td>
+                  <td>
+                    <label htmlFor={`session-${r.session.id}`} className="session-label">
+                      <span id={`session-${r.session.id}-title`}>{r.session.title}</span>
+                      <span className="message-meta" id={`session-${r.session.id}-meta`}>
+                        {r.session.id} · {r.session.location}
+                      </span>
+                      <span className="session-when">
+                        <span id={`session-${r.session.id}-starts`}>{formatDateTime(r.session.startsAt)}</span>
+                        {r.afterDue ? (
+                          <span className="session-after" id={`session-${r.session.id}-due`}>
+                            after the due date
+                          </span>
+                        ) : null}
+                      </span>
+                    </label>
+                  </td>
+                  <td id={`session-${r.session.id}-seats`} className="session-seats">
+                    {r.session.seatsRemaining === 0 ? <LockIcon /> : null}
+                    {seatText(r.session)}
+                  </td>
+                </tr>
+              ),
+            )}
+          </tbody>
+        ))}
+      </table>
     </>
   );
 }

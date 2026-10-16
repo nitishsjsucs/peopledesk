@@ -1,14 +1,16 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import { setFetch } from "../../src/web/lib/api.ts";
 import type { Me, PendingActionView } from "../../src/shared/api-types.ts";
-import { OrientationForm } from "../../src/web/components/OrientationForm.tsx";
+import { OrientationForm, seatText, sessionWeeks, weekOf } from "../../src/web/components/OrientationForm.tsx";
+import { BusinessDateContext } from "../../src/web/lib/business-date.tsx";
 import { MeContext } from "../../src/web/lib/session.tsx";
 import { ScheduleOrientationPage } from "../../src/web/pages/ScheduleOrientationPage.tsx";
 import { actionsServer, installFetch, me, pendingTicket } from "./fixtures.ts";
 import type { Route as FakeRoute } from "./fixtures.ts";
 import { LocationProbe } from "./probe.tsx";
+import { DEEPA, deepaIds, overviewFor, progressFor, sessionsAt } from "./seed.ts";
 
 const session = (id: string, seatsRemaining: number, capacity = 10, region: "GLOBAL" | "US" | "UK" | "IN" = "GLOBAL") => ({
   id,
@@ -87,7 +89,7 @@ describe("OrientationForm", () => {
     const full = await findRadio("ORI-001");
     expect((full as HTMLInputElement).disabled).toBe(true);
     expect(screen.getByText("Full")).toBeTruthy();
-    expect(screen.getByText("4 of 10")).toBeTruthy();
+    expect(screen.getByText("4 of 10 left")).toBeTruthy();
     expect(screen.queryByLabelText("Attendee")).toBeNull();
     fireEvent.click(radio("ORI-002"));
     fireEvent.click(screen.getByRole("button", { name: "Review request" }));
@@ -546,5 +548,162 @@ describe("ScheduleOrientationPage", () => {
     expect((await screen.findByTestId("not-editable")).textContent).toContain("replaced by an edited request");
     expect(screen.getByRole("link", { name: "See the new request" }).getAttribute("href")).toBe(`/actions?focus=${id(5)}`);
     expect(screen.queryByRole("button", { name: "Update request" })).toBeNull();
+  });
+});
+
+describe("OrientationForm session picker (seeded sessions, business date 2026-10-01)", () => {
+  const seeded = sessionsAt();
+  const nadia: Me = { ...me, employeeId: "E0025", fullName: "Nadia Fernandes", region: "US", inOnboarding: true };
+  const deepa: Me = { ...me, employeeId: DEEPA, fullName: "Deepa Foster", role: "manager", region: "US", directReportIds: deepaIds };
+  const deepaTeam = {
+    members: overviewFor(deepaIds).people.map((p) => ({ employeeId: p.employeeId, fullName: p.fullName, inOnboarding: true, booked: p.orientation !== null, percentComplete: 50, blockedTasks: 0 })),
+  };
+  const failing = { error: { code: "internal", message: "Internal error.", requestId: "r" } };
+
+  function renderPicker(who: Me, opts: { extra?: FakeRoute[]; asOf?: string | null; props?: Partial<Parameters<typeof OrientationForm>[0]> } = {}) {
+    const onProposed = vi.fn();
+    const calls = installFetch([
+      ...(opts.extra ?? []),
+      { path: "/api/orientation-sessions", body: seeded },
+      { path: "/api/team", body: who.role === "employee" ? { members: [] } : deepaTeam },
+      { path: "/api/orientation-booking", body: { booking: null } },
+      ...(who.inOnboarding ? [{ path: "/api/onboarding", body: progressFor(who.employeeId) }] : []),
+      ...deepaIds.map((id) => ({ path: `/api/onboarding/${id}`, body: progressFor(id) })),
+      { method: "POST", path: "/api/actions", status: 201, body: (init: RequestInit) => proposed(JSON.parse(String(init.body)).arguments) },
+    ]);
+    const asOf = opts.asOf === undefined ? "2026-10-01" : opts.asOf;
+    render(
+      <MemoryRouter>
+        <MeContext.Provider value={who}>
+          <BusinessDateContext.Provider value={{ asOf, settled: true }}>
+            <OrientationForm onProposed={onProposed} {...opts.props} />
+          </BusinessDateContext.Provider>
+        </MeContext.Provider>
+      </MemoryRouter>,
+    );
+    return { calls, onProposed };
+  }
+  const seededRadio = (id: string) => document.getElementById(`session-${id}`) as HTMLInputElement;
+  const weekHeadings = () => screen.getAllByRole("rowheader").map((h) => h.textContent);
+  const sessionsIn = (heading: string) => {
+    const th = screen.getAllByRole("rowheader").find((h) => h.textContent === heading)!;
+    return [...(th.closest("tbody") as HTMLElement).querySelectorAll("tr[data-session], tr[data-testid=due-row]")].map((tr) => tr.getAttribute("data-session") ?? "due");
+  };
+
+  it("groups sessions by week, Monday first, across the October to November boundary", () => {
+    expect(weekOf("2026-10-26T16:00:00.000Z")).toBe("2026-10-26");
+    expect(weekOf("2026-10-31T16:00:00.000Z")).toBe("2026-10-26");
+    expect(weekOf("2026-11-01")).toBe("2026-10-26");
+    expect(weekOf("2026-11-02T05:00:00.000Z")).toBe("2026-11-02");
+    const weeks = sessionWeeks(seeded.sessions, null);
+    expect(weeks.find((w) => w.week === "2026-10-26")?.rows.map((r) => (r.kind === "session" ? r.session.id : "due"))).toEqual(["ORI-006", "ORI-007", "ORI-008"]);
+    expect(weeks.find((w) => w.week === "2026-11-02")?.rows.map((r) => (r.kind === "session" ? r.session.id : "due"))).toEqual(["ORI-009", "ORI-010", "ORI-011"]);
+  });
+
+  it("puts the due date at its place in time, and marks every later session after it", () => {
+    const weeks = sessionWeeks(seeded.sessions, "2026-10-21");
+    const flat = weeks.flatMap((w) => w.rows.map((r) => (r.kind === "session" ? `${r.session.id}${r.afterDue ? "+" : ""}` : "due")));
+    expect(flat.slice(0, 6)).toEqual(["ORI-001", "ORI-002", "ORI-003", "due", "ORI-004+", "ORI-005+"]);
+    // A session on the due date itself is before it; a due date after every session goes last.
+    expect(sessionWeeks(seeded.sessions, "2026-10-19").flatMap((w) => w.rows.map((r) => (r.kind === "due" ? "due" : r.session.id))).slice(2, 4)).toEqual(["ORI-003", "due"]);
+    const late = sessionWeeks(seeded.sessions.slice(0, 2), "2026-12-30");
+    expect(late[late.length - 1]).toMatchObject({ week: "2026-12-28", rows: [{ kind: "due", date: "2026-12-30" }] });
+  });
+
+  it("says Full, Only N left for 1 to 3 seats, and N of C left otherwise", () => {
+    expect([0, 1, 3, 4, 18].map((n) => seatText({ seatsRemaining: n, capacity: 18 }))).toEqual(["Full", "Only 1 left", "Only 3 left", "4 of 18 left", "18 of 18 left"]);
+  });
+
+  it("shows Nadia her past due date once, marks no row, and offers the soonest open session in her region", async () => {
+    const { calls } = renderPicker(nadia);
+    expect((await screen.findByTestId("due-past")).textContent).toBe("Your orientation task was due Sep 21, 2026.");
+    expect(screen.queryByTestId("due-row")).toBeNull();
+    expect(document.querySelectorAll(".session-after")).toHaveLength(0);
+    const soonest = screen.getByTestId("soonest-open");
+    expect(soonest.textContent).toContain("Soonest open session: New Hire Orientation (Global, virtual) (ORI-004), Oct 22, 2026 15:00 UTC, in 21 days");
+    fireEvent.click(within(soonest).getByRole("button", { name: "Choose it" }));
+    expect(seededRadio("ORI-004").checked).toBe(true);
+    expect(document.activeElement).toBe(seededRadio("ORI-004"));
+    expect(calls.filter((c) => c.path.startsWith("/api/onboarding")).map((c) => c.path)).toEqual(["/api/onboarding"]);
+    expect(weekHeadings().slice(0, 3)).toEqual(["Week of Oct 12, 2026", "Week of Oct 19, 2026", "Week of Oct 26, 2026"]);
+  });
+
+  it("shows a manager booking for Olivia where her due date falls, and which sessions come after it", async () => {
+    const { calls } = renderPicker(deepa, { props: { initialEmployeeId: "E0024" } });
+    const due = await screen.findByTestId("due-row");
+    expect(due.textContent).toBe("Orientation task due Oct 21, 2026 for Olivia Morgan");
+    expect(sessionsIn("Week of Oct 12, 2026")).toEqual(["ORI-001", "ORI-002"]);
+    expect(sessionsIn("Week of Oct 19, 2026")).toEqual(["ORI-003", "due", "ORI-004", "ORI-005"]);
+    expect(seededRadio("ORI-001").disabled).toBe(true);
+    expect(document.getElementById("session-ORI-001-seats")?.textContent).toBe("Full");
+    expect(document.getElementById("session-ORI-001-seats")?.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
+    // Names are unchanged; the seats and the due date describe each radio.
+    expect(seededRadio("ORI-004").getAttribute("aria-labelledby")).toBe("session-ORI-004-title session-ORI-004-meta session-ORI-004-starts");
+    expect(seededRadio("ORI-004").getAttribute("aria-describedby")).toBe("session-ORI-004-seats session-ORI-004-due");
+    expect(seededRadio("ORI-003").getAttribute("aria-describedby")).toBe("session-ORI-003-seats");
+    expect(screen.getByRole("radio", { name: "New Hire Orientation (Global, virtual) ORI-004 · Video call (link sent after booking) Oct 22, 2026 15:00 UTC" })).toBe(seededRadio("ORI-004"));
+    expect(document.getElementById("session-ORI-004-due")?.textContent).toBe("after the due date");
+    expect(document.getElementById("session-ORI-002-seats")?.textContent).toBe("17 of 18 left");
+    expect(calls.filter((c) => c.path.startsWith("/api/onboarding")).map((c) => c.path)).toEqual(["/api/onboarding/E0024"]);
+    // The soonest open session follows the region filter.
+    fireEvent.change(screen.getByLabelText("Region"), { target: { value: "US" } });
+    expect(screen.getByTestId("soonest-open").textContent).toContain("(ORI-006), Oct 26, 2026 16:00 UTC, in 25 days");
+    fireEvent.change(screen.getByLabelText("Region"), { target: { value: "GLOBAL" } });
+    expect(screen.getByTestId("soonest-open").textContent).toContain("(ORI-004), Oct 22, 2026");
+  });
+
+  it("asks for the new attendee's checklist when the attendee changes, and says another person's due date has passed", async () => {
+    const past = progressFor("E0033");
+    const orientation = past.tasks.find((t) => t.category === "orientation")!;
+    orientation.dueDate = "2026-09-21";
+    const { calls } = renderPicker(deepa, { props: { initialEmployeeId: "E0024" }, extra: [{ path: "/api/onboarding/E0033", body: past }] });
+    await screen.findByTestId("due-row");
+    fireEvent.change(screen.getByLabelText("Attendee"), { target: { value: "E0033" } });
+    expect((await screen.findByTestId("due-past")).textContent).toBe("Zara Kim's orientation task was due Sep 21, 2026, so every session is after it.");
+    expect(screen.queryByTestId("due-row")).toBeNull();
+    expect(calls.filter((c) => c.path.startsWith("/api/onboarding")).map((c) => c.path)).toEqual(["/api/onboarding/E0024", "/api/onboarding/E0033"]);
+  });
+
+  it("sets no rule when the attendee has no orientation task or no plan (404)", async () => {
+    const noTask = progressFor("E0024");
+    noTask.tasks = noTask.tasks.filter((t) => t.category !== "orientation");
+    renderPicker(deepa, { props: { initialEmployeeId: "E0024" }, extra: [{ path: "/api/onboarding/E0024", body: noTask }] });
+    await screen.findByTestId("soonest-open");
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.queryByTestId("due-row")).toBeNull();
+    expect(screen.queryByTestId("due-past")).toBeNull();
+    cleanup();
+    renderPicker(deepa, { props: { initialEmployeeId: "E0024" }, extra: [{ path: "/api/onboarding/E0024", status: 404, body: { error: { code: "not_found", message: "No onboarding plan found.", requestId: "r" } } }] });
+    await screen.findByTestId("soonest-open");
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.queryByTestId("due-row")).toBeNull();
+    expect(screen.queryByTestId("due-check-failed")).toBeNull();
+  });
+
+  it("keeps the form usable with a quiet note and Try again when the due date cannot be checked", async () => {
+    let fail = true;
+    const { calls, onProposed } = renderPicker(deepa, {
+      props: { initialEmployeeId: "E0024" },
+      extra: [{ path: "/api/onboarding/E0024", status: () => (fail ? 500 : 200), body: () => (fail ? failing : progressFor("E0024")) }],
+    });
+    const note = await screen.findByTestId("due-check-failed");
+    expect(note.textContent).toContain("Could not check the orientation due date.");
+    expect(screen.queryByRole("alert")).toBeNull();
+    fireEvent.click(seededRadio("ORI-004"));
+    fireEvent.click(screen.getByRole("button", { name: "Review request" }));
+    await waitFor(() => expect(onProposed).toHaveBeenCalledTimes(1));
+    expect(calls.filter((c) => c.method === "POST")[0]?.body).toEqual({ tool: "schedule_orientation_session", arguments: { sessionId: "ORI-004", employeeId: "E0024" } });
+    fail = false;
+    fireEvent.click(within(note).getByRole("button", { name: "Try again" }));
+    expect((await screen.findByTestId("due-row")).textContent).toBe("Orientation task due Oct 21, 2026 for Olivia Morgan");
+  });
+
+  it("leaves out how soon a session is, and the due date rule, without a business date", async () => {
+    const { calls } = renderPicker(nadia, { asOf: null });
+    const soonest = await screen.findByTestId("soonest-open");
+    expect(soonest.textContent).toContain("Oct 22, 2026 15:00 UTC");
+    expect(soonest.textContent).not.toMatch(/in \d+ days/);
+    expect(screen.queryByTestId("due-past")).toBeNull();
+    expect(calls.some((c) => c.path.startsWith("/api/onboarding"))).toBe(false);
   });
 });

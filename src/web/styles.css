@@ -1677,3 +1677,95 @@ main h1[tabindex="-1"]:focus {
 .home-panel .stat-tiles {
   margin-bottom: 0;
 }
+
+/* Orientation picker: sessions by week, the soonest open one, and the attendee's due date in time. */
+.session-table .week-row th {
+  padding-top: 12px;
+  font-size: 12px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text);
+  background: var(--surface-muted);
+}
+
+.session-when {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 8px;
+  font-size: 14px;
+}
+
+.session-after {
+  color: var(--warning);
+  font-size: 13px;
+}
+
+.session-after::before {
+  content: "·";
+  margin-right: 8px;
+  color: var(--text-faint);
+}
+
+.session-seats {
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.seat-lock {
+  width: 14px;
+  height: 14px;
+  margin-right: 4px;
+  vertical-align: -2px;
+}
+
+.due-row td {
+  border-top: 2px solid var(--warning);
+  color: var(--warning);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.soonest,
+.due-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  margin: 0 0 10px;
+  font-size: 14px;
+}
+
+.soonest .btn {
+  padding: 4px 12px;
+}
+
+.due-check {
+  margin: 0 0 10px;
+}
+
+.session-table th:first-child,
+.session-table td:first-child {
+  width: 32px;
+}
+
+/* On a phone the picker stays one table: tighter rows, week headings and card padding keep it shorter
+   than the four-column table it replaced. */
+@media (max-width: 480px) {
+  .session-table th,
+  .session-table td {
+    padding: 6px 4px;
+  }
+  .session-table input[type="radio"] {
+    margin: 8px 2px;
+  }
+  .session-label {
+    line-height: 1.3;
+  }
+  .session-table .week-row th {
+    padding: 5px 4px;
+  }
+  form.booking-form {
+    padding: 12px;
+  }
+}
