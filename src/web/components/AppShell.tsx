@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
-import { NavLink, Outlet, useLocation } from "react-router";
+import { useEffect, useRef, useState } from "react";
+import type { MouseEvent } from "react";
+import { Link, NavLink, Outlet, useLocation } from "react-router";
 import { api, ApiClientError, onUnauthenticated } from "../lib/api.ts";
+import { pageKeyOf, titleFor } from "../lib/page-titles.ts";
 import { MeContext } from "../lib/session.tsx";
 import { applyTheme, nextTheme, readTheme } from "../lib/theme.ts";
 import type { ThemeChoice } from "../lib/theme.ts";
@@ -36,15 +38,43 @@ export function AppShell() {
   const [theme, setTheme] = useState<ThemeChoice>(() => readTheme());
   useEffect(() => applyTheme(theme), [theme]);
 
+  const mainRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    document.title = titleFor(location.pathname);
+  }, [location.pathname]);
+  // On a client navigation to another page, focus moves to the new page's h1 (or to main), so a
+  // keyboard or screen reader user starts at the top of what changed. Search-only changes, moving
+  // between /chat and a conversation, and the first render keep focus where it is.
+  const pageKey = pageKeyOf(location.pathname);
+  const previousPage = useRef<string | null>(null);
+  useEffect(() => {
+    const previous = previousPage.current;
+    previousPage.current = pageKey;
+    if (previous === null || previous === pageKey) return;
+    const main = mainRef.current;
+    const h1 = main?.querySelector("h1");
+    if (h1) {
+      if (!h1.hasAttribute("tabindex")) h1.setAttribute("tabindex", "-1");
+      h1.focus();
+    } else main?.focus();
+  }, [pageKey]);
+  const skipToContent = (e: MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault();
+    mainRef.current?.focus();
+  };
+
   const status = me.error instanceof ApiClientError ? me.error.status : null;
   const signedOut = status === 401;
   const unlinked = status === 403;
   return (
     <div className="shell">
+      <a className="skip-link" href="#main" onClick={skipToContent}>
+        Skip to content
+      </a>
       <header className="topbar">
-        <a className="brand" href="/">
+        <Link className="brand" to="/" aria-label="PeopleDesk home">
           People<span>Desk</span>
-        </a>
+        </Link>
         {signedOut || unlinked ? null : (
           <nav className="nav" aria-label="Main">
             {NAV.map(([to, label]) => (
@@ -59,7 +89,7 @@ export function AppShell() {
         </button>
         {me.data ? <UserBadge me={me.data} authMode={authMode} next={next} /> : null}
       </header>
-      <main className="content">
+      <main className="content" id="main" tabIndex={-1} ref={mainRef}>
         {sessionEnded ? (
           <div className="banner banner-error" role="alert" data-testid="session-ended">
             <span>{SESSION_ENDED}</span>
@@ -81,7 +111,7 @@ export function AppShell() {
           </p>
         ) : null}
         {signedOut ? (
-          <EmptyState title="Sign in to PeopleDesk">
+          <EmptyState title="Sign in to PeopleDesk" level={1}>
             <p>Your session is missing or has expired.</p>
             <p>
               Locally, pick a persona at <a href={loginUrl(next)}>/dev/login</a>. In production, Cloudflare Access signs you in when
@@ -92,7 +122,7 @@ export function AppShell() {
             </button>
           </EmptyState>
         ) : unlinked ? (
-          <EmptyState title="This identity is not linked to PeopleDesk">
+          <EmptyState title="This identity is not linked to PeopleDesk" level={1}>
             <p>
               You are signed in, but this identity is not linked to a PeopleDesk employee record. Ask the PeopleDesk administrator to
               link it.

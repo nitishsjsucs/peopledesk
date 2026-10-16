@@ -26,7 +26,7 @@ export function PolicyDocumentPage() {
 
   if (doc.error instanceof ApiClientError && doc.error.status === 404) {
     return (
-      <EmptyState title="Policy not found">
+      <EmptyState title="Policy not found" level={1}>
         <Link to="/policies">Back to policies</Link>
       </EmptyState>
     );

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
-type Props = { title: string; children?: ReactNode };
+/** `level` 1 when the empty state is the whole page (a page has exactly one h1). */
+type Props = { title: string; level?: 1 | 2; children?: ReactNode };
 
 /** A neutral, decorative illustration (an empty tray) above the message. */
 function Illustration() {
@@ -17,11 +18,12 @@ function Illustration() {
   );
 }
 
-export function EmptyState({ title, children }: Props) {
+export function EmptyState({ title, level = 2, children }: Props) {
+  const Heading = level === 1 ? "h1" : "h2";
   return (
     <div className="empty">
       <Illustration />
-      <h2>{title}</h2>
+      <Heading>{title}</Heading>
       {children ? <div>{children}</div> : null}
     </div>
   );

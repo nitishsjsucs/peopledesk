@@ -8,7 +8,7 @@
   --border-strong: #b8bfca;
   --text: #1c2230;
   --text-muted: #5a6475;
-  --text-faint: #7d8696;
+  --text-faint: #646d7d;
   --primary: #2556c7;
   --primary-hover: #1d47a8;
   --primary-soft: #e8eefb;
@@ -247,9 +247,13 @@ a {
   cursor: not-allowed;
 }
 
+/* The text color is set here too: .btn above sets color: var(--text) at the same specificity, so the
+   earlier ".btn-primary { color: #fff }" alone lost and light-theme primary buttons were dark on blue.
+   The dark-theme overrides above are more specific and still win. */
 .btn-primary {
   background: var(--primary);
   border-color: var(--primary);
+  color: #fff;
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -421,6 +425,7 @@ label {
   color: var(--text-muted);
 }
 
+.empty h1,
 .empty h2 {
   font-size: 17px;
   color: var(--text);
@@ -942,6 +947,22 @@ label {
   }
 }
 
+/* On a phone the seven links wrap onto rows instead of scrolling sideways, so every page (Requests,
+   where approvals live, included) is visible, each link about 40px tall. */
+@media (max-width: 640px) {
+  .topbar .nav {
+    flex-wrap: wrap;
+    overflow-x: visible;
+    row-gap: 2px;
+  }
+  .nav a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+    padding: 8px 10px;
+  }
+}
+
 /* On a phone the badge shows the role only; the full name stays in its accessible label and tooltip. */
 @media (max-width: 480px) {
   .user-badge-name {
@@ -1058,4 +1079,29 @@ label {
 .user-badge-action {
   font-size: 13px;
   white-space: nowrap;
+}
+
+/* Skip link: the first focusable element, shown only when it has focus. */
+.skip-link {
+  position: absolute;
+  left: 8px;
+  top: -60px;
+  z-index: 50;
+  padding: 8px 12px;
+  background: var(--surface);
+  color: var(--primary);
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+}
+
+.skip-link:focus {
+  top: 8px;
+}
+
+/* Focus moved here by the app (skip link, page change) is not a control, so it gets no ring. */
+main:focus,
+main h1[tabindex="-1"]:focus {
+  outline: none;
+  box-shadow: none;
 }

@@ -1,6 +1,6 @@
 // The shell: sign-in, session and connection problems say what to do next, and the badge offers the
 // way out for the auth mode (switch persona locally, sign out of Access in production).
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { describe, expect, it } from "vitest";
 import type { Health } from "../../src/shared/api-types.ts";
@@ -100,5 +100,76 @@ describe("UserBadge", () => {
     renderAt("/tickets");
     expect((await screen.findByRole("link", { name: "Sign out" })).getAttribute("href")).toBe("/cdn-cgi/access/logout");
     expect(screen.queryByRole("link", { name: "Switch persona" })).toBeNull();
+  });
+});
+
+describe("AppShell navigation and structure", () => {
+  const pages: Route[] = [
+    ...signedIn("dev"),
+    { path: "/api/actions?status=awaiting_approval", body: { actions: [] } },
+    { path: "/api/tickets", body: { tickets: [] } },
+    { path: "/api/conversations", body: { conversations: [] } },
+    { path: "/api/conversations/c1", body: { id: "c1", title: "t", messages: [] } },
+  ];
+
+  it("starts with a skip link that moves focus to the main content", async () => {
+    installFetch(pages);
+    renderAt("/tickets");
+    await screen.findByRole("heading", { level: 1, name: "My tickets" });
+    const focusable = document.querySelectorAll<HTMLElement>("a[href], button, input, select, textarea, [tabindex]:not([tabindex='-1'])");
+    expect(focusable[0]?.textContent).toBe("Skip to content");
+    fireEvent.click(screen.getByRole("link", { name: "Skip to content" }));
+    expect(document.activeElement).toBe(screen.getByRole("main"));
+  });
+
+  it("titles each page and moves focus to the new page's h1 after a nav link", async () => {
+    installFetch(pages);
+    renderAt("/");
+    await screen.findByRole("heading", { level: 1, name: /Hello, Emeka/ });
+    expect(document.title).toBe("PeopleDesk");
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Main" })).getByRole("link", { name: "My tickets" }));
+    const h1 = await screen.findByRole("heading", { level: 1, name: "My tickets" });
+    expect(document.title).toBe("My tickets | PeopleDesk");
+    await waitFor(() => expect(document.activeElement).toBe(h1));
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Main" })).getByRole("link", { name: "Requests" }));
+    await screen.findByRole("heading", { level: 1, name: "My requests" });
+    expect(document.title).toBe("My requests | PeopleDesk");
+  });
+
+  it("does not take focus from the composer when moving from /chat to a conversation", async () => {
+    installFetch(pages);
+    const router = renderAt("/chat");
+    const input = (await screen.findByLabelText("Message")) as HTMLTextAreaElement;
+    input.focus();
+    await router.navigate("/chat/c1");
+    await waitFor(() => expect(document.title).toBe("Chat | PeopleDesk"));
+    await waitFor(() => expect((screen.getByLabelText("Message") as HTMLTextAreaElement).disabled).toBe(false));
+    expect(document.activeElement).not.toBe(screen.getByRole("heading", { level: 1, name: "Chat" }));
+    expect(document.activeElement).not.toBe(screen.getByRole("main"));
+  });
+
+  it("navigates home through the router when the brand is clicked", async () => {
+    installFetch(pages);
+    const router = renderAt("/tickets");
+    await screen.findByRole("heading", { level: 1, name: "My tickets" });
+    const brand = screen.getByRole("link", { name: "PeopleDesk home" });
+    const event = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
+    brand.dispatchEvent(event);
+    // A router Link prevents the browser's full page load and moves the router instead.
+    expect(event.defaultPrevented).toBe(true);
+    await waitFor(() => expect(router.state.location.pathname).toBe("/"));
+  });
+
+  it("has exactly one h1 on the chat page and on the not-found page", async () => {
+    installFetch(pages);
+    renderAt("/chat");
+    await screen.findByLabelText("Message");
+    expect(screen.getAllByRole("heading", { level: 1 }).map((h) => h.textContent)).toEqual(["Chat"]);
+    cleanup();
+    installFetch(pages);
+    renderAt("/no-such-page");
+    await screen.findByText("Page not found");
+    expect(screen.getAllByRole("heading", { level: 1 }).map((h) => h.textContent)).toEqual(["Page not found"]);
+    expect(document.title).toBe("Page not found | PeopleDesk");
   });
 });

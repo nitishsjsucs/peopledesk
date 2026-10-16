@@ -36,6 +36,7 @@ export function ConversationList({ conversations, loading, error, onRetry, onNew
             Loading conversations...
           </p>
         ) : null}
+        {!loading && !error && conversations.length === 0 ? <p className="message-meta conversation-empty">No conversations yet.</p> : null}
         <ul>
           {conversations.map((c) => (
             <li key={c.id}>

@@ -289,6 +289,7 @@ export function ChatPage() {
 
   return (
     <div className="chat-layout">
+      <h1 className="visually-hidden">Chat</h1>
       <ConversationList
         conversations={conversations.data?.conversations ?? []}
         loading={conversations.loading}
