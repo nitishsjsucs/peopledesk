@@ -74,7 +74,8 @@ type Options = {
 export function groupChecklist(progress: OnboardingProgress, { relation, asOf, booked }: Options): GroupedChecklist {
   const next7 = addDaysIso(asOf, 7);
   const items: ChecklistItem[] = progress.tasks.map((task) => {
-    const unbookedOrientation = task.category === "orientation" && booked === false;
+    // A done orientation task needs no booking, so it keeps its owner and has no Book link.
+    const unbookedOrientation = task.category === "orientation" && booked === false && task.status !== "done";
     const overdue = task.status !== "done" && task.dueDate < asOf;
     const dueToday = task.dueDate === asOf;
     const mine = (relation === "self" && unbookedOrientation) || task.ownerRole === VIEWER_ROLE[relation];

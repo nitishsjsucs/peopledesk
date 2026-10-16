@@ -113,15 +113,20 @@ type OrientationLineProps = {
   asOf: string | null;
   /** The orientation task's due date, if the plan has one. */
   taskDue: string | null;
+  /** Whether the orientation task is done: without a booking, there is then nothing to book. */
+  taskDone?: boolean;
   bookHref: string;
 } & (
   | { who: "self"; booking: OrientationBooking | null }
   | { who: "report"; fullName: string; booking: { sessionId: string; startsAt: string } | null }
 );
 
-/** Whether orientation is booked, and when; or Book orientation, with the task's due date once it has passed. */
+/**
+ * Whether orientation is booked, and when; that the orientation task is done when there is no booking;
+ * or Book orientation, with the task's due date once it has passed.
+ */
 export function OrientationLine(props: OrientationLineProps) {
-  const { asOf, taskDue, bookHref } = props;
+  const { asOf, taskDue, taskDone = false, bookHref } = props;
   const pastDue = asOf !== null && taskDue !== null && taskDue < asOf;
   if (props.who === "self") {
     return (
@@ -130,6 +135,8 @@ export function OrientationLine(props: OrientationLineProps) {
           <span>
             <OwnBooking booking={props.booking} asOf={asOf} />
           </span>
+        ) : taskDone ? (
+          <span>Your orientation task is done, so there is no session to book.</span>
         ) : (
           <>
             <span>
@@ -151,6 +158,8 @@ export function OrientationLine(props: OrientationLineProps) {
           Orientation: {props.booking.sessionId} on {formatDateTime(props.booking.startsAt)}
           {asOf ? ` (${relativeDays(props.booking.startsAt, asOf)})` : ""}.
         </span>
+      ) : taskDone ? (
+        <span>{first}'s orientation task is done, so there is no session to book.</span>
       ) : (
         <>
           <span>

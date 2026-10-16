@@ -81,6 +81,7 @@ describe("GET /api/team/onboarding", () => {
     const plan = org.onboardingPlans.find((p) => p.employeeId === "E0024")!;
     expect(byId(o, "E0024")).toMatchObject({ fullName: "Olivia Morgan", startDate: plan.startDate, targetCompletionDate: plan.targetCompletionDate, orientation: null });
     expect(byId(o, "E0024").orientationTaskDue).toBe(tasksOf("E0024").find((t) => t.category === "orientation")!.dueDate);
+    for (const p of o.people) expect(p.orientationTaskDone, p.employeeId).toBe(false);
     for (const p of o.people) expect(p.orientation === null, p.employeeId).toBe(!booked.has(p.employeeId));
   });
 
@@ -88,11 +89,17 @@ describe("GET /api/team/onboarding", () => {
     expect(await overviewAs("manager_no_new_hires")).toEqual({ asOf: AS_OF, people: [], steps: [] });
   });
 
-  it("gives HR everyone with a plan: 12 unbooked, 14 with blocked tasks, 19 with overdue tasks", async () => {
+  it("gives HR everyone with a plan: 12 unbooked (4 of them with the orientation task done), 14 with blocked tasks, 19 with overdue tasks", async () => {
     const o = await overviewAs("hr_admin");
     expect(o.people.map((p) => p.employeeId)).toEqual(allPlanned);
     expect(o.people).toHaveLength(30);
     expect(o.people.filter((p) => p.orientation === null)).toHaveLength(12);
+    // orientationTaskDone against the oracle, and the four the seed has done without a booking.
+    for (const p of o.people) {
+      expect(p.orientationTaskDone, p.employeeId).toBe(tasksOf(p.employeeId).some((t) => t.category === "orientation" && t.status === "done"));
+    }
+    expect(o.people.filter((p) => p.orientation === null && p.orientationTaskDone).map((p) => p.employeeId)).toEqual(["E0064", "E0084", "E0085", "E0107"]);
+    expect(o.people.filter((p) => p.orientation !== null && p.orientationTaskDone).map((p) => p.employeeId)).toEqual(["E0082", "E0086"]);
     expect(o.people.filter((p) => p.tasks.blocked > 0)).toHaveLength(14);
     expect(o.people.filter((p) => p.tasks.overdue > 0)).toHaveLength(19);
     for (const p of o.people) expect(p.tasks, p.employeeId).toEqual(oracleTasks(p.employeeId));
@@ -155,6 +162,7 @@ describe("GET /api/team/onboarding", () => {
       overdue: 1,
       due_next7: 0,
       orientation_task_due: null,
+      orientation_task_done: 0,
     });
     const step = { step_key: 3, title: "Step", owner_role: "employee" as const, blocked: 1, overdue_not_blocked: 1, due_next7: 0, stuck_ids: "E0024,E9001" };
     const principal = { employeeId: deepa.employeeId, role: "manager" as const, identityKind: "user" as const };
@@ -213,6 +221,20 @@ describe("GET /api/team/onboarding", () => {
     } finally {
       await env.DB.prepare("UPDATE onboarding_tasks SET status = ?2 WHERE id = ?1").bind(other.id, other.status).run();
     }
+  });
+
+  it("reports the orientation task as done once it is, and only that person's", async () => {
+    const task = tasksOf("E0033").find((t) => t.category === "orientation")!;
+    expect(task.status).not.toBe("done");
+    try {
+      await env.DB.prepare("UPDATE onboarding_tasks SET status = 'done', completed_at = '2026-09-30T12:00:00.000Z' WHERE id = ?1").bind(task.id).run();
+      const o = await overviewAs(deepa.key);
+      expect(o.people.filter((p) => p.orientationTaskDone).map((p) => p.employeeId)).toEqual(["E0033"]);
+      expect(byId(o, "E0033").orientation).toBeNull();
+    } finally {
+      await env.DB.prepare("UPDATE onboarding_tasks SET status = ?2, completed_at = NULL WHERE id = ?1").bind(task.id, task.status).run();
+    }
+    expect(byId(await overviewAs(deepa.key), "E0033").orientationTaskDone).toBe(false);
   });
 
   it("shows a booking once it is approved", async () => {

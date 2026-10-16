@@ -13,7 +13,7 @@ import { OnboardingChecklist } from "../components/ToolResultCard.tsx";
 import { api, ApiClientError } from "../lib/api.ts";
 import { useBusinessDate } from "../lib/business-date.tsx";
 import { formatShortDate } from "../lib/format.ts";
-import { EMPTY_FILTER_TEXT, matchesShow, personLine, SHOW_FILTERS, SORT_LABEL, SORTS, sortPeople } from "../lib/onboarding-overview.ts";
+import { EMPTY_FILTER_TEXT, matchesShow, needsOrientation, personLine, SHOW_FILTERS, SORT_LABEL, SORTS, sortPeople } from "../lib/onboarding-overview.ts";
 import type { ShowFilter, SortOrder } from "../lib/onboarding-overview.ts";
 import { useMe } from "../lib/session.tsx";
 import { useAsync } from "../lib/use-async.ts";
@@ -59,6 +59,7 @@ function OwnChecklist() {
                   booking={ownBooking}
                   asOf={asOf}
                   taskDue={progress.data.tasks.find((t) => t.category === "orientation")?.dueDate ?? null}
+                  taskDone={progress.data.tasks.some((t) => t.category === "orientation" && t.status === "done")}
                   bookHref="/requests/orientation"
                 />
               ) : null
@@ -275,16 +276,18 @@ function TeamOnboarding() {
                         </button>
                         {m.orientation ? (
                           <span className="status-pill done">Orientation {formatShortDate(m.orientation.startsAt)}</span>
+                        ) : m.orientationTaskDone ? (
+                          <span className="status-pill done">Orientation done</span>
                         ) : (
                           <span className="status-pill open">Not booked</span>
                         )}
                       </div>
                       <TaskBar counts={{ total: m.tasks.total, done: m.tasks.done, overdue: m.tasks.overdue }} text={personLine(m, asOf)} />
-                      {m.orientation ? null : (
+                      {needsOrientation(m) ? (
                         <Link className="person-book" to={bookUrl(m.employeeId)} aria-label={`Book orientation for ${m.fullName}`}>
                           Book orientation
                         </Link>
-                      )}
+                      ) : null}
                     </li>
                   ))}
                 </ul>
@@ -309,6 +312,7 @@ function TeamOnboarding() {
                           booking={current.orientation}
                           asOf={asOf}
                           taskDue={current.orientationTaskDue}
+                          taskDone={current.orientationTaskDone}
                           bookHref={bookUrl(current.employeeId)}
                         />
                       }

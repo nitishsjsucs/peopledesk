@@ -12,15 +12,24 @@ export type SortOrder = (typeof SORTS)[number];
 
 export const SORT_LABEL: Record<SortOrder, string> = { attention: "Needs attention first", name: "Name", start: "Start date" };
 
+/**
+ * Whether someone still needs an orientation session: no booking, and the orientation task is not
+ * done. The seed has people whose orientation task is done without a booking (attended outside the
+ * booking flow); they are not "Not booked" and get no Book orientation link.
+ */
+export const needsOrientation = (p: Pick<OnboardingOverviewPerson, "orientation" | "orientationTaskDone">): boolean =>
+  p.orientation === null && !p.orientationTaskDone;
+
 export const matchesShow = (p: OnboardingOverviewPerson, show: ShowFilter): boolean =>
-  show === "unbooked" ? p.orientation === null : show === "blocked" ? p.tasks.blocked > 0 : show === "overdue" ? p.tasks.overdue > 0 : true;
+  show === "unbooked" ? needsOrientation(p) : show === "blocked" ? p.tasks.blocked > 0 : show === "overdue" ? p.tasks.overdue > 0 : true;
 
 const byId = (a: OnboardingOverviewPerson, b: OnboardingOverviewPerson) => (a.employeeId < b.employeeId ? -1 : a.employeeId > b.employeeId ? 1 : 0);
 const byStart = (a: OnboardingOverviewPerson, b: OnboardingOverviewPerson) => (a.startDate < b.startDate ? -1 : a.startDate > b.startDate ? 1 : 0);
 
 /**
- * Needs attention first: most overdue tasks, then most blocked, then not booked before booked, then
- * the earliest start, then the employee id. Name and Start date sort as labeled.
+ * Needs attention first: most overdue tasks, then most blocked, then whoever still needs orientation
+ * (not booked, orientation task not done), then the earliest start, then the employee id. Name and
+ * Start date sort as labeled.
  */
 export function sortPeople(people: readonly OnboardingOverviewPerson[], sort: SortOrder): OnboardingOverviewPerson[] {
   const out = [...people];
@@ -30,7 +39,7 @@ export function sortPeople(people: readonly OnboardingOverviewPerson[], sort: So
     (a, b) =>
       b.tasks.overdue - a.tasks.overdue ||
       b.tasks.blocked - a.tasks.blocked ||
-      Number(a.orientation !== null) - Number(b.orientation !== null) ||
+      Number(needsOrientation(b)) - Number(needsOrientation(a)) ||
       byStart(a, b) ||
       byId(a, b),
   );
@@ -60,7 +69,7 @@ export function personLine(p: OnboardingOverviewPerson, asOf: string): string {
 
 /** What a tile filter with no one in it says. */
 export const EMPTY_FILTER_TEXT: Record<Exclude<ShowFilter, "all">, string> = {
-  unbooked: "Everyone here is booked for orientation.",
+  unbooked: "No one here still needs an orientation session.",
   blocked: "No one has blocked tasks.",
   overdue: "No one is overdue.",
 };

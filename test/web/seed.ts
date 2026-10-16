@@ -47,6 +47,7 @@ export function overviewFor(ids: readonly string[]): OnboardingOverview {
       },
       orientation: session ? { sessionId: session.id, startsAt: session.startsAt } : null,
       orientationTaskDue: ts.find((t) => t.category === "orientation")?.dueDate ?? null,
+      orientationTaskDone: ts.some((t) => t.category === "orientation" && t.status === "done"),
     };
   });
   const groups = new Map<string, OnboardingOverview["steps"][number]>();

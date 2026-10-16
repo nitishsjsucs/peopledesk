@@ -10,7 +10,7 @@ import { groupChecklist, nextForYou, waitingText } from "../lib/checklist.ts";
 import type { GroupedChecklist } from "../lib/checklist.ts";
 import { relativeDays } from "../lib/dates.ts";
 import { formatDate, formatDateTime } from "../lib/format.ts";
-import { matchesShow } from "../lib/onboarding-overview.ts";
+import { matchesShow, needsOrientation } from "../lib/onboarding-overview.ts";
 import { useMe } from "../lib/session.tsx";
 import { useAsync } from "../lib/use-async.ts";
 
@@ -48,6 +48,9 @@ type PanelProps = {
 function YourOnboarding({ progress, progressError, onRetry, booking, asOf }: PanelProps) {
   const grouped = progress && asOf && booking !== undefined ? groupChecklist(progress, { relation: "self", asOf, booked: booking !== null }) : null;
   const done = progress ? progress.tasks.filter((t) => t.status === "done").length : 0;
+  // A done orientation task without a booking (attended outside the booking flow) needs no session.
+  const orientationDone = progress ? progress.tasks.some((t) => t.category === "orientation" && t.status === "done") : false;
+  const needsBooking = booking === null && !orientationDone;
   const line = progress
     ? [`${done} of ${progress.tasks.length} done`, ...(grouped && grouped.overdue > 0 ? [`${grouped.overdue} overdue`] : []), ...(grouped && waitingText(grouped.waiting) ? [waitingText(grouped.waiting) as string] : [])].join(" · ")
     : "";
@@ -75,11 +78,15 @@ function YourOnboarding({ progress, progressError, onRetry, booking, asOf }: Pan
       ) : null}
       {booking !== undefined ? (
         <p className="home-orientation" data-testid="home-orientation">
-          {booking ? `Orientation: ${formatDateTime(booking.startsAt)}${asOf ? `, ${relativeDays(booking.startsAt, asOf)}` : ""}` : "Orientation: not booked yet."}
+          {booking
+            ? `Orientation: ${formatDateTime(booking.startsAt)}${asOf ? `, ${relativeDays(booking.startsAt, asOf)}` : ""}`
+            : orientationDone
+              ? "Orientation: done."
+              : "Orientation: not booked yet."}
         </p>
       ) : null}
       <p className="request-links home-links">
-        {booking === null ? (
+        {needsBooking ? (
           <Link className="btn btn-primary" to="/requests/orientation">
             Book orientation
           </Link>
@@ -136,7 +143,7 @@ export function HomePage() {
   const waiting = pending.data?.actions.length ?? 0;
 
   const teamPeople = overview.data?.people ?? [];
-  const teamUnbooked = teamPeople.filter((p) => p.orientation === null && p.employeeId !== me.employeeId).length;
+  const teamUnbooked = teamPeople.filter((p) => needsOrientation(p) && p.employeeId !== me.employeeId).length;
   const showTeamPanel = teamPeople.length > 0;
 
   const quick: QuickAction[] = [{ to: "/chat", title: "Ask a question", hint: "Policy answers cite the version they come from." }];

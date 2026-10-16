@@ -73,6 +73,16 @@ describe("groupChecklist", () => {
     expect(manager.groups[0]!.items[0]).toMatchObject({ owner: "HR", action: "book", group: "later" });
   });
 
+  it("keeps a done orientation task without a booking in Done, owned by HR, with nothing to book", () => {
+    const orientation = task("o", { title: "Attend new hire orientation", category: "orientation", ownerRole: "hr_admin", dueDate: addDaysIso(AS_OF, -10), status: "done" });
+    for (const relation of ["self", "manager", "hr"] as const) {
+      const g = groupChecklist(plan([orientation]), { relation, asOf: AS_OF, booked: false });
+      expect(g.groups.map((x) => x.key), relation).toEqual(["done"]);
+      expect(g.groups[0]!.items[0], relation).toMatchObject({ owner: relation === "hr" ? "You" : "HR", action: null, overdue: false });
+      expect(nextForYou(g), relation).toBeNull();
+    }
+  });
+
   it("offers Open a ticket on an open IT task only", () => {
     const g = groupChecklist(
       plan([task("i", { ownerRole: "it", category: "it_setup" }), task("j", { ownerRole: "it", category: "it_setup", status: "done" })]),

@@ -108,6 +108,15 @@ describe("HomePage", () => {
     expect(within(panel()).queryByRole("link", { name: "Book orientation" })).toBeNull();
   });
 
+  it("says orientation is done, with no Book orientation, for a new hire whose orientation task is done without a booking", async () => {
+    // Mateo Foster (E0064): orientation task done in the seed, no booking.
+    installFetch(ownRoutes("E0064"));
+    renderHome({ ...me, employeeId: "E0064", fullName: "Mateo Foster", inOnboarding: true });
+    await waitFor(() => expect(within(panel()).getByTestId("home-orientation").textContent).toBe("Orientation: done."));
+    expect(within(panel()).queryByRole("link", { name: "Book orientation" })).toBeNull();
+    expect(within(panel()).getByTestId("next-for-you").textContent).not.toContain("Book orientation");
+  });
+
   it("shows done counts only, never overdue or waiting, while the business date is unknown or /api/health failed", async () => {
     installFetch(ownRoutes("E0025"));
     const view = renderHome(nadia, { asOf: null, settled: false });
@@ -138,12 +147,12 @@ describe("HomePage", () => {
     expect(calls.some((c) => c.path === "/api/team")).toBe(false);
   });
 
-  it("gives Kenji 30 in onboarding with 12, 14 and 19", async () => {
+  it("gives Kenji 30 in onboarding with 8, 14 and 19 (no one whose orientation task is done counts as needing a session)", async () => {
     installFetch([noPending, { path: "/api/team/onboarding", body: overviewFor(everyoneIds) }]);
     renderHome(kenji);
     expect((await screen.findByTestId("team-onboarding")).textContent).toContain("30 in onboarding");
-    expect(tiles().map((a) => a.querySelector(".stat-value")?.textContent)).toEqual(["12", "14", "19"]);
-    expect(screen.getByTestId("quick-book-orientation").textContent).toContain("12 people need an orientation session.");
+    expect(tiles().map((a) => a.querySelector(".stat-value")?.textContent)).toEqual(["8", "14", "19"]);
+    expect(screen.getByTestId("quick-book-orientation").textContent).toContain("8 people need an orientation session.");
   });
 
   it("shows a zero tile as 0 with a check, still a link", async () => {

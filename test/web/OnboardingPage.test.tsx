@@ -80,13 +80,15 @@ describe("OnboardingPage team overview", () => {
     expect(calls.some((c) => c.path === "/api/team")).toBe(false);
   });
 
-  it("counts everyone for HR: 30, 12, 14 and 19", async () => {
-    installFetch(teamRoutes([], overviewFor(everyoneIds)));
+  it("counts everyone for HR: 30, 8, 14 and 19 (12 have no booking, 4 of them with the orientation task done)", async () => {
+    const overview = overviewFor(everyoneIds);
+    expect(overview.people.filter((p) => p.orientation === null)).toHaveLength(12);
+    installFetch(teamRoutes([], overview));
     renderAs(kenji);
     expect(await screen.findByRole("heading", { level: 2, name: "Everyone in onboarding" })).toBeTruthy();
     await screen.findByRole("group", { name: "Show" });
     expect(tile(/ in onboarding,/).getAttribute("aria-label")).toBe("30 in onboarding, 30 people");
-    expect(tile(/ not booked,/).getAttribute("aria-label")).toBe("12 not booked, 12 people");
+    expect(tile(/ not booked,/).getAttribute("aria-label")).toBe("8 not booked, 8 people");
     expect(tile(/ blocked tasks,/).getAttribute("aria-label")).toBe("14 with blocked tasks, 14 people");
     expect(tile(/ overdue tasks,/).getAttribute("aria-label")).toBe("19 with overdue tasks, 19 people");
   });
@@ -128,6 +130,24 @@ describe("OnboardingPage team overview", () => {
     // One legend for the whole list, not one per row.
     const card = document.querySelector(".onboarding-people-card") as HTMLElement;
     expect(within(card).getAllByRole("list", { name: "Task bar key" })).toHaveLength(1);
+  });
+
+  it("shows someone whose orientation task is done without a booking as Orientation done: not in Not booked, no Book link", async () => {
+    installFetch(teamRoutes([], overviewFor(everyoneIds)));
+    renderAs(kenji, "/onboarding?person=E0064");
+    // Mateo Foster: orientation task done in the seed, no booking.
+    const mateo = await screen.findByTestId("person-E0064");
+    expect(within(mateo).getByText("Orientation done").className).toContain("status-pill done");
+    expect(within(mateo).queryByText("Not booked")).toBeNull();
+    expect(within(mateo).queryByRole("link", { name: /Book orientation/ })).toBeNull();
+    const pane = await screen.findByTestId("checklist-E0064");
+    expect(within(pane).getByTestId("report-orientation").textContent).toBe("Mateo's orientation task is done, so there is no session to book.");
+    expect(within(pane).queryByRole("link", { name: /Book orientation/ })).toBeNull();
+    fireEvent.click(tile(/ not booked,/));
+    const shown = rowIds();
+    expect(shown).toHaveLength(8);
+    for (const id of ["E0064", "E0084", "E0085", "E0107"]) expect(shown).not.toContain(id);
+    for (const id of shown) expect(within(screen.getByTestId(`person-${id}`)).getByText("Not booked")).toBeTruthy();
   });
 
   it("filters by a tile and writes ?show=, and Name sort and the selection also go into the URL", async () => {
@@ -387,6 +407,19 @@ describe("OnboardingPage own checklist", () => {
     expect(done.open).toBe(false);
     expect(within(done).getAllByRole("listitem", { hidden: true })).toHaveLength(9);
     expect(screen.queryByRole("table")).toBeNull();
+  });
+
+  it("says the orientation task is done, with no Book link, for a new hire who has no booking but did orientation", async () => {
+    // Mateo Foster (E0064): orientation task done in the seed, no booking.
+    const mateo = { ...me, employeeId: "E0064", fullName: "Mateo Foster", inOnboarding: true };
+    installFetch(ownRoutes("E0064"));
+    renderAs(mateo, "/onboarding", ON_ASOF);
+    const orientation = await screen.findByTestId("own-orientation");
+    expect(orientation.textContent).toBe("Your orientation task is done, so there is no session to book.");
+    expect(screen.queryByRole("link", { name: "Book orientation" })).toBeNull();
+    const done = screen.getByText(/^Done \(\d+\)$/).closest("details") as HTMLDetailsElement;
+    const task = within(done).getAllByRole("listitem", { hidden: true }).find((li) => li.querySelector(".task-title")?.textContent === "Attend new hire orientation");
+    expect(task?.querySelector(".task-meta")?.textContent).toMatch(/^HR · /);
   });
 
   it("shows Gabriel his session, what is due soon, and a task due today as due today, not overdue", async () => {

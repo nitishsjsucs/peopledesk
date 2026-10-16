@@ -85,6 +85,7 @@ type OverviewPersonRow = {
   overdue: number;
   due_next7: number;
   orientation_task_due: string | null;
+  orientation_task_done: number;
 };
 type OverviewBookingRow = { employee_id: string; session_id: string; starts_at: string };
 type OverviewStepRow = {
@@ -122,7 +123,8 @@ export async function overviewRows(
                 COALESCE(SUM(t.status = 'blocked'), 0) AS blocked,
                 COALESCE(SUM(t.status <> 'done' AND t.due_date < ?2), 0) AS overdue,
                 COALESCE(SUM(t.status <> 'done' AND t.due_date >= ?2 AND t.due_date <= ?3), 0) AS due_next7,
-                MAX(CASE WHEN t.category = 'orientation' THEN t.due_date END) AS orientation_task_due
+                MAX(CASE WHEN t.category = 'orientation' THEN t.due_date END) AS orientation_task_due,
+                COALESCE(MAX(t.category = 'orientation' AND t.status = 'done'), 0) AS orientation_task_done
            FROM onboarding_plans p
            JOIN employees e ON e.id = p.employee_id
            LEFT JOIN onboarding_tasks t ON t.employee_id = p.employee_id
@@ -188,6 +190,7 @@ export function shapeOverview(
       tasks: { total: r.total, done: r.done, overdue: r.overdue, blocked: r.blocked, dueNext7: r.due_next7 },
       orientation: booking.get(r.employee_id) ?? null,
       orientationTaskDue: r.orientation_task_due,
+      orientationTaskDone: r.orientation_task_done === 1,
     });
   }
   const allowed = new Set(people.map((p) => p.employeeId));

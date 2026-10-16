@@ -227,6 +227,11 @@ export const OnboardingOverviewSchema = z.object({
       orientation: z.object({ sessionId: z.string(), startsAt: z.string() }).nullable(),
       /** The due date of the plan's orientation task, or null without one. */
       orientationTaskDue: z.string().nullable(),
+      /**
+       * Whether the plan's orientation task is done. Someone with a done orientation task and no
+       * booking (it was attended outside the booking flow) does not need a session.
+       */
+      orientationTaskDone: z.boolean(),
     }),
   ),
   /** Checklist steps with stuck tasks, most stuck first (at most 20). */

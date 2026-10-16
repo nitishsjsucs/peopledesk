@@ -118,7 +118,7 @@ Locally, a reviewer signs in as any of them; in production, Cloudflare Access si
 
 ## HR admin (Kenji)
 
-1. Home and Onboarding cover everyone in onboarding (30 people: 12 not booked, 14 with blocked tasks, 19 with overdue tasks), with the same tiles, task bars, sort and Book links as a manager. "Where onboarding is stuck" shows that 9 people are stuck on "Enroll in multi-factor authentication" (3 blocked, 6 overdue and not blocked) and 6 on "First one-on-one with your manager", owned by their managers; HR's own steps read "HR (you)".
+1. Home and Onboarding cover everyone in onboarding (30 people: 8 not booked, 14 with blocked tasks, 19 with overdue tasks), with the same tiles, task bars, sort and Book links as a manager. Four more people have no booking, but their orientation task is already done in the seed: their row says "Orientation done", with no Book link, and they are not counted as Not booked. "Where onboarding is stuck" shows that 9 people are stuck on "Enroll in multi-factor authentication" (3 blocked, 6 overdue and not blocked) and 6 on "First one-on-one with your manager", owned by their managers; HR's own steps read "HR (you)".
 2. Orientation lets HR choose any unbooked person in onboarding as the attendee; the attendee list starts on "Choose an attendee" unless a link names someone.
 
 ## Changed on 2026-10-15
