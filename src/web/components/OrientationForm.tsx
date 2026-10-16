@@ -274,18 +274,19 @@ function BookingForm({ initialSessionId, initialEmployeeId, supersedes, onPropos
                             setSessionId(s.id);
                             setChoose(false);
                           }}
-                          aria-label={`${s.title}, ${s.id}`}
+                          // Several sessions share a title, so the name also gives the id, place and start.
+                          aria-labelledby={`session-${s.id}-title session-${s.id}-meta session-${s.id}-starts`}
                         />
                       </td>
                       <td>
                         <label htmlFor={`session-${s.id}`} className="session-label">
-                          {s.title}
-                          <span className="message-meta">
+                          <span id={`session-${s.id}-title`}>{s.title}</span>
+                          <span className="message-meta" id={`session-${s.id}-meta`}>
                             {s.id} · {s.location}
                           </span>
                         </label>
                       </td>
-                      <td>{formatDateTime(s.startsAt)}</td>
+                      <td id={`session-${s.id}-starts`}>{formatDateTime(s.startsAt)}</td>
                       <td>{s.seatsRemaining === 0 ? "Full" : `${s.seatsRemaining} of ${s.capacity}`}</td>
                     </tr>
                   ))}

@@ -65,6 +65,11 @@ function renderForm(who: Me, opts: FormOptions = {}) {
   return { calls, onProposed, posts: () => calls.filter((c) => c.method === "POST") };
 }
 
+/** A session's radio, by its accessible name: title, then "id · location", then the start. */
+const radioName = (id: string) => new RegExp(`^New hire orientation ${id} ${id} · Video call `);
+const radio = (id: string) => screen.getByRole("radio", { name: radioName(id) });
+const findRadio = (id: string) => screen.findByRole("radio", { name: radioName(id) });
+
 const radioIds = () => screen.queryAllByRole("radio").map((r) => (r as HTMLInputElement).value);
 
 const member = (employeeId: string, fullName: string, inOnboarding: boolean, booked: boolean) => ({
@@ -79,12 +84,12 @@ const member = (employeeId: string, fullName: string, inOnboarding: boolean, boo
 describe("OrientationForm", () => {
   it("lists sessions with seats left, disables full ones, and proposes for self", async () => {
     const { posts, onProposed } = renderForm(newHire);
-    const full = await screen.findByLabelText("New hire orientation ORI-001, ORI-001");
+    const full = await findRadio("ORI-001");
     expect((full as HTMLInputElement).disabled).toBe(true);
     expect(screen.getByText("Full")).toBeTruthy();
     expect(screen.getByText("4 of 10")).toBeTruthy();
     expect(screen.queryByLabelText("Attendee")).toBeNull();
-    fireEvent.click(screen.getByLabelText("New hire orientation ORI-002, ORI-002"));
+    fireEvent.click(radio("ORI-002"));
     fireEvent.click(screen.getByRole("button", { name: "Review request" }));
     await waitFor(() => expect(onProposed).toHaveBeenCalledTimes(1));
     expect(posts()).toEqual([
@@ -94,7 +99,7 @@ describe("OrientationForm", () => {
 
   it("validates on the client, ties the error to the session group, moves focus to the first open session, and sends nothing", async () => {
     const { posts } = renderForm(newHire);
-    await screen.findByLabelText("New hire orientation ORI-002, ORI-002");
+    await findRadio("ORI-002");
     const submit = screen.getByRole("button", { name: "Review request" }) as HTMLButtonElement;
     expect(submit.disabled).toBe(false);
     fireEvent.click(submit);
@@ -103,17 +108,24 @@ describe("OrientationForm", () => {
     const group = screen.getByRole("group", { name: "Session" });
     expect(group.getAttribute("aria-describedby")).toBe(alert.id);
     // ORI-001 is full, so the first session that can be chosen is ORI-002.
-    expect(document.activeElement).toBe(screen.getByLabelText("New hire orientation ORI-002, ORI-002"));
+    expect(document.activeElement).toBe(radio("ORI-002"));
     expect(posts()).toHaveLength(0);
+  });
+
+  it("names each session's radio by its title, id, place and start, since several share a title", async () => {
+    renderForm(newHire);
+    const r = await findRadio("ORI-002");
+    expect(r.getAttribute("aria-label")).toBeNull();
+    expect(screen.getByRole("radio", { name: "New hire orientation ORI-002 ORI-002 · Video call Oct 20, 2026 16:00 UTC" })).toBe(r);
   });
 
   it("checks a session's radio when its title is clicked", async () => {
     renderForm(newHire);
-    await screen.findByLabelText("New hire orientation ORI-003, ORI-003");
-    const label = screen.getByText("New hire orientation ORI-003", { selector: "label" });
+    await findRadio("ORI-003");
+    const label = screen.getByText("New hire orientation ORI-003").closest("label")!;
     expect(label.getAttribute("for")).toBe("session-ORI-003");
     fireEvent.click(label);
-    expect((screen.getByLabelText("New hire orientation ORI-003, ORI-003") as HTMLInputElement).checked).toBe(true);
+    expect((radio("ORI-003") as HTMLInputElement).checked).toBe(true);
   });
 
   it("shows a loading line while the sessions load", async () => {
@@ -135,7 +147,7 @@ describe("OrientationForm", () => {
     expect(screen.getByRole("status").textContent).toBe("Loading sessions...");
     expect(screen.queryByRole("button", { name: "Review request" })).toBeNull();
     release();
-    await screen.findByLabelText("New hire orientation ORI-002, ORI-002");
+    await findRadio("ORI-002");
   });
 
   it("offers a manager only reports in onboarding without a booking, and proposes for the attendee shown", async () => {
@@ -147,7 +159,7 @@ describe("OrientationForm", () => {
     // The only attendee is the one shown as selected, so it is the one proposed for: the manager is
     // not in onboarding and must never be proposed for by default.
     expect(select.value).toBe("E0101");
-    fireEvent.click(screen.getByLabelText("New hire orientation ORI-003, ORI-003"));
+    fireEvent.click(radio("ORI-003"));
     fireEvent.click(screen.getByRole("button", { name: "Review request" }));
     await waitFor(() => expect(onProposed).toHaveBeenCalledTimes(1));
     expect(posts()[0]!.body).toEqual({ tool: "schedule_orientation_session", arguments: { sessionId: "ORI-003", employeeId: "E0101" } });
@@ -160,7 +172,7 @@ describe("OrientationForm", () => {
     await screen.findByRole("option", { name: "Dina Haddad (E0104)" });
     expect(select.value).toBe("");
     expect([...select.options].map((o) => o.textContent)).toEqual(["Choose an attendee", "Ana Lima (E0101)", "Dina Haddad (E0104)"]);
-    fireEvent.click(screen.getByLabelText("New hire orientation ORI-002, ORI-002"));
+    fireEvent.click(radio("ORI-002"));
     fireEvent.click(screen.getByRole("button", { name: "Review request" }));
     expect((await screen.findByRole("alert")).textContent).toBe("Choose an attendee.");
     expect(select.getAttribute("aria-invalid")).toBe("true");
@@ -169,7 +181,7 @@ describe("OrientationForm", () => {
     expect(posts()).toHaveLength(0);
     fireEvent.change(select, { target: { value: "E0104" } });
     expect(screen.queryByRole("alert")).toBeNull();
-    fireEvent.click(screen.getByLabelText("New hire orientation ORI-002, ORI-002"));
+    fireEvent.click(radio("ORI-002"));
     fireEvent.click(screen.getByRole("button", { name: "Review request" }));
     await waitFor(() => expect(posts()).toHaveLength(1));
     expect(posts()[0]!.body).toEqual({ tool: "schedule_orientation_session", arguments: { sessionId: "ORI-002", employeeId: "E0104" } });
@@ -195,7 +207,7 @@ describe("OrientationForm", () => {
       expect(select.value).toBe("");
       expect(select.getAttribute("aria-describedby")).toBe("attendee-error");
       expect(screen.getByText(why).id).toBe("attendee-error");
-      fireEvent.click(screen.getByLabelText("New hire orientation ORI-002, ORI-002"));
+      fireEvent.click(radio("ORI-002"));
       fireEvent.click(screen.getByRole("button", { name: "Review request" }));
       expect((await screen.findByRole("alert")).textContent).toBe(`${why} Choose an attendee.`);
       expect(posts()).toHaveLength(0);
@@ -210,16 +222,16 @@ describe("OrientationForm", () => {
 
   it("does not keep a preselected session that is full now: it says so, checks nothing and sends nothing", async () => {
     const { posts } = renderForm(newHire, { props: { initialSessionId: "ORI-001" } });
-    const full = (await screen.findByLabelText("New hire orientation ORI-001, ORI-001")) as HTMLInputElement;
+    const full = (await findRadio("ORI-001")) as HTMLInputElement;
     expect(full.checked).toBe(false);
     expect(full.disabled).toBe(true);
     const note = screen.getByText("ORI-001 is full now. Choose another session.");
     expect(screen.getByRole("group", { name: "Session" }).getAttribute("aria-describedby")).toBe(note.id);
     fireEvent.click(screen.getByRole("button", { name: "Review request" }));
     expect((await screen.findByRole("alert")).textContent).toBe("ORI-001 is full now. Choose another session.");
-    expect(document.activeElement).toBe(screen.getByLabelText("New hire orientation ORI-002, ORI-002"));
+    expect(document.activeElement).toBe(radio("ORI-002"));
     expect(posts()).toHaveLength(0);
-    fireEvent.click(screen.getByLabelText("New hire orientation ORI-002, ORI-002"));
+    fireEvent.click(radio("ORI-002"));
     expect(screen.queryByText(/is full now/)).toBeNull();
   });
 
@@ -248,10 +260,10 @@ describe("OrientationForm", () => {
         },
       ],
     });
-    fireEvent.click(await screen.findByLabelText("New hire orientation ORI-002, ORI-002"));
+    fireEvent.click(await findRadio("ORI-002"));
     fireEvent.click(screen.getByRole("button", { name: "Review request" }));
     expect(await screen.findByText("ORI-002 is full now. Choose another session.")).toBeTruthy();
-    expect((screen.getByLabelText("New hire orientation ORI-002, ORI-002") as HTMLInputElement).checked).toBe(false);
+    expect((radio("ORI-002") as HTMLInputElement).checked).toBe(false);
     expect(screen.getByRole("alert").textContent).toContain("That session is full.");
     expect(posts()).toHaveLength(1);
   });
@@ -263,7 +275,7 @@ describe("OrientationForm", () => {
     await screen.findByRole("option", { name: "Ana Lima (E0101)" });
     expect([...select.options].map((o) => o.textContent)).toEqual(["Grace Okafor (you) (E0007)", "Ana Lima (E0101)"]);
     expect(select.value).toBe("E0007");
-    fireEvent.click(screen.getByLabelText("New hire orientation ORI-002, ORI-002"));
+    fireEvent.click(radio("ORI-002"));
     fireEvent.click(screen.getByRole("button", { name: "Review request" }));
     await waitFor(() => expect(posts()).toHaveLength(1));
     expect(posts()[0]!.body).toEqual({ tool: "schedule_orientation_session", arguments: { sessionId: "ORI-002" } });
@@ -353,7 +365,7 @@ describe("OrientationForm", () => {
   it("defaults a self booking to the person's region and Global, and lists every session under All regions", async () => {
     const list = { sessions: [session("ORI-010", 5, 10, "US"), session("ORI-011", 5, 10, "UK"), session("ORI-012", 5, 10, "GLOBAL"), session("ORI-013", 5, 10, "IN")] };
     renderForm(newHire, { list });
-    await screen.findByLabelText("New hire orientation ORI-010, ORI-010");
+    await findRadio("ORI-010");
     const region = screen.getByLabelText("Region") as HTMLSelectElement;
     expect(region.value).toBe("mine");
     expect(radioIds()).toEqual(["ORI-010", "ORI-012"]);
@@ -366,9 +378,9 @@ describe("OrientationForm", () => {
   it("shows every region when a session is preselected, and keeps the chosen session visible under any filter", async () => {
     const list = { sessions: [session("ORI-010", 5, 10, "US"), session("ORI-011", 5, 10, "UK")] };
     renderForm(newHire, { list, props: { initialSessionId: "ORI-011" } });
-    await screen.findByLabelText("New hire orientation ORI-011, ORI-011");
+    await findRadio("ORI-011");
     expect((screen.getByLabelText("Region") as HTMLSelectElement).value).toBe("all");
-    expect((screen.getByLabelText("New hire orientation ORI-011, ORI-011") as HTMLInputElement).checked).toBe(true);
+    expect((radio("ORI-011") as HTMLInputElement).checked).toBe(true);
     fireEvent.change(screen.getByLabelText("Region"), { target: { value: "IN" } });
     expect(radioIds()).toEqual(["ORI-011"]);
   });
@@ -393,7 +405,7 @@ describe("OrientationForm", () => {
         },
       ],
     });
-    fireEvent.click(await screen.findByLabelText("New hire orientation ORI-002, ORI-002"));
+    fireEvent.click(await findRadio("ORI-002"));
     fireEvent.click(screen.getByRole("button", { name: "Review request" }));
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("You already have 5 requests awaiting approval.");
@@ -420,7 +432,7 @@ describe("ScheduleOrientationPage", () => {
     const server = actionsServer();
     const calls = installFetch([{ path: "/api/orientation-sessions", body: sessions }, { path: "/api/orientation-booking", body: noBooking }, ...server.routes]);
     renderPage("/requests/orientation");
-    fireEvent.click(await screen.findByLabelText("New hire orientation ORI-002, ORI-002"));
+    fireEvent.click(await findRadio("ORI-002"));
     fireEvent.click(screen.getByRole("button", { name: "Review request" }));
     await screen.findByTestId("approval-card");
     expect(location()).toBe(`/requests/orientation?review=${id(1)}`);
@@ -430,9 +442,9 @@ describe("ScheduleOrientationPage", () => {
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { level: 1, name: "Edit orientation request" })));
     expect(location()).toBe(`/requests/orientation?edit=${id(1)}`);
     expect(screen.queryByTestId("approval-card")).toBeNull();
-    const prefilled = (await screen.findByLabelText("New hire orientation ORI-002, ORI-002")) as HTMLInputElement;
+    const prefilled = (await findRadio("ORI-002")) as HTMLInputElement;
     expect(prefilled.checked).toBe(true);
-    fireEvent.click(screen.getByLabelText("New hire orientation ORI-003, ORI-003"));
+    fireEvent.click(radio("ORI-003"));
     fireEvent.click(screen.getByRole("button", { name: "Update request" }));
     await screen.findByRole("heading", { name: "Review orientation request" });
     await screen.findByTestId("approval-card");
@@ -459,7 +471,7 @@ describe("ScheduleOrientationPage", () => {
     const old = { ...proposed({ sessionId: "ORI-002" }), status: "expired" as const };
     const calls = installFetch([{ path: "/api/orientation-sessions", body: sessions }, { path: "/api/orientation-booking", body: noBooking }, ...actionsServer([old]).routes]);
     renderPage(`/requests/orientation?from=${old.actionId}`);
-    const prefilled = (await screen.findByLabelText("New hire orientation ORI-002, ORI-002")) as HTMLInputElement;
+    const prefilled = (await findRadio("ORI-002")) as HTMLInputElement;
     expect(prefilled.checked).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Review request" }));
     await screen.findByTestId("approval-card");
@@ -474,11 +486,11 @@ describe("ScheduleOrientationPage", () => {
     const calls = installFetch([{ path: "/api/orientation-sessions", body: sessions }, { path: "/api/orientation-booking", body: noBooking }, ...actionsServer([failed]).routes]);
     renderPage(`/requests/orientation?from=${failed.actionId}`);
     expect(await screen.findByText("ORI-001 is full now. Choose another session.")).toBeTruthy();
-    expect((screen.getByLabelText("New hire orientation ORI-001, ORI-001") as HTMLInputElement).checked).toBe(false);
+    expect((radio("ORI-001") as HTMLInputElement).checked).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "Review request" }));
     await screen.findByRole("alert");
     expect(calls.filter((c) => c.method === "POST")).toHaveLength(0);
-    fireEvent.click(screen.getByLabelText("New hire orientation ORI-003, ORI-003"));
+    fireEvent.click(radio("ORI-003"));
     fireEvent.click(screen.getByRole("button", { name: "Review request" }));
     await screen.findByTestId("approval-card");
     expect(calls.filter((c) => c.method === "POST").map((c) => c.body)).toEqual([{ tool: "schedule_orientation_session", arguments: { sessionId: "ORI-003" } }]);
