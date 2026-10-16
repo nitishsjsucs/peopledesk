@@ -2,12 +2,14 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { OnboardingProgress } from "../../src/shared/api-types.ts";
+import { BusinessDateContext } from "../../src/web/lib/business-date.tsx";
+import type { BusinessDate } from "../../src/web/lib/business-date.tsx";
 import { MeContext } from "../../src/web/lib/session.tsx";
 import { OnboardingPage } from "../../src/web/pages/OnboardingPage.tsx";
 import { installFetch, me } from "./fixtures.ts";
 import type { Route } from "./fixtures.ts";
 import { LocationProbe } from "./probe.tsx";
-import { DEEPA, deepaIds, everyoneIds, overviewFor, progressFor } from "./seed.ts";
+import { bookingFor, DEEPA, deepaIds, everyoneIds, overviewFor, progressFor } from "./seed.ts";
 
 const progress = (employeeId: string, fullName: string, percent: number, blocked = 0): OnboardingProgress => ({
   employeeId,
@@ -22,15 +24,18 @@ const progress = (employeeId: string, fullName: string, percent: number, blocked
 const deepa = { ...me, employeeId: DEEPA, fullName: "Deepa Foster", role: "manager" as const, region: "US" as const, directReportIds: deepaIds };
 const kenji = { ...me, employeeId: "E0016", fullName: "Kenji Nakamura", role: "hr_admin" as const };
 
-const renderAs = (who: typeof me, url = "/onboarding") =>
+const renderAs = (who: typeof me, url = "/onboarding", date: BusinessDate | null = null) =>
   render(
     <MemoryRouter initialEntries={[url]}>
       <MeContext.Provider value={who}>
-        <OnboardingPage />
-        <LocationProbe />
+        <BusinessDateContext.Provider value={date}>
+          <OnboardingPage />
+          <LocationProbe />
+        </BusinessDateContext.Provider>
       </MeContext.Provider>
     </MemoryRouter>,
   );
+const ON_ASOF: BusinessDate = { asOf: "2026-10-01", settled: true };
 
 const progressRoutes = (ids: readonly string[]): Route[] => ids.map((id) => ({ path: `/api/onboarding/${id}`, body: progressFor(id) }));
 const teamRoutes = (extra: Route[] = [], overview = overviewFor(deepaIds)): Route[] => [
@@ -120,8 +125,9 @@ describe("OnboardingPage team overview", () => {
     const hana = screen.getByTestId("person-E0051");
     expect(within(hana).getByRole("img").getAttribute("aria-label")).toBe("0 of 12 done · starts in 15 days");
     expect(segmentsIn(hana)).toEqual([["rest", 12]]);
-    // One legend for the whole list.
-    expect(screen.getAllByRole("list", { name: "Task bar key" })).toHaveLength(1);
+    // One legend for the whole list, not one per row.
+    const card = document.querySelector(".onboarding-people-card") as HTMLElement;
+    expect(within(card).getAllByRole("list", { name: "Task bar key" })).toHaveLength(1);
   });
 
   it("filters by a tile and writes ?show=, and Name sort and the selection also go into the URL", async () => {
@@ -226,6 +232,31 @@ describe("OnboardingPage team overview", () => {
     expect(stuckRows.find((r) => r.textContent?.includes("First one-on-one"))?.querySelector(".col-owner")?.textContent).toBe("You");
   });
 
+  it("shows a report's checklist as next steps, with the manager's own task as You and Book orientation", async () => {
+    installFetch(teamRoutes());
+    renderAs(deepa, "/onboarding?person=E0036");
+    const pane = await screen.findByTestId("checklist-E0036");
+    expect(screen.getByRole("heading", { level: 3, name: "Elijah Sullivan's checklist" })).toBeTruthy();
+    const overdue = within(pane).getByRole("heading", { level: 4, name: "Overdue (3)" });
+    const items = within(overdue.closest("section") as HTMLElement).getAllByRole("listitem");
+    expect(items.map((li) => li.querySelector(".task-title")?.textContent)).toEqual(["Submit tax and payroll forms", "First one-on-one with your manager", "Code of conduct training"]);
+    expect(items.map((li) => li.querySelector(".task-meta")?.textContent?.split(" · ")[0])).toEqual(["New hire", "You", "New hire"]);
+    const later = within(pane).getByRole("heading", { level: 4, name: "Later (1)" }).closest("section") as HTMLElement;
+    expect(within(later).getByText("Attend new hire orientation")).toBeTruthy();
+    expect(within(later).getByRole("link", { name: "Book orientation for Elijah Sullivan" }).getAttribute("href")).toBe("/requests/orientation?employee=E0036");
+    expect(within(pane).getByRole("img").getAttribute("aria-label")).toBe("Day 25 of 90 · target Dec 5, 2026 · 6 of 12 done · 3 overdue");
+    expect(within(pane).getByTestId("report-orientation").textContent).toContain("Elijah has not booked an orientation session yet.");
+    // No heading in the pane is above h4, under the pane's h3.
+    expect(within(pane).queryAllByRole("heading", { level: 3 })).toHaveLength(0);
+  });
+
+  it("shows a booked report's session and how soon it is", async () => {
+    installFetch(teamRoutes());
+    renderAs(deepa, "/onboarding?person=E0030");
+    const pane = await screen.findByTestId("checklist-E0030");
+    expect(within(pane).getByTestId("report-orientation").textContent).toBe("Orientation: ORI-008 on Oct 31, 2026 16:00 UTC (in 30 days).");
+  });
+
   it("puts the people list before the checklist in the DOM, as on screen", async () => {
     installFetch(teamRoutes());
     renderAs(deepa);
@@ -321,6 +352,82 @@ describe("OnboardingPage team overview", () => {
 });
 
 describe("OnboardingPage own checklist", () => {
+  const nadia = { ...me, employeeId: "E0025", fullName: "Nadia Fernandes", inOnboarding: true };
+  const gabriel = { ...me, employeeId: "E0022", fullName: "Gabriel Kowalski", inOnboarding: true };
+  const ownRoutes = (id: string): Route[] => [
+    { path: "/api/onboarding", body: progressFor(id) },
+    { path: "/api/orientation-booking", body: bookingFor(id) },
+  ];
+  const group = (name: string) => screen.getByRole("heading", { level: 3, name }).closest("section") as HTMLElement;
+  const metaOf = (section: HTMLElement) => within(section).getAllByRole("listitem").map((li) => `${li.querySelector(".task-title")?.textContent} | ${li.querySelector(".task-meta")?.textContent}`);
+
+  it("shows Nadia her plan, what is overdue for her, what waits on her manager, and Done folded", async () => {
+    installFetch(ownRoutes("E0025"));
+    renderAs(nadia, "/onboarding", ON_ASOF);
+    const bar = await screen.findByRole("img", { name: "Day 55 of 90 · target Nov 5, 2026 · 9 of 12 done · 3 overdue" });
+    expect(bar).toBeTruthy();
+    const orientation = screen.getByTestId("own-orientation");
+    expect(orientation.textContent).toContain("You have not booked an orientation session yet. Your orientation task was due Sep 21, 2026.");
+    expect(within(orientation).getByRole("link", { name: "Book orientation" }).getAttribute("href")).toBe("/requests/orientation");
+    expect(metaOf(group("Overdue (1)"))).toEqual(["Attend new hire orientation | You · Due Sep 21, 2026, overdue · in progress"]);
+    expect(within(group("Overdue (1)")).getByRole("link", { name: "Book orientation" }).getAttribute("href")).toBe("/requests/orientation");
+    expect(metaOf(group("Waiting on someone else (2)"))).toEqual([
+      "First one-on-one with your manager | Your manager · Due Aug 14, 2026, overdue · blocked",
+      "Team introductions | Your manager · Due Aug 17, 2026, overdue · blocked",
+    ]);
+    const done = screen.getByText("Done (9)").closest("details") as HTMLDetailsElement;
+    expect(done.open).toBe(false);
+    expect(within(done).getAllByRole("listitem", { hidden: true })).toHaveLength(9);
+    expect(screen.queryByRole("table")).toBeNull();
+  });
+
+  it("shows Gabriel his session, what is due soon, and a task due today as due today, not overdue", async () => {
+    installFetch(ownRoutes("E0022"));
+    renderAs(gabriel, "/onboarding", ON_ASOF);
+    expect(await screen.findByRole("img", { name: "Day 10 of 90 · target Dec 20, 2026 · 3 of 12 done · 3 overdue" })).toBeTruthy();
+    expect(screen.getByTestId("own-orientation").textContent).toBe(
+      "You're booked into New Hire Orientation (US, in person) (ORI-008) on Oct 31, 2026 16:00 UTC (in 30 days), Austin Office, Training Room 2.",
+    );
+    expect(metaOf(group("Overdue (2)"))).toEqual([
+      "Enroll in multi-factor authentication | You · Due Sep 22, 2026, overdue · in progress",
+      "Submit tax and payroll forms | You · Due Sep 24, 2026, overdue · in progress",
+    ]);
+    expect(metaOf(group("Due in the next 7 days (2)")).map((x) => x.split(" | ")[0])).toEqual(["Security awareness training", "Code of conduct training"]);
+    expect(metaOf(group("Later (1)"))).toEqual(["Benefits enrollment | You · Due Oct 21, 2026 · pending"]);
+    const waiting = metaOf(group("Waiting on someone else (4)"));
+    expect(waiting).toContain("Team introductions | Your manager · Due today · pending");
+    expect(waiting).toContain("First one-on-one with your manager | Your manager · Due Sep 28, 2026, overdue · blocked");
+    expect(screen.getByText("Done (3)").closest("details")?.open).toBe(false);
+  });
+
+  it("keeps the loading line until the business date has settled, so the table never swaps for groups", async () => {
+    installFetch(ownRoutes("E0025"));
+    const view = renderAs(nadia, "/onboarding", { asOf: null, settled: false });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.getByRole("status").textContent).toBe("Loading your checklist...");
+    expect(screen.queryByRole("table")).toBeNull();
+    view.rerender(
+      <MemoryRouter initialEntries={["/onboarding"]}>
+        <MeContext.Provider value={nadia}>
+          <BusinessDateContext.Provider value={ON_ASOF}>
+            <OnboardingPage />
+          </BusinessDateContext.Provider>
+        </MeContext.Provider>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByTestId("grouped-checklist")).toBeTruthy();
+    expect(screen.queryByText("Loading your checklist...")).toBeNull();
+  });
+
+  it("shows today's ungrouped table and never says overdue when /api/health failed", async () => {
+    installFetch(ownRoutes("E0025"));
+    renderAs(nadia, "/onboarding", { asOf: null, settled: true });
+    expect(await screen.findByRole("table")).toBeTruthy();
+    expect(screen.queryByTestId("grouped-checklist")).toBeNull();
+    expect(document.body.textContent).not.toMatch(/overdue/i);
+    expect(screen.getByTestId("own-orientation").textContent).toContain("You have not booked an orientation session yet.");
+  });
+
   it("shows the checklist of an employee in onboarding, and whether orientation is booked", async () => {
     const newHire = { ...me, employeeId: "E0025", fullName: "Nadia Fernandes", inOnboarding: true };
     const calls = installFetch([

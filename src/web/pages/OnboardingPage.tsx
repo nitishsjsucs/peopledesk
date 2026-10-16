@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import type { OnboardingOverview, OnboardingOverviewPerson, OnboardingOverviewStep } from "../../shared/api-types.ts";
 import { EmptyState } from "../components/EmptyState.tsx";
+import { Checklist, OrientationLine } from "../components/Checklist.tsx";
 import { ErrorBanner } from "../components/ErrorBanner.tsx";
 import { OwnBooking } from "../components/OrientationForm.tsx";
 import { StatTiles } from "../components/StatTiles.tsx";
@@ -10,6 +11,7 @@ import type { Tile } from "../components/StatTiles.tsx";
 import { TaskBar, TaskBarLegend } from "../components/TaskBar.tsx";
 import { OnboardingChecklist } from "../components/ToolResultCard.tsx";
 import { api, ApiClientError } from "../lib/api.ts";
+import { useBusinessDate } from "../lib/business-date.tsx";
 import { formatShortDate } from "../lib/format.ts";
 import { EMPTY_FILTER_TEXT, matchesShow, personLine, SHOW_FILTERS, SORT_LABEL, SORTS, sortPeople } from "../lib/onboarding-overview.ts";
 import type { ShowFilter, SortOrder } from "../lib/onboarding-overview.ts";
@@ -18,45 +20,75 @@ import { useAsync } from "../lib/use-async.ts";
 
 const bookUrl = (employeeId: string) => `/requests/orientation?employee=${encodeURIComponent(employeeId)}`;
 
+/**
+ * The viewer's own checklist as next steps (Checklist), once the checklist, the booking and the business
+ * date have settled, so the layout never swaps from a table to groups. Without a business date
+ * (/api/health failed) it is today's ungrouped table, and nothing is called overdue.
+ */
 function OwnChecklist() {
+  const { asOf, settled } = useBusinessDate();
   const progress = useAsync(() => api.onboarding(), []);
   const booking = useAsync(() => api.orientationBooking(), []);
   const noPlan = progress.error instanceof ApiClientError && progress.error.status === 404;
   if (noPlan) return null;
+  const ready = progress.data !== null && settled && (booking.data !== null || Boolean(booking.error));
+  const ownBooking = booking.data?.booking ?? null;
   return (
     <section aria-labelledby="own-onboarding">
       <h2 id="own-onboarding" style={{ fontSize: 17 }}>
         My checklist
       </h2>
       {booking.error ? <ErrorBanner error={booking.error} onRetry={booking.reload} /> : null}
-      {booking.data ? (
-        <div className="banner banner-info" data-testid="own-orientation">
-          {booking.data.booking ? (
-            <>
-              <span>
-                <OwnBooking booking={booking.data.booking} />
-              </span>
-            </>
-          ) : (
-            <>
-              <span>You have not booked an orientation session yet.</span>
-              <Link className="btn" to="/requests/orientation">
-                Book orientation
-              </Link>
-            </>
-          )}
-        </div>
-      ) : null}
       {progress.error ? <ErrorBanner error={progress.error} onRetry={progress.reload} /> : null}
-      {!progress.data && !progress.error ? (
+      {!progress.error && !ready ? (
         <p className="thinking" role="status">
           Loading your checklist...
         </p>
       ) : null}
-      {progress.data ? (
-        <div className="card">
-          <OnboardingChecklist progress={progress.data} />
+      {ready && progress.data && asOf ? (
+        <div className="card own-checklist-card">
+          <Checklist
+            progress={progress.data}
+            relation="self"
+            asOf={asOf}
+            booked={booking.data ? ownBooking !== null : null}
+            orientation={
+              booking.data ? (
+                <OrientationLine
+                  who="self"
+                  booking={ownBooking}
+                  asOf={asOf}
+                  taskDue={progress.data.tasks.find((t) => t.category === "orientation")?.dueDate ?? null}
+                  bookHref="/requests/orientation"
+                />
+              ) : null
+            }
+            headingLevel={3}
+            bookHref="/requests/orientation"
+          />
         </div>
+      ) : ready && progress.data ? (
+        <>
+          {booking.data ? (
+            <div className="banner banner-info" data-testid="own-orientation">
+              {ownBooking ? (
+                <span>
+                  <OwnBooking booking={ownBooking} />
+                </span>
+              ) : (
+                <>
+                  <span>You have not booked an orientation session yet.</span>
+                  <Link className="btn" to="/requests/orientation">
+                    Book orientation
+                  </Link>
+                </>
+              )}
+            </div>
+          ) : null}
+          <div className="card">
+            <OnboardingChecklist progress={progress.data} />
+          </div>
+        </>
       ) : null}
     </section>
   );
@@ -263,9 +295,27 @@ function TeamOnboarding() {
                 </h3>
                 {progress.error ? (
                   <ErrorBanner error={progress.error} onRetry={progress.reload} />
-                ) : checklist ? (
+                ) : checklist && current ? (
                   <div data-testid={`checklist-${checklist.employeeId}`}>
-                    <OnboardingChecklist progress={checklist} />
+                    <Checklist
+                      progress={checklist}
+                      relation={me.directReportIds.includes(current.employeeId) ? "manager" : "hr"}
+                      asOf={asOf}
+                      booked={current.orientation !== null}
+                      orientation={
+                        <OrientationLine
+                          who="report"
+                          fullName={current.fullName}
+                          booking={current.orientation}
+                          asOf={asOf}
+                          taskDue={current.orientationTaskDue}
+                          bookHref={bookUrl(current.employeeId)}
+                        />
+                      }
+                      headingLevel={4}
+                      bookHref={bookUrl(current.employeeId)}
+                      bookLabel={`Book orientation for ${current.fullName}`}
+                    />
                   </div>
                 ) : current ? (
                   <p className="thinking" role="status">

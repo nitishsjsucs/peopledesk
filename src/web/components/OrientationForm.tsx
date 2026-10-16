@@ -9,6 +9,7 @@ import { Link } from "react-router";
 import type { Me, OrientationBooking, PendingActionView, Session, Team } from "../../shared/api-types.ts";
 import { ScheduleOrientationSessionInput } from "../../shared/tool-schemas.ts";
 import { api, ApiClientError } from "../lib/api.ts";
+import { relativeDays } from "../lib/dates.ts";
 import { formatDateTime } from "../lib/format.ts";
 import { useMe } from "../lib/session.tsx";
 import { useAsync } from "../lib/use-async.ts";
@@ -60,11 +61,12 @@ function unavailableAttendee(id: string, me: Me, ownBooking: OrientationBooking 
   return `${m.fullName} (${id}) cannot be booked here.`;
 }
 
-/** "You're booked into ..." for the viewer's own booking. */
-export function OwnBooking({ booking }: { booking: OrientationBooking }) {
+/** "You're booked into ..." for the viewer's own booking; with the business date, also how soon it is. */
+export function OwnBooking({ booking, asOf = null }: { booking: OrientationBooking; asOf?: string | null }) {
   return (
     <>
-      You're booked into {booking.title} ({booking.sessionId}) on {formatDateTime(booking.startsAt)}, {booking.location}.
+      You're booked into {booking.title} ({booking.sessionId}) on {formatDateTime(booking.startsAt)}
+      {asOf ? ` (${relativeDays(booking.startsAt, asOf)})` : ""}, {booking.location}.
     </>
   );
 }

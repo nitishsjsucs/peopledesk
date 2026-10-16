@@ -1533,3 +1533,97 @@ main h1[tabindex="-1"]:focus {
     white-space: normal;
   }
 }
+
+/* Checklist as next steps: the plan header, then groups of two-line tasks (title, then owner, due date
+   and status). Done is folded into a details element. */
+.plan-header {
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.plan-header .task-line {
+  font-size: 14px;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.plan-header .chart-legend {
+  margin-bottom: 6px;
+}
+
+.plan-orientation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  font-size: 14px;
+}
+
+.plan-orientation .btn {
+  padding: 4px 12px;
+}
+
+.checklist-group-title,
+.checklist-done summary {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 14px 0 2px;
+}
+
+.checklist-done summary {
+  cursor: pointer;
+}
+
+.task-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.task-item {
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.task-item:last-child {
+  border-bottom: 0;
+}
+
+.task-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  flex-wrap: wrap;
+}
+
+.task-action {
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.task-meta {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.task-overdue {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+/* On a phone each task stays two lines: smaller meta text and pill, and a narrower card padding. */
+@media (max-width: 480px) {
+  .checklist .task-meta {
+    font-size: 12px;
+  }
+  .checklist .task-meta .status-pill {
+    font-size: 11px;
+    padding: 0 6px;
+  }
+  .onboarding-checklist,
+  .own-checklist-card {
+    padding: 12px;
+  }
+}
