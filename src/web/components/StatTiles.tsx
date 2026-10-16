@@ -1,7 +1,8 @@
 // A row of counts that are also the way in: buttons that filter the list below them (aria-pressed),
 // or links to a filtered page. Each count is a number of people (or tickets), never a share of a
-// whole, so tiles that overlap never read as parts of one total. The accessible name reads as a
-// sentence ("19 people with overdue tasks") and contains the visible number and label, built in one
+// whole, so tiles that overlap never read as parts of one total. The accessible name starts with the
+// visible number and label, in that order, so a speech-input user can say what they see (WCAG 2.5.3
+// Label in Name), then says what is counted ("19 with overdue tasks, 19 people"). It is built in one
 // place so it does not depend on how a browser joins the tile's inline and block parts.
 import type { Ref } from "react";
 import { Link } from "react-router";
@@ -14,9 +15,9 @@ export type Tile = {
   /** Visible label, lowercase first ("with overdue tasks"); the first letter is shown in capitals. */
   label: string;
   icon: TileIcon;
-  /** The counted noun for screen readers, after the number: ["person", "people"] by default. */
+  /** The counted noun for screen readers, read after the visible text: ["person", "people"] by default. */
   noun?: readonly [string, string];
-  /** Read after the label only, for example ", show them" on a link. */
+  /** Read last, after the noun, for example ", show them" on a link. */
   hint?: string;
   href?: string;
 };
@@ -38,10 +39,10 @@ export function TileIconSvg({ icon }: { icon: TileIcon }) {
   );
 }
 
-/** "19 people with overdue tasks": the number, the noun and the label, then any hint. */
+/** "19 with overdue tasks, 19 people": the visible number and label first, then the count with its noun, then any hint. */
 export function tileName(tile: Tile): string {
   const [one, many] = tile.noun ?? ["person", "people"];
-  return `${tile.count} ${tile.count === 1 ? one : many} ${tile.label}${tile.hint ?? ""}`;
+  return `${tile.count} ${tile.label}, ${tile.count} ${tile.count === 1 ? one : many}${tile.hint ?? ""}`;
 }
 
 function TileBody({ tile }: { tile: Tile }) {

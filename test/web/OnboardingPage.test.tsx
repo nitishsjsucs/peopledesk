@@ -71,10 +71,10 @@ describe("OnboardingPage team overview", () => {
     await screen.findByRole("group", { name: "Show" });
     const group = within(screen.getByRole("group", { name: "Show" }));
     expect(group.getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual([
-      "5 people in onboarding",
-      "3 people not booked",
-      "1 person with blocked tasks",
-      "3 people with overdue tasks",
+      "5 in onboarding, 5 people",
+      "3 not booked, 3 people",
+      "1 with blocked tasks, 1 person",
+      "3 with overdue tasks, 3 people",
     ]);
     expect(group.getAllByRole("button").map((b) => b.getAttribute("aria-pressed"))).toEqual(["true", "false", "false", "false"]);
     expect(calls.some((c) => c.path === "/api/team")).toBe(false);
@@ -85,10 +85,10 @@ describe("OnboardingPage team overview", () => {
     renderAs(kenji);
     expect(await screen.findByRole("heading", { level: 2, name: "Everyone in onboarding" })).toBeTruthy();
     await screen.findByRole("group", { name: "Show" });
-    expect(tile(/in onboarding$/).getAttribute("aria-label")).toBe("30 people in onboarding");
-    expect(tile(/not booked$/).getAttribute("aria-label")).toBe("12 people not booked");
-    expect(tile(/blocked tasks$/).getAttribute("aria-label")).toBe("14 people with blocked tasks");
-    expect(tile(/overdue tasks$/).getAttribute("aria-label")).toBe("19 people with overdue tasks");
+    expect(tile(/ in onboarding,/).getAttribute("aria-label")).toBe("30 in onboarding, 30 people");
+    expect(tile(/ not booked,/).getAttribute("aria-label")).toBe("12 not booked, 12 people");
+    expect(tile(/ blocked tasks,/).getAttribute("aria-label")).toBe("14 with blocked tasks, 14 people");
+    expect(tile(/ overdue tasks,/).getAttribute("aria-label")).toBe("19 with overdue tasks, 19 people");
   });
 
   it("puts the people who need attention first: most overdue, then most blocked, then not booked, then earliest start", async () => {
@@ -134,17 +134,17 @@ describe("OnboardingPage team overview", () => {
     installFetch(teamRoutes());
     renderAs(deepa);
     await screen.findByRole("list", { name: "People in onboarding" });
-    fireEvent.click(tile(/not booked$/));
-    expect(tile(/not booked$/).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(tile(/ not booked,/));
+    expect(tile(/ not booked,/).getAttribute("aria-pressed")).toBe("true");
     expect(rowIds()).toEqual(["E0036", "E0024", "E0033"]);
     expect(location()).toBe("/onboarding?show=unbooked");
-    fireEvent.click(tile(/blocked tasks$/));
+    fireEvent.click(tile(/ blocked tasks,/));
     expect(rowIds()).toEqual(["E0030"]);
-    fireEvent.click(tile(/overdue tasks$/));
+    fireEvent.click(tile(/ overdue tasks,/));
     expect(rowIds()).toEqual(["E0036", "E0030", "E0024"]);
     fireEvent.click(people().getByRole("button", { name: "Olivia Morgan" }));
     expect(location()).toBe("/onboarding?show=overdue&person=E0024");
-    fireEvent.click(tile(/in onboarding$/));
+    fireEvent.click(tile(/ in onboarding,/));
     expect(location()).toBe("/onboarding?person=E0024");
   });
 
@@ -152,7 +152,7 @@ describe("OnboardingPage team overview", () => {
     installFetch(teamRoutes());
     renderAs(deepa, "/onboarding?show=overdue&sort=name&person=E0036");
     expect(await screen.findByRole("heading", { level: 3, name: "Elijah Sullivan's checklist" })).toBeTruthy();
-    expect(tile(/overdue tasks$/).getAttribute("aria-pressed")).toBe("true");
+    expect(tile(/ overdue tasks,/).getAttribute("aria-pressed")).toBe("true");
     expect((screen.getByLabelText("Sort") as HTMLSelectElement).value).toBe("name");
     expect(rowIds()).toEqual(["E0036", "E0030", "E0024"]);
     expect(people().getByRole("button", { name: "Elijah Sullivan" }).getAttribute("aria-pressed")).toBe("true");
@@ -162,7 +162,7 @@ describe("OnboardingPage team overview", () => {
     installFetch(teamRoutes());
     renderAs(deepa, "/onboarding?show=blocked");
     await screen.findByRole("list", { name: "People in onboarding" });
-    expect(tile(/blocked tasks$/).getAttribute("aria-pressed")).toBe("true");
+    expect(tile(/ blocked tasks,/).getAttribute("aria-pressed")).toBe("true");
     expect(rowIds()).toEqual(["E0030"]);
   });
 
@@ -170,7 +170,7 @@ describe("OnboardingPage team overview", () => {
     installFetch(teamRoutes());
     renderAs(deepa, "/onboarding?show=everyone&sort=height&person=E9999");
     await screen.findByRole("list", { name: "People in onboarding" });
-    expect(tile(/in onboarding$/).getAttribute("aria-pressed")).toBe("true");
+    expect(tile(/ in onboarding,/).getAttribute("aria-pressed")).toBe("true");
     expect((screen.getByLabelText("Sort") as HTMLSelectElement).value).toBe("attention");
     expect(rowIds()).toEqual(["E0036", "E0030", "E0024", "E0033", "E0051"]);
     expect(await screen.findByRole("heading", { level: 3, name: `${FIRST}'s checklist` })).toBeTruthy();
@@ -183,13 +183,13 @@ describe("OnboardingPage team overview", () => {
     renderAs(deepa, "/onboarding?show=blocked");
     const empty = await screen.findByTestId("filter-empty");
     expect(empty.textContent).toContain("No one has blocked tasks.");
-    expect(tile(/blocked tasks$/).getAttribute("aria-label")).toBe("0 people with blocked tasks");
+    expect(tile(/ blocked tasks,/).getAttribute("aria-label")).toBe("0 with blocked tasks, 0 people");
     expect(screen.queryByRole("list", { name: "People in onboarding" })).toBeNull();
     const button = within(empty).getByRole("button", { name: "Show everyone" });
     button.focus();
     fireEvent.click(button);
     expect(location()).toBe("/onboarding");
-    expect(document.activeElement).toBe(tile(/in onboarding$/));
+    expect(document.activeElement).toBe(tile(/ in onboarding,/));
     expect(rowIds()).toHaveLength(5);
   });
 
@@ -206,7 +206,7 @@ describe("OnboardingPage team overview", () => {
     expect(within(screen.getByRole("group", { name: "Show" })).getAllByRole("button").map((b) => b.getAttribute("aria-pressed"))).toEqual(["false", "false", "false", "false"]);
     fireEvent.click(within(screen.getByTestId("step-filter")).getByRole("button", { name: "Show everyone" }));
     expect(location()).toBe("/onboarding");
-    expect(document.activeElement).toBe(tile(/in onboarding$/));
+    expect(document.activeElement).toBe(tile(/ in onboarding,/));
     expect(rowIds()).toHaveLength(30);
   });
 
@@ -215,7 +215,7 @@ describe("OnboardingPage team overview", () => {
     renderAs(deepa, "/onboarding?step=6");
     expect((await screen.findByTestId("step-filter")).textContent).toContain("Showing 1 person stuck on First one-on-one with your manager");
     expect(rowIds()).toEqual(["E0036"]);
-    fireEvent.click(tile(/not booked$/));
+    fireEvent.click(tile(/ not booked,/));
     expect(location()).toBe("/onboarding?show=unbooked");
     expect(screen.queryByTestId("step-filter")).toBeNull();
     expect(rowIds()).toEqual(["E0036", "E0024", "E0033"]);
@@ -227,7 +227,7 @@ describe("OnboardingPage team overview", () => {
     await screen.findByRole("list", { name: "People in onboarding" });
     expect(screen.queryByTestId("step-filter")).toBeNull();
     expect(rowIds()).toHaveLength(5);
-    expect(tile(/in onboarding$/).getAttribute("aria-pressed")).toBe("true");
+    expect(tile(/ in onboarding,/).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("shows where a manager's reports are stuck, with her own step as You", async () => {

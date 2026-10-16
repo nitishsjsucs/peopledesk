@@ -93,9 +93,9 @@ function YourOnboarding({ progress, progressError, onRetry, booking, asOf }: Pan
 /** For a manager or HR admin with people in onboarding: counts that open the filtered Onboarding view. */
 function TeamPanel({ overview }: { overview: OnboardingOverview }) {
   const count = (show: "unbooked" | "blocked" | "overdue") => overview.people.filter((p) => matchesShow(p, show)).length;
-  const tile = (show: "unbooked" | "blocked" | "overdue", label: string, hint: string, icon: Tile["icon"]): Tile => {
+  const tile = (show: "unbooked" | "blocked" | "overdue", label: string, hint: (n: number) => string, icon: Tile["icon"]): Tile => {
     const n = count(show);
-    return { key: show, count: n, label, hint, icon: n === 0 ? "check" : icon, href: `/onboarding?show=${show}` };
+    return { key: show, count: n, label, hint: hint(n), icon: n === 0 ? "check" : icon, href: `/onboarding?show=${show}` };
   };
   return (
     <section className="card home-panel" aria-labelledby="home-team" data-testid="team-onboarding">
@@ -111,9 +111,9 @@ function TeamPanel({ overview }: { overview: OnboardingOverview }) {
         mode="link"
         label="People in onboarding"
         tiles={[
-          tile("unbooked", "not booked", " for orientation, show them", "calendar"),
-          tile("blocked", "with blocked tasks", ", show them", "blocked"),
-          tile("overdue", "with overdue tasks", ", show them", "clock"),
+          tile("unbooked", "not booked", (n) => ` who ${n === 1 ? "needs" : "need"} orientation, show them`, "calendar"),
+          tile("blocked", "with blocked tasks", () => ", show them", "blocked"),
+          tile("overdue", "with overdue tasks", () => ", show them", "clock"),
         ]}
       />
     </section>

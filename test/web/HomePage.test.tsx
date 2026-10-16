@@ -127,9 +127,9 @@ describe("HomePage", () => {
     const team = await screen.findByTestId("team-onboarding");
     expect(team.textContent).toContain("5 in onboarding");
     expect(tiles().map((a) => [a.getAttribute("aria-label"), a.getAttribute("href"), a.querySelector(".stat-value")?.textContent])).toEqual([
-      ["3 people not booked for orientation, show them", "/onboarding?show=unbooked", "3"],
-      ["1 person with blocked tasks, show them", "/onboarding?show=blocked", "1"],
-      ["3 people with overdue tasks, show them", "/onboarding?show=overdue", "3"],
+      ["3 not booked, 3 people who need orientation, show them", "/onboarding?show=unbooked", "3"],
+      ["1 with blocked tasks, 1 person, show them", "/onboarding?show=blocked", "1"],
+      ["3 with overdue tasks, 3 people, show them", "/onboarding?show=overdue", "3"],
     ]);
     expect(within(team).getByRole("link", { name: "See everyone" }).getAttribute("href")).toBe("/onboarding");
     expect(screen.queryByTestId("quick-onboarding")).toBeNull();
@@ -152,7 +152,7 @@ describe("HomePage", () => {
     installFetch([noPending, { path: "/api/team/onboarding", body: none }]);
     renderHome(deepa);
     await screen.findByTestId("team-onboarding");
-    const zero = screen.getByRole("link", { name: "0 people with blocked tasks, show them" });
+    const zero = screen.getByRole("link", { name: "0 with blocked tasks, 0 people, show them" });
     expect(zero.querySelector(".stat-value")?.textContent).toBe("0");
     expect(zero.getAttribute("href")).toBe("/onboarding?show=blocked");
     expect(zero.querySelector("svg path")?.getAttribute("d")).toBe("M4.5 12.5l5 5 10-11");
