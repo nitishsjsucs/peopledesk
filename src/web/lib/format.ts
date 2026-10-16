@@ -10,6 +10,13 @@ export function formatDate(isoDate: string): string {
   return month ? `${month} ${Number(m[3])}, ${m[1]}` : isoDate;
 }
 
+/** "2026-10-31" or "2026-10-31T16:00:00.000Z" -> "Oct 31" (UTC), for a date whose year is clear from context. */
+export function formatShortDate(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  const month = m ? MONTHS[Number(m[2]) - 1] : undefined;
+  return m && month ? `${month} ${Number(m[3])}` : iso;
+}
+
 /** "2026-10-15T16:00:00.000Z" -> "Oct 15, 2026 16:00 UTC". */
 export function formatDateTime(iso: string): string {
   const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})/.exec(iso);

@@ -1,11 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router";
-import type { Team } from "../../shared/api-types.ts";
+import { Link, useSearchParams } from "react-router";
+import type { OnboardingOverview, OnboardingOverviewPerson } from "../../shared/api-types.ts";
 import { EmptyState } from "../components/EmptyState.tsx";
 import { ErrorBanner } from "../components/ErrorBanner.tsx";
 import { OwnBooking } from "../components/OrientationForm.tsx";
+import { StatTiles } from "../components/StatTiles.tsx";
+import type { Tile } from "../components/StatTiles.tsx";
+import { TaskBar, TaskBarLegend } from "../components/TaskBar.tsx";
 import { OnboardingChecklist } from "../components/ToolResultCard.tsx";
 import { api, ApiClientError } from "../lib/api.ts";
+import { formatShortDate } from "../lib/format.ts";
+import { EMPTY_FILTER_TEXT, matchesShow, personLine, SHOW_FILTERS, SORT_LABEL, SORTS, sortPeople } from "../lib/onboarding-overview.ts";
+import type { ShowFilter, SortOrder } from "../lib/onboarding-overview.ts";
 import { useMe } from "../lib/session.tsx";
 import { useAsync } from "../lib/use-async.ts";
 
@@ -55,29 +61,63 @@ function OwnChecklist() {
   );
 }
 
-type Member = Team["members"][number];
-type Filter = "all" | "unbooked" | "blocked";
-
-/** Managers see their direct reports in onboarding; HR sees everyone with a plan (the /api/team slice). */
+/**
+ * Managers see their direct reports in onboarding; HR sees everyone with a plan (GET /api/team/onboarding).
+ * Tiles count people and filter the list; each row has the person's task bar against due dates. The
+ * filter, the sort and the selected person live in the URL (?show=, ?sort=, ?person=), written with
+ * replace, so a reload, Back and links from Home keep them; invalid values are ignored.
+ */
 function TeamOnboarding() {
   const me = useMe();
-  const team = useAsync(() => api.team(), []);
-  const members = (team.data?.members ?? []).filter((m) => m.inOnboarding);
-  const [filter, setFilter] = useState<Filter>("all");
-  const [selected, setSelected] = useState<string | null>(null);
+  const overview = useAsync(() => api.teamOnboarding(), []);
+  // The previous rows stay on screen while Try again reloads them.
+  const lastData = useRef<OnboardingOverview | null>(null);
+  if (overview.data) lastData.current = overview.data;
+  const data = overview.data ?? lastData.current;
+  const people = data?.people ?? [];
+  const asOf = data?.asOf ?? "";
+
+  const [params, setParams] = useSearchParams();
+  const rawShow = params.get("show") ?? "";
+  const show: ShowFilter = (SHOW_FILTERS as readonly string[]).includes(rawShow) ? (rawShow as ShowFilter) : "all";
+  const rawSort = params.get("sort") ?? "";
+  const sort: SortOrder = rawSort === "name" || rawSort === "start" ? rawSort : "attention";
+  const personParam = params.get("person");
+  const update = (changes: Record<string, string | null>) =>
+    setParams(
+      (p) => {
+        const out = new URLSearchParams(p);
+        for (const [k, v] of Object.entries(changes)) {
+          if (v === null) out.delete(k);
+          else out.set(k, v);
+        }
+        return out;
+      },
+      { replace: true },
+    );
+
+  const counts = {
+    all: people.length,
+    unbooked: people.filter((p) => matchesShow(p, "unbooked")).length,
+    blocked: people.filter((p) => matchesShow(p, "blocked")).length,
+    overdue: people.filter((p) => matchesShow(p, "overdue")).length,
+  };
+  const shown = sortPeople(
+    people.filter((p) => matchesShow(p, show)),
+    sort,
+  );
+  const current = shown.find((m) => m.employeeId === personParam) ?? shown[0] ?? null;
+
   const checklistHeading = useRef<HTMLHeadingElement>(null);
+  const allTile = useRef<HTMLButtonElement>(null);
   const focusChecklist = useRef(false);
   const [selections, setSelections] = useState(0);
-  const unbooked = members.filter((m) => !m.booked);
-  const blocked = members.filter((m) => m.blockedTasks > 0);
-  const shown = filter === "unbooked" ? unbooked : filter === "blocked" ? blocked : members;
-  const current = shown.find((m) => m.employeeId === selected) ?? shown[0] ?? null;
   const progress = useAsync(() => (current ? api.onboardingFor(current.employeeId) : Promise.resolve(null)), [current?.employeeId]);
   // useAsync keeps the previous result while the next one loads; never show it under another name.
   const checklist = progress.data && !progress.loading && current && progress.data.employeeId === current.employeeId ? progress.data : null;
 
-  function select(m: Member) {
-    setSelected(m.employeeId);
+  function select(m: OnboardingOverviewPerson) {
+    update({ person: m.employeeId });
     // On a narrow screen the checklist sits below the whole list, out of view: focus moves to its
     // heading (which scrolls it into view), so a keyboard user reads on from there instead of being
     // sent back up the list by the next Tab. Wide screens show it beside the list; focus stays put.
@@ -102,81 +142,111 @@ function TeamOnboarding() {
     if (document.activeElement === checklistHeading.current) alignChecklist();
   }, [checklist, progress.error]);
 
-  const filterButton = (value: Filter, label: string, count: number) => (
-    <button type="button" className={`btn filter-btn${filter === value ? " active" : ""}`} aria-pressed={filter === value} onClick={() => setFilter(value)}>
-      {label} ({count})
-    </button>
-  );
+  // Show everyone removes the empty message and its button, so focus goes to the In onboarding tile.
+  const showEveryone = () => {
+    update({ show: null });
+    allTile.current?.focus();
+  };
+
+  const tiles: Tile[] = [
+    { key: "all", count: counts.all, label: "in onboarding", icon: "people" },
+    { key: "unbooked", count: counts.unbooked, label: "not booked", icon: "calendar" },
+    { key: "blocked", count: counts.blocked, label: "with blocked tasks", icon: "blocked" },
+    { key: "overdue", count: counts.overdue, label: "with overdue tasks", icon: "clock" },
+  ];
 
   return (
     <section aria-labelledby="team-onboarding">
       <h2 id="team-onboarding" style={{ fontSize: 17 }}>
         {me.role === "hr_admin" ? "Everyone in onboarding" : "Your direct reports in onboarding"}
       </h2>
-      {team.error ? <ErrorBanner error={team.error} onRetry={team.reload} /> : null}
-      {!team.data && !team.error ? (
+      {overview.error ? <ErrorBanner error={overview.error} onRetry={overview.reload} /> : null}
+      {!data && !overview.error ? (
         <p className="thinking" role="status">
           Loading the people you support...
         </p>
       ) : null}
-      {team.data && members.length === 0 ? <EmptyState title="No one you support is in onboarding" /> : null}
-      {members.length > 0 ? (
+      {data && people.length === 0 ? <EmptyState title="No one you support is in onboarding" /> : null}
+      {people.length > 0 ? (
         <>
-          <p className="onboarding-summary" data-testid="onboarding-summary">
-            {members.length} in onboarding · {unbooked.length} without orientation · {blocked.length} with blocked tasks
-          </p>
-          <div className="filters filter-buttons" role="group" aria-label="Show">
-            {filterButton("all", "All", members.length)}
-            {filterButton("unbooked", "Not booked", unbooked.length)}
-            {filterButton("blocked", "Has blocked tasks", blocked.length)}
-          </div>
-          {/* The list comes first in the DOM, as on screen (beside the checklist, or above it on a phone). */}
-          <div className="onboarding-grid">
-            <ul className="policy-list card onboarding-people" aria-label="People in onboarding">
-              {shown.map((m) => (
-                <li key={m.employeeId} className="person-row">
-                  <div className="person-main">
-                    <button
-                      type="button"
-                      className={`person-name${m.employeeId === current?.employeeId ? " active" : ""}`}
-                      aria-pressed={m.employeeId === current?.employeeId}
-                      onClick={() => select(m)}
-                    >
-                      {m.fullName}
-                    </button>
-                    <span className="message-meta">
-                      {m.percentComplete ?? 0}% complete
-                      {m.blockedTasks > 0 ? ` · ${m.blockedTasks} blocked` : ""}
-                    </span>
-                  </div>
-                  <div className="person-side">
-                    <span className={`status-pill ${m.booked ? "done" : "open"}`}>{m.booked ? "orientation booked" : "not booked"}</span>
-                    {m.booked ? null : (
-                      <Link to={bookUrl(m.employeeId)} aria-label={`Book orientation for ${m.fullName}`}>
-                        Book orientation
-                      </Link>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
-            <div className="card onboarding-checklist">
-              <h3 className="onboarding-checklist-title" tabIndex={-1} ref={checklistHeading}>
-                {current ? `${current.fullName}'s checklist` : "Checklist"}
-              </h3>
-              {progress.error ? (
-                <ErrorBanner error={progress.error} onRetry={progress.reload} />
-              ) : checklist ? (
-                <OnboardingChecklist progress={checklist} />
-              ) : current ? (
-                <p className="thinking" role="status">
-                  Loading {current.fullName}'s checklist...
-                </p>
-              ) : (
-                <p className="message-meta">No one matches this filter.</p>
-              )}
+          <StatTiles
+            mode="filter"
+            label="Show"
+            tiles={tiles}
+            selected={show}
+            onSelect={(key) => update({ show: key === "all" ? null : key })}
+            buttonRefs={{ all: allTile }}
+          />
+          {shown.length === 0 ? (
+            <div className="banner" data-testid="filter-empty">
+              <span>{EMPTY_FILTER_TEXT[show as Exclude<ShowFilter, "all">]}</span>
+              <button type="button" className="btn" onClick={showEveryone}>
+                Show everyone
+              </button>
             </div>
-          </div>
+          ) : (
+            /* The list comes first in the DOM, as on screen (beside the checklist, or above it on a phone). */
+            <div className="onboarding-grid">
+              <div className="card onboarding-people-card">
+                <div className="people-toolbar">
+                  <TaskBarLegend />
+                  <div className="field people-sort">
+                    <label htmlFor="team-sort">Sort</label>
+                    <select id="team-sort" value={sort} onChange={(e) => update({ sort: e.target.value === "attention" ? null : e.target.value })}>
+                      {SORTS.map((o) => (
+                        <option key={o} value={o}>
+                          {SORT_LABEL[o]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <ul className="policy-list onboarding-people" aria-label="People in onboarding">
+                  {shown.map((m) => (
+                    <li key={m.employeeId} className="person-row" data-testid={`person-${m.employeeId}`}>
+                      <div className="person-head">
+                        <button
+                          type="button"
+                          className={`person-name${m.employeeId === current?.employeeId ? " active" : ""}`}
+                          aria-pressed={m.employeeId === current?.employeeId}
+                          onClick={() => select(m)}
+                        >
+                          {m.fullName}
+                        </button>
+                        {m.orientation ? (
+                          <span className="status-pill done">Orientation {formatShortDate(m.orientation.startsAt)}</span>
+                        ) : (
+                          <span className="status-pill open">Not booked</span>
+                        )}
+                      </div>
+                      <TaskBar counts={{ total: m.tasks.total, done: m.tasks.done, overdue: m.tasks.overdue }} text={personLine(m, asOf)} />
+                      {m.orientation ? null : (
+                        <Link className="person-book" to={bookUrl(m.employeeId)} aria-label={`Book orientation for ${m.fullName}`}>
+                          Book orientation
+                        </Link>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="card onboarding-checklist">
+                <h3 className="onboarding-checklist-title" tabIndex={-1} ref={checklistHeading}>
+                  {current ? `${current.fullName}'s checklist` : "Checklist"}
+                </h3>
+                {progress.error ? (
+                  <ErrorBanner error={progress.error} onRetry={progress.reload} />
+                ) : checklist ? (
+                  <div data-testid={`checklist-${checklist.employeeId}`}>
+                    <OnboardingChecklist progress={checklist} />
+                  </div>
+                ) : current ? (
+                  <p className="thinking" role="status">
+                    Loading {current.fullName}'s checklist...
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          )}
         </>
       ) : null}
     </section>

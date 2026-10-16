@@ -1149,7 +1149,7 @@ main h1[tabindex="-1"]:focus {
 
 .onboarding-grid {
   display: grid;
-  grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 360px) minmax(0, 1fr);
   gap: 20px;
   align-items: start;
 }
@@ -1169,22 +1169,55 @@ main h1[tabindex="-1"]:focus {
   box-shadow: none;
 }
 
-.person-row {
+/* Each person: name and orientation pill, the task bar and its text line, then Book orientation. */
+.onboarding-people .person-row {
+  display: block;
+  padding: 10px 2px;
+}
+
+.onboarding-people .person-row:last-child {
+  border-bottom: 0;
+}
+
+.person-head {
+  display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: space-between;
+  gap: 4px 8px;
 }
 
-.person-main,
-.person-side {
+.person-book {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 14px;
+}
+
+.people-toolbar {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
 }
 
-.person-side {
-  align-items: flex-end;
-  gap: 4px;
+.people-toolbar .chart-legend {
+  margin: 0 0 6px;
+}
+
+.people-sort {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+
+.people-sort select {
+  width: auto;
+  padding: 4px 8px;
+  font-size: 14px;
 }
 
 .person-name {
