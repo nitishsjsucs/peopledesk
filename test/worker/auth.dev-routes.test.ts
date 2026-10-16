@@ -15,7 +15,40 @@ describe("dev login routes", () => {
   it("serves the persona picker", async () => {
     const res = await SELF.fetch("http://localhost/dev/login");
     expect(res.status).toBe(200);
-    expect(await res.text()).toContain("PeopleDesk local login");
+    const html = await res.text();
+    expect(html).toContain("PeopleDesk local login");
+    expect(html).toContain('const NEXT = "/";');
+    // A failed or empty persona list says what to run; a failed sign-in shows inline, never alert().
+    expect(html).toContain("No personas found. Run npm run seed:local, then reload this page.");
+    expect(html).toContain('role="alert"');
+    expect(html).not.toContain("alert(");
+  });
+
+  it("returns to a same-origin path after sign-in, and to / for anything else", async () => {
+    const nextOf = async (next: string) => {
+      const html = await (await SELF.fetch(`http://localhost/dev/login?next=${encodeURIComponent(next)}`)).text();
+      return /const NEXT = (".*?");/.exec(html)?.[1];
+    };
+    expect(await nextOf("/policies/POL-001")).toBe('"/policies/POL-001"');
+    expect(await nextOf("/requests/ticket?review=6f1c2b8e-3d1a-4c9b-9e1f-2a3b4c5d6e7f")).toBe(
+      '"/requests/ticket?review=6f1c2b8e-3d1a-4c9b-9e1f-2a3b4c5d6e7f"',
+    );
+    for (const bad of [
+      "//evil.example",
+      "https://evil.example",
+      "/\\evil.example",
+      "javascript:alert(1)",
+      "/dev/token",
+      "/dev",
+      "/DEV/login",
+      "/%2Fdev/login",
+      "/%64ev/login",
+      "/a<script>",
+      "/a\"b",
+      "",
+    ]) {
+      expect(await nextOf(bad), bad).toBe('"/"');
+    }
   });
 
   it("issues an Access-shaped token and an HttpOnly SameSite=Strict cookie", async () => {

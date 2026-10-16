@@ -912,7 +912,7 @@ type ApiError = { error: { code: "unauthenticated" | "forbidden" | "human_approv
 | POST | `/api/actions/:id/approve` | requester only, user identity only | `{}` | `{ status: "executed", result, replayed: boolean } \| { status: "failed", errorCode, replayed: boolean }`; a retry on an already decided row by the same requester returns the stored outcome with `replayed: true`; 403 `human_approval_required` for a service-token principal; 404 not mine; 409 `not_pending` (rejected); 410 expired |
 | POST | `/api/actions/:id/reject` | requester only (user or service token) | `{ reason?: string(0..200) }` | `{ status: "rejected" }` |
 | GET, POST | `/mcp` | any principal | MCP Streamable HTTP (JSON-RPC) | MCP responses; 401 without JWT |
-| GET | `/dev/login` | none, dev only | none | HTML persona picker (404 unless `AUTH_MODE=dev`) |
+| GET | `/dev/login` | none, dev only | `?next=` (optional same-origin path) | HTML persona picker (404 unless `AUTH_MODE=dev`); after sign-in it goes to `next` when that is a path starting with one `/`, made of path and query characters, and not under `/dev/`, otherwise to `/` |
 | GET | `/dev/personas` | none, dev only | none | `{ personas: Array<{ key, employeeId, email, role, description }> }` |
 | POST | `/dev/token` | none, dev only | `{ email }` | `{ token, expiresAt }` and sets `CF_Authorization` cookie (HttpOnly, SameSite=Strict, Path=/) |
 
@@ -1493,7 +1493,7 @@ React 19, `react-router` 8.4.0 (`createBrowserRouter`, `RouterProvider`), plain 
 
 Components: `AppShell` (nav, `UserBadge`), `ConversationList`, `MessageList`, `ChatComposer` (2000-char counter, disabled while a turn runs; focus returns to it when the turn ends if the send started there), `CitationChip` (title, `POL-014 v3`, "effective 2026-01-01"), `SourceDrawer` (passage quote, effective range, link to the version page; a modal dialog outside the app root that keeps Tab inside, makes the page behind it inert and returns focus to the chip), `EffectiveDateBadge`, `ApprovalCard` (preview fields, expiry countdown, Approve, Reject, Edit; a replayed approve shows the stored outcome; a decided card shows its outcome and the next step instead of the buttons), `ToolResultCard` (TicketTable, OnboardingChecklist, SessionTable), `TicketForm`, `OrientationForm`, `VersionTimeline`, `ErrorBanner`, `EmptyState`.
 
-Dev login is not part of the SPA: the Worker serves a minimal HTML persona picker at `/dev/login` in dev mode only, which posts to `/dev/token` and redirects to `/`.
+Dev login is not part of the SPA: the Worker serves a minimal HTML persona picker at `/dev/login` in dev mode only, which posts to `/dev/token` and redirects to `?next=` when it is a same-origin path outside `/dev/` (otherwise to `/`; since 2026-10-15, so "Switch persona" and the sign-in link return to the page the person was on).
 
 ## 16. Local versus production matrix
 

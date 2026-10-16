@@ -100,7 +100,28 @@ export const devRoutes = new Hono<AppEnv>()
     });
     return c.json({ token, expiresAt: new Date((iat + TOKEN_TTL_SECONDS) * 1000).toISOString() });
   })
-  .get("/login", (c) => c.html(LOGIN_HTML));
+  .get("/login", (c) => c.html(loginHtml(safeNext(c.req.query("next")))));
+
+const NEXT_RE = /^\/[A-Za-z0-9\-._~/?=&%]*$/;
+
+/**
+ * Where /dev/login goes after a persona is picked: a same-origin path only (it starts with one "/", not
+ * "//" or "/\\", uses only path and query characters, and is not under /dev/). Anything else is "/".
+ */
+export function safeNext(raw: string | undefined): string {
+  if (!raw || !NEXT_RE.test(raw) || raw.startsWith("//") || raw.startsWith("/\\")) return "/";
+  let path: string;
+  try {
+    path = decodeURIComponent((raw.split("?")[0] as string).toLowerCase());
+  } catch {
+    return "/";
+  }
+  if (path === "/dev" || path.startsWith("/dev/") || path.startsWith("//") || path.includes("\\")) return "/";
+  return raw;
+}
+
+// The target is embedded as a JSON string literal; "<" is escaped so it can never close the script.
+const loginHtml = (next: string) => LOGIN_HTML.replace("__NEXT_JSON__", () => JSON.stringify(next).replace(/</g, "\\u003c"));
 
 const LOGIN_HTML = `<!doctype html>
 <html lang="en">
@@ -119,33 +140,65 @@ const LOGIN_HTML = `<!doctype html>
   button:hover, button:focus-visible { border-color: #2f6fde; outline: none; box-shadow: 0 0 0 3px #2f6fde33; }
   .role { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: #2f6fde; }
   .desc { color: #5b6475; font-size: 13px; }
+  .error { color: #b42318; background: #fdecea; border: 1px solid #b42318; border-radius: 8px; padding: 10px 14px; }
+  .error:empty { display: none; }
+  code { font-size: 14px; }
 </style>
 </head>
 <body>
 <main>
   <h1>PeopleDesk local login</h1>
   <p class="note">Dev mode only. Pick a synthetic persona; the Worker signs an Access-shaped RS256 token with the local dev key.</p>
+  <p class="note" id="next-note" hidden></p>
+  <p class="error" id="login-error" role="alert"></p>
   <ul id="personas" aria-live="polite"><li>Loading personas...</li></ul>
 </main>
 <script>
+  const NEXT = __NEXT_JSON__;
   const list = document.getElementById("personas");
-  fetch("/dev/personas").then((r) => r.json()).then(({ personas }) => {
+  const errorBox = document.getElementById("login-error");
+  if (NEXT !== "/") {
+    const note = document.getElementById("next-note");
+    note.textContent = "After you pick a persona you go back to " + NEXT + ".";
+    note.hidden = false;
+  }
+  const noPersonas = () => {
     list.textContent = "";
-    for (const p of personas) {
-      const li = document.createElement("li");
-      const b = document.createElement("button");
-      const role = document.createElement("div"); role.className = "role"; role.textContent = p.role + " · " + p.key;
-      const name = document.createElement("div"); name.textContent = p.email + " (" + p.employeeId + ")";
-      const desc = document.createElement("div"); desc.className = "desc"; desc.textContent = p.description;
-      b.append(role, name, desc);
-      b.addEventListener("click", async () => {
-        const r = await fetch("/dev/token", { method: "POST", headers: { "content-type": "application/json" },
-          body: JSON.stringify({ email: p.email }) });
-        if (r.ok) location.href = "/"; else alert("Login failed: " + r.status);
-      });
-      li.append(b); list.append(li);
-    }
-  });
+    const li = document.createElement("li");
+    li.textContent = "No personas found. Run npm run seed:local, then reload this page.";
+    list.append(li);
+  };
+  fetch("/dev/personas")
+    .then((r) => { if (!r.ok) throw new Error("status " + r.status); return r.json(); })
+    .then(({ personas }) => {
+      if (!Array.isArray(personas) || personas.length === 0) return noPersonas();
+      list.textContent = "";
+      for (const p of personas) {
+        const li = document.createElement("li");
+        const b = document.createElement("button");
+        const role = document.createElement("div"); role.className = "role"; role.textContent = p.role + " · " + p.key;
+        const name = document.createElement("div"); name.textContent = p.email + " (" + p.employeeId + ")";
+        const desc = document.createElement("div"); desc.className = "desc"; desc.textContent = p.description;
+        b.append(role, name, desc);
+        b.addEventListener("click", async () => {
+          errorBox.textContent = "";
+          b.disabled = true;
+          try {
+            const r = await fetch("/dev/token", { method: "POST", headers: { "content-type": "application/json" },
+              body: JSON.stringify({ email: p.email }) });
+            if (r.ok) { location.href = NEXT; return; }
+            let message = "";
+            try { message = (await r.json()).error.message; } catch { message = ""; }
+            errorBox.textContent = "Sign-in failed (status " + r.status + ")" + (message ? ": " + message : ".");
+          } catch {
+            errorBox.textContent = "Sign-in failed: the dev server could not be reached. Check that npm run dev is running.";
+          }
+          b.disabled = false;
+        });
+        li.append(b); list.append(li);
+      }
+    })
+    .catch(noPersonas);
 </script>
 </body>
 </html>`;

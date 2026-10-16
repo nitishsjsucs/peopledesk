@@ -9,6 +9,7 @@ import {
   ConversationCreatedSchema,
   ConversationListSchema,
   ConversationSchema,
+  HealthSchema,
   MeSchema,
   OnboardingProgressSchema,
   OrientationBookingSchema,
@@ -47,14 +48,33 @@ export function setFetch(f: Fetch): void {
   fetchImpl = f;
 }
 
+export const NETWORK_MESSAGE = "Could not reach PeopleDesk. Check your connection and try again; if you have been away, reload the page.";
+
+const unauthenticatedListeners = new Set<() => void>();
+
+/** Called on every 401 (the session ended mid-use); returns an unsubscribe function. */
+export function onUnauthenticated(listener: () => void): () => void {
+  unauthenticatedListeners.add(listener);
+  return () => {
+    unauthenticatedListeners.delete(listener);
+  };
+}
+
 async function request<S extends z.ZodType>(method: "GET" | "POST", path: string, schema: S, body?: unknown): Promise<z.infer<S>> {
-  const res = await fetchImpl(path, {
-    method,
-    credentials: "same-origin",
-    headers: method === "POST" ? { "content-type": "application/json", accept: "application/json" } : { accept: "application/json" },
-    ...(method === "POST" ? { body: JSON.stringify(body ?? {}) } : {}),
-  });
-  const text = await res.text();
+  let res: Response;
+  let text: string;
+  try {
+    res = await fetchImpl(path, {
+      method,
+      credentials: "same-origin",
+      headers: method === "POST" ? { "content-type": "application/json", accept: "application/json" } : { accept: "application/json" },
+      ...(method === "POST" ? { body: JSON.stringify(body ?? {}) } : {}),
+    });
+    text = await res.text();
+  } catch {
+    // fetch rejects (a TypeError such as "Failed to fetch") only when no response arrived at all.
+    throw new ApiClientError(0, "network", NETWORK_MESSAGE, null);
+  }
   let json: unknown = null;
   try {
     json = text ? JSON.parse(text) : null;
@@ -62,10 +82,15 @@ async function request<S extends z.ZodType>(method: "GET" | "POST", path: string
     json = null;
   }
   if (!res.ok) {
+    if (res.status === 401) for (const listener of unauthenticatedListeners) listener();
     const parsed = ApiErrorSchema.safeParse(json);
     if (parsed.success) {
       const e = parsed.data.error;
       throw new ApiClientError(res.status, e.code, e.message, e.requestId, e.details);
+    }
+    // Not the Worker's JSON envelope: an HTML error page from a proxy or the platform.
+    if (res.status >= 500) {
+      throw new ApiClientError(res.status, "unavailable", `PeopleDesk is temporarily unavailable (status ${res.status}). Try again in a moment.`, null);
     }
     throw new ApiClientError(res.status, "internal", `Request failed with status ${res.status}.`, null);
   }
@@ -80,6 +105,7 @@ const qs = (params: Record<string, string | undefined>) => {
 };
 
 export const api = {
+  health: () => request("GET", "/api/health", HealthSchema),
   me: () => request("GET", "/api/me", MeSchema),
   conversations: () => request("GET", "/api/conversations", ConversationListSchema),
   createConversation: () => request("POST", "/api/conversations", ConversationCreatedSchema, {}),

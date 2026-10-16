@@ -1048,3 +1048,14 @@ label {
   cursor: not-allowed;
   color: var(--text-muted);
 }
+
+.user-badge-who {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-badge-action {
+  font-size: 13px;
+  white-space: nowrap;
+}
