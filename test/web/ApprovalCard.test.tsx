@@ -52,7 +52,7 @@ afterEach(() => {
 });
 
 describe("ApprovalCard", () => {
-  it("shows the preview fields and the expiry, hidden from screen readers", () => {
+  it("shows the preview fields and the expiry, readable by screen readers but never announced as it changes", () => {
     installFetch([]);
     renderCard(pendingTicket());
     expect(screen.getByText("New support ticket")).toBeTruthy();
@@ -60,7 +60,8 @@ describe("ApprovalCard", () => {
     expect(screen.getByText("Laptop will not boot")).toBeTruthy();
     const expiry = screen.getByTestId("approval-expiry");
     expect(expiry.textContent).toBe("Expires in 14 min");
-    expect(expiry.getAttribute("aria-hidden")).toBe("true");
+    expect(expiry.getAttribute("aria-hidden")).toBeNull();
+    expect(expiry.closest("[aria-live], [role=status], [role=alert]")).toBeNull();
     expect(screen.getByTestId("approval-announcer").textContent).toBe("");
   });
 
@@ -88,7 +89,11 @@ describe("ApprovalCard", () => {
   it("keeps focus on the button while the request is in flight, and on an error", async () => {
     const action = pendingTicket();
     let release: (r: Response) => void = () => {};
-    setFetch(() => new Promise<Response>((resolve) => (release = resolve)));
+    const calls: string[] = [];
+    setFetch((input, init) => {
+      calls.push(`${init?.method ?? "GET"} ${String(input)}`);
+      return new Promise<Response>((resolve) => (release = resolve));
+    });
     renderCard(action);
     const approve = screen.getByRole("button", { name: "Approve" });
     approve.focus();
@@ -98,6 +103,7 @@ describe("ApprovalCard", () => {
     expect(document.activeElement).toBe(approve);
     // A second click while busy sends nothing more.
     fireEvent.click(approve);
+    expect(calls).toEqual([`POST /api/actions/${action.actionId}/approve`]);
     release(new Response(JSON.stringify({ error: { code: "internal", message: "Internal error.", requestId: "r" } }), { status: 500 }));
     expect((await screen.findByRole("alert")).textContent).toBe("Internal error.");
     expect(document.activeElement).toBe(approve);
@@ -154,6 +160,7 @@ describe("ApprovalCard", () => {
     renderCard(action);
     fireEvent.click(screen.getByRole("button", { name: "Reject" }));
     await screen.findByText(/Rejected. Nothing was submitted./);
+    expect(outcome().querySelector(".status-pill")?.textContent).toBe("rejected");
     expect(calls[0]?.path).toBe(`/api/actions/${action.actionId}/reject`);
     expect(document.activeElement).toBe(outcome());
     expect(linkIn(outcome(), "Start again with these details")).toBe(`/requests/ticket?from=${action.actionId}`);
@@ -163,6 +170,9 @@ describe("ApprovalCard", () => {
     installFetch([]);
     renderCard(pendingTicket({ status: "rejected", supersededBy: "99999999-9999-4999-8999-999999999999" }));
     expect(outcome().textContent).toContain("Replaced by an edited request.");
+    // Stored as rejected, but the person never rejected it.
+    expect(outcome().querySelector(".status-pill")?.textContent).toBe("replaced");
+    expect(screen.getByTestId("approval-card").getAttribute("aria-label")).toBe("Request, replaced: New support ticket");
     expect(linkIn(outcome(), "See the new request")).toBe("/actions?focus=99999999-9999-4999-8999-999999999999");
   });
 

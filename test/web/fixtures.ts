@@ -58,7 +58,7 @@ export function pendingTicket(overrides: Partial<PendingActionView> = {}): Pendi
       fields: [
         { label: "Category", value: "IT" },
         { label: "Subject", value: "Laptop will not boot" },
-        { label: "Priority", value: "normal" },
+        { label: "Priority", value: "Normal" },
       ],
     },
     arguments: { category: "it", subject: "Laptop will not boot", description: "Black screen after the logo.", priority: "normal" },

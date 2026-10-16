@@ -24,6 +24,9 @@ describe("forms path", () => {
     const view = await proposeTicket(spares[0]!);
     expect(view).toMatchObject({ tool: "create_support_ticket", status: "awaiting_approval", source: "form" });
     expect(view.preview.fields.find((f) => f.label === "Subject")?.value).toBe(ticketArgs().subject);
+    // The card people approve labels values as the form does (Normal, not the stored value normal).
+    expect(view.preview.fields.find((f) => f.label === "Category")?.value).toBe("IT");
+    expect(view.preview.fields.find((f) => f.label === "Priority")?.value).toBe("Normal");
   });
 
   it("maps business-rule failures to 409 with a reason", async () => {

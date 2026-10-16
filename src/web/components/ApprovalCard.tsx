@@ -146,8 +146,9 @@ export function ApprovalCard({ action, highlight }: Props) {
     return () => clearInterval(t);
   }, [decision]);
 
-  // The countdown text is hidden from screen readers (it changes every second); this status region
-  // speaks only at one minute left and at expiry, and only for a change seen while the card is open.
+  // The countdown text is readable but not live (no card sits in a live region), so it is never read
+  // out as it changes; this status region speaks only at one minute left and at expiry, and only for a
+  // change seen while the card is open.
   useEffect(() => {
     if (decision) return;
     const before = remainingBefore.current;
@@ -216,7 +217,9 @@ export function ApprovalCard({ action, highlight }: Props) {
     if (!busy) navigate(editUrl(action), { state: STEP_FOCUS });
   };
 
-  const statusText = STATUS_LABEL[decision?.status ?? "awaiting_approval"];
+  // A request replaced by an edit is stored as rejected, but the person never rejected it.
+  const replaced = decision?.status === "rejected" && Boolean(decision.supersededBy);
+  const statusText = replaced ? "replaced" : STATUS_LABEL[decision?.status ?? "awaiting_approval"];
   const outcome = decision ? outcomeOf(action, decision) : null;
   return (
     <section
@@ -238,7 +241,7 @@ export function ApprovalCard({ action, highlight }: Props) {
       {outcome && decision ? (
         <div className="approval-outcome" ref={outcomeRef} tabIndex={-1} data-testid="approval-outcome">
           <p>
-            <span className={`status-pill ${decision.status}`}>{statusText}</span> {outcome.text}
+            <span className={`status-pill ${replaced ? "replaced" : decision.status}`}>{statusText}</span> {outcome.text}
           </p>
           {outcome.next ? <div className="approval-next">{outcome.next}</div> : null}
         </div>
@@ -254,7 +257,7 @@ export function ApprovalCard({ action, highlight }: Props) {
           <button type="button" className="btn" onClick={edit} aria-disabled={busy || undefined}>
             Edit
           </button>
-          <span className="approval-expiry" data-testid="approval-expiry" aria-hidden="true">
+          <span className="approval-expiry" data-testid="approval-expiry">
             Expires in {expiry}
           </span>
         </div>

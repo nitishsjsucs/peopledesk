@@ -13,6 +13,7 @@
 // partial write between propose and approve. It is an integrity check, not a security control:
 // anyone who can rewrite the row can rewrite the digest too.
 import { canonicalJson } from "../../shared/canonical-json.ts";
+import { TICKET_CATEGORY_LABEL, TICKET_PRIORITY_LABEL } from "../../shared/labels.ts";
 import type { PendingActionView } from "../../shared/api-types.ts";
 import type { ActionSource, ActionStatus, ToolErrorCode, WriteToolName } from "../../shared/domain.ts";
 import { sha256Hex } from "../../shared/sha256.ts";
@@ -74,15 +75,6 @@ export type ActionDeps = {
   orientation: OrientationService;
   ttlSeconds: number;
   hooks?: ActionHooks;
-};
-
-const TICKET_CATEGORY_LABEL: Record<CreateSupportTicketArgs["category"], string> = {
-  it: "IT",
-  payroll: "Payroll",
-  benefits: "Benefits",
-  facilities: "Facilities",
-  hr_general: "HR (general)",
-  access_request: "Access request",
 };
 
 const utc = (iso: string) => `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC`;
@@ -223,7 +215,7 @@ export class ActionService {
       { label: "Category", value: TICKET_CATEGORY_LABEL[args.category] },
       { label: "Subject", value: args.subject },
       { label: "Description", value: args.description },
-      { label: "Priority", value: args.priority },
+      { label: "Priority", value: TICKET_PRIORITY_LABEL[args.priority] },
     ];
     if (args.relatedPolicyId) fields.push({ label: "Related policy", value: args.relatedPolicyId });
     return { subjectEmployeeId: principal.employeeId, preview: { title: "New support ticket", fields } };
