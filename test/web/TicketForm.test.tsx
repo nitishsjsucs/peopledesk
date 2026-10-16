@@ -127,6 +127,8 @@ describe("TicketForm", () => {
     await screen.findByTestId("approval-card");
     expect(location()).toBe(`/requests/ticket?review=${id(1)}`);
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Review ticket request");
+    // The form (and its focused button) is gone, so the new step's heading takes focus.
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { level: 1, name: "Review ticket request" })));
     const actionCalls = calls.filter((c) => c.path === "/api/actions");
     expect(actionCalls.map((c) => `${c.method} ${c.path}`)).toEqual(["POST /api/actions", "GET /api/actions"]);
     expect(actionCalls[0]!.body).toEqual({
@@ -150,6 +152,8 @@ describe("TicketForm", () => {
     expect(screen.getByText("Laptop will not boot")).toBeTruthy();
     expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual(["GET /api/actions"]);
     expect(screen.queryByRole("link", { name: "Back to conversation" })).toBeNull();
+    // Opening the URL is not a step change on the page, so focus stays where the browser put it.
+    expect(document.activeElement).toBe(document.body);
   });
 
   it("says so when the review id is not among the viewer's requests", async () => {
@@ -206,6 +210,24 @@ describe("TicketForm", () => {
     }
   });
 
+  it("moves focus to the heading of the step a Start again or See the outcome link opens", async () => {
+    const done = pendingTicket({ actionId: id(65), status: "executed", result: { ticketId: "TKT-000151" }, conversationId: null });
+    installFetch(actionsServer([done]).routes);
+    const view = renderPage(`/requests/ticket?edit=${done.actionId}`);
+    fireEvent.click(await screen.findByRole("link", { name: "See the outcome" }));
+    await screen.findByTestId("approval-card");
+    expect(location()).toBe(`/requests/ticket?review=${done.actionId}`);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { level: 1, name: "Review ticket request" })));
+    view.unmount();
+    const rejected = pendingTicket({ actionId: id(66), status: "rejected", conversationId: null });
+    installFetch(actionsServer([rejected]).routes);
+    renderPage(`/requests/ticket?review=${rejected.actionId}`);
+    fireEvent.click(await screen.findByRole("link", { name: "Start again with these details" }));
+    expect((await screen.findByLabelText<HTMLInputElement>("Subject")).value).toBe("Laptop will not boot");
+    expect(location()).toBe(`/requests/ticket?from=${rejected.actionId}`);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { level: 1, name: "New support ticket" })));
+  });
+
   it("starts again from an earlier request: a prefilled form that proposes without supersedes", async () => {
     const old = pendingTicket({ actionId: id(70), status: "expired", conversationId: null });
     const calls = installFetch(actionsServer([old]).routes);
@@ -232,11 +254,13 @@ describe("TicketForm", () => {
     expect(location()).toBe(`/requests/ticket?edit=${id(1)}`);
     expect(screen.queryByTestId("approval-card")).toBeNull();
     expect((await screen.findByLabelText<HTMLInputElement>("Subject")).value).toBe("Monitor flickers");
+    expect(document.activeElement).toBe(screen.getByRole("heading", { level: 1, name: "Edit ticket request" }));
     fill("Subject", "Monitor flickers and goes black");
     fireEvent.click(screen.getByRole("button", { name: "Update request" }));
     await screen.findByRole("heading", { name: "Review ticket request" });
     await screen.findByTestId("approval-card");
     expect(location()).toBe(`/requests/ticket?review=${id(2)}`);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { level: 1, name: "Review ticket request" })));
     const posts = calls.filter((c) => c.method === "POST");
     expect(posts).toHaveLength(2);
     expect(posts[1]!.body).toMatchObject({

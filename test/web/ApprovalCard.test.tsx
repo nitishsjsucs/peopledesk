@@ -4,11 +4,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PendingActionView } from "../../src/shared/api-types.ts";
 import { setFetch } from "../../src/web/lib/api.ts";
 import { ApprovalCard } from "../../src/web/components/ApprovalCard.tsx";
+import { wantsStepFocus } from "../../src/web/lib/requests.ts";
 import { installFetch, pendingTicket } from "./fixtures.ts";
 
 function EditTarget() {
   const l = useLocation();
-  return <p data-testid="edit-target">{`${l.pathname}${l.search}`}</p>;
+  return (
+    <p data-testid="edit-target" data-step-focus={String(wantsStepFocus(l.state))}>
+      {`${l.pathname}${l.search}`}
+    </p>
+  );
 }
 
 function renderCard(action: PendingActionView) {
@@ -235,6 +240,8 @@ describe("ApprovalCard", () => {
     const view = renderCard(action);
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     expect((await screen.findByTestId("edit-target")).textContent).toBe(`/requests/ticket?edit=${action.actionId}`);
+    // The edit step's heading takes focus once it loads (RequestSteps), from chat as from the review step.
+    expect(screen.getByTestId("edit-target").getAttribute("data-step-focus")).toBe("true");
     view.unmount();
     const b = booking();
     renderCard(b);

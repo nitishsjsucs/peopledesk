@@ -18,6 +18,17 @@ export const editUrl = (a: ActionRef) => `${requestPath(a.tool)}?edit=${encodeUR
 export const startAgainUrl = (a: ActionRef) => `${requestPath(a.tool)}?from=${encodeURIComponent(a.actionId)}`;
 export const focusUrl = (actionId: string) => `/actions?focus=${encodeURIComponent(actionId)}`;
 
+/**
+ * Navigation state for a move to another step of a request page (propose, Edit, Start again, See the
+ * outcome). The step remounts, which removes the control that had focus, so the new step's heading
+ * takes focus once the request has loaded (RequestSteps).
+ */
+export const STEP_FOCUS = { stepFocus: true } as const;
+
+export function wantsStepFocus(state: unknown): boolean {
+  return typeof state === "object" && state !== null && (state as { stepFocus?: unknown }).stepFocus === true;
+}
+
 /** Whether the server would still accept an edit (a supersede) of this request. */
 export function isEditable(a: Pick<PendingActionView, "status" | "expiresAt">, nowMs: number = Date.now()): boolean {
   return a.status === "awaiting_approval" && Date.parse(a.expiresAt) > nowMs;

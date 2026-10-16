@@ -8,7 +8,7 @@ import { Link, useNavigate } from "react-router";
 import type { PendingActionView } from "../../shared/api-types.ts";
 import { api, ApiClientError } from "../lib/api.ts";
 import { formatRelativeExpiry } from "../lib/format.ts";
-import { editUrl, focusUrl, startAgainUrl } from "../lib/requests.ts";
+import { editUrl, focusUrl, STEP_FOCUS, startAgainUrl } from "../lib/requests.ts";
 import { errorMessage } from "./ErrorBanner.tsx";
 
 type Props = { action: PendingActionView; highlight?: boolean };
@@ -62,7 +62,7 @@ const field = (a: PendingActionView, label: string) => a.preview.fields.find((f)
 function outcomeOf(action: PendingActionView, d: Decision): { text: string; next: ReactNode } {
   const prefix = d.replayed ? "Already approved earlier. " : "";
   const startAgain = (
-    <Link className="btn" to={startAgainUrl(action)}>
+    <Link className="btn" to={startAgainUrl(action)} state={STEP_FOCUS}>
       Start again with these details
     </Link>
   );
@@ -100,7 +100,7 @@ function outcomeOf(action: PendingActionView, d: Decision): { text: string; next
       text: `${prefix}Approved, but it could not be completed: ${reason}.`,
       next:
         code === "session_full" ? (
-          <Link className="btn" to={startAgainUrl(action)}>
+          <Link className="btn" to={startAgainUrl(action)} state={STEP_FOCUS}>
             Pick another session
           </Link>
         ) : (
@@ -213,7 +213,7 @@ export function ApprovalCard({ action, highlight }: Props) {
       return { status: "rejected" };
     });
   const edit = () => {
-    if (!busy) navigate(editUrl(action));
+    if (!busy) navigate(editUrl(action), { state: STEP_FOCUS });
   };
 
   const statusText = STATUS_LABEL[decision?.status ?? "awaiting_approval"];

@@ -343,8 +343,10 @@ describe("ScheduleOrientationPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Review request" }));
     await screen.findByTestId("approval-card");
     expect(location()).toBe(`/requests/orientation?review=${id(1)}`);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { level: 1, name: "Review orientation request" })));
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     expect(await screen.findByRole("heading", { name: "Edit orientation request" })).toBeTruthy();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { level: 1, name: "Edit orientation request" })));
     expect(location()).toBe(`/requests/orientation?edit=${id(1)}`);
     expect(screen.queryByTestId("approval-card")).toBeNull();
     const prefilled = (await screen.findByLabelText("New hire orientation ORI-002, ORI-002")) as HTMLInputElement;
@@ -354,6 +356,7 @@ describe("ScheduleOrientationPage", () => {
     await screen.findByRole("heading", { name: "Review orientation request" });
     await screen.findByTestId("approval-card");
     expect(location()).toBe(`/requests/orientation?review=${id(2)}`);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { level: 1, name: "Review orientation request" })));
     const posts = calls.filter((c) => c.method === "POST");
     expect(posts).toHaveLength(2);
     expect(posts[1]!.body).toEqual({

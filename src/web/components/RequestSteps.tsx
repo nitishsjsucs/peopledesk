@@ -1,13 +1,13 @@
 // The steps of a request page (/requests/ticket and /requests/orientation): the form, the review card
 // and the edit form. Each step is addressed by the URL (see lib/requests.ts), so a reload, Back or
 // Forward shows the request as the server has it now, never a form for a request already replaced.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react-router";
 import type { PendingActionView } from "../../shared/api-types.ts";
 import type { WriteToolName } from "../../shared/domain.ts";
 import { api } from "../lib/api.ts";
-import { conversationOf, focusUrl, isEditable, requestPath, reviewUrl, startAgainUrl } from "../lib/requests.ts";
+import { conversationOf, focusUrl, isEditable, requestPath, reviewUrl, STEP_FOCUS, startAgainUrl, wantsStepFocus } from "../lib/requests.ts";
 import { useAsync } from "../lib/use-async.ts";
 import { ApprovalCard } from "./ApprovalCard.tsx";
 import { ErrorBanner } from "./ErrorBanner.tsx";
@@ -42,19 +42,37 @@ export function RequestSteps(props: Props) {
   return <Steps key={useLocation().search} {...props} />;
 }
 
+/**
+ * The step's h1. A move between steps on this page (navigation state STEP_FOCUS) removes the control
+ * that had focus, so the heading takes it once `focus` is true, that is once the request has loaded.
+ */
+function StepTitle({ children, focus = false }: { children: ReactNode; focus?: boolean }) {
+  const ref = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (focus) ref.current?.focus();
+  }, [focus]);
+  return (
+    <h1 className="page-title" tabIndex={-1} ref={ref}>
+      {children}
+    </h1>
+  );
+}
+
 function Steps({ tool, titles, subtitle, renderForm }: Props) {
   const [params] = useSearchParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const step = stepOf(params);
+  const focusStep = wantsStepFocus(location.state);
   const own = useAsync(() => (step.kind === "new" ? Promise.resolve(null) : api.actions()), []);
   // A successful propose replaces this history entry with the review step of the new request, so a
   // reload or Back never shows a form whose request was already sent.
-  const onProposed = (view: PendingActionView) => navigate(reviewUrl(view), { replace: true });
+  const onProposed = (view: PendingActionView) => navigate(reviewUrl(view), { replace: true, state: STEP_FOCUS });
 
   if (step.kind === "new") {
     return (
       <>
-        <h1 className="page-title">{titles.new}</h1>
+        <StepTitle focus={focusStep}>{titles.new}</StepTitle>
         <p className="page-subtitle">{subtitle}</p>
         {renderForm({ onProposed })}
       </>
@@ -65,7 +83,7 @@ function Steps({ tool, titles, subtitle, renderForm }: Props) {
   if (!own.data) {
     return (
       <>
-        <h1 className="page-title">{heading}</h1>
+        <StepTitle focus={focusStep && Boolean(own.error)}>{heading}</StepTitle>
         {own.error ? (
           <ErrorBanner error={own.error} onRetry={own.reload} />
         ) : (
@@ -82,7 +100,7 @@ function Steps({ tool, titles, subtitle, renderForm }: Props) {
   if (!action) {
     return (
       <>
-        <h1 className="page-title">{heading}</h1>
+        <StepTitle focus={focusStep}>{heading}</StepTitle>
         <div className="banner banner-info">
           <span>That request was not found among yours.</span>
           <Link className="btn" to="/actions">
@@ -92,7 +110,7 @@ function Steps({ tool, titles, subtitle, renderForm }: Props) {
       </>
     );
   }
-  if (action.tool !== tool) return <Navigate replace to={`${requestPath(action.tool)}?${params.toString()}`} />;
+  if (action.tool !== tool) return <Navigate replace to={`${requestPath(action.tool)}?${params.toString()}`} state={location.state} />;
 
   const conversationId = conversationOf(action, list);
   const backToChat = conversationId ? <Link to={`/chat/${conversationId}`}>Back to conversation</Link> : null;
@@ -101,7 +119,7 @@ function Steps({ tool, titles, subtitle, renderForm }: Props) {
   if (step.kind === "review") {
     return (
       <>
-        <h1 className="page-title">{heading}</h1>
+        <StepTitle focus={focusStep}>{heading}</StepTitle>
         {action.status === "awaiting_approval" ? (
           <p className="page-subtitle">Check the details below. Nothing is submitted until you approve.</p>
         ) : null}
@@ -117,19 +135,30 @@ function Steps({ tool, titles, subtitle, renderForm }: Props) {
   if (step.kind === "from") {
     return (
       <>
-        <h1 className="page-title">{heading}</h1>
+        <StepTitle focus={focusStep}>{heading}</StepTitle>
         <p className="page-subtitle">Prefilled from an earlier request. {subtitle}</p>
         {renderForm({ initialArgs: args, onProposed })}
       </>
     );
   }
 
-  return <EditStep action={action} heading={heading} subtitle={subtitle} backToChat={backToChat} renderForm={renderForm} onProposed={onProposed} />;
+  return (
+    <EditStep
+      action={action}
+      heading={heading}
+      focusHeading={focusStep}
+      subtitle={subtitle}
+      backToChat={backToChat}
+      renderForm={renderForm}
+      onProposed={onProposed}
+    />
+  );
 }
 
 function EditStep({
   action,
   heading,
+  focusHeading,
   subtitle,
   backToChat,
   renderForm,
@@ -137,6 +166,7 @@ function EditStep({
 }: {
   action: PendingActionView;
   heading: string;
+  focusHeading: boolean;
   subtitle: string;
   backToChat: ReactNode;
   renderForm: (props: RequestFormProps) => ReactNode;
@@ -156,7 +186,7 @@ function EditStep({
   if (!editable) {
     return (
       <>
-        <h1 className="page-title">{heading}</h1>
+        <StepTitle focus={focusHeading}>{heading}</StepTitle>
         <NotEditable action={action} />
         <p className="request-links">
           <Link to="/actions">All my requests</Link>
@@ -167,7 +197,7 @@ function EditStep({
   }
   return (
     <>
-      <h1 className="page-title">{heading}</h1>
+      <StepTitle focus={focusHeading}>{heading}</StepTitle>
       <p className="page-subtitle">{subtitle} Updating replaces the request you are editing.</p>
       {expiredWhileEditing ? (
         <div className="banner banner-info" role="status">
@@ -208,12 +238,12 @@ function NotEditable({ action }: { action: PendingActionView }) {
             See the new request
           </Link>
         ) : (
-          <Link className="btn" to={startAgainUrl(action)}>
+          <Link className="btn" to={startAgainUrl(action)} state={STEP_FOCUS}>
             Start again with these details
           </Link>
         )}
         {status === "executed" || status === "failed" ? (
-          <Link className="btn" to={reviewUrl(action)}>
+          <Link className="btn" to={reviewUrl(action)} state={STEP_FOCUS}>
             See the outcome
           </Link>
         ) : null}
