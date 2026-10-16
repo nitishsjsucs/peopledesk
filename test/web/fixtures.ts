@@ -70,7 +70,7 @@ export function pendingTicket(overrides: Partial<PendingActionView> = {}): Pendi
   };
 }
 
-export type Route = { method?: string; path: string | RegExp; status?: number; body: unknown | ((init: RequestInit) => unknown) };
+export type Route = { method?: string; path: string | RegExp; status?: number | ((init: RequestInit) => number); body: unknown | ((init: RequestInit) => unknown) };
 
 /** Installs a fetch that answers by method and path; records every call. */
 export function installFetch(routes: Route[]): Array<{ method: string; path: string; body: unknown }> {
@@ -83,8 +83,10 @@ export function installFetch(routes: Route[]): Array<{ method: string; path: str
       (r) => (r.method ?? "GET") === method && (typeof r.path === "string" ? r.path === url : r.path.test(url)),
     );
     if (!route) return new Response(JSON.stringify({ error: { code: "not_found", message: `no fake for ${method} ${url}`, requestId: "t" } }), { status: 404 });
-    const body = typeof route.body === "function" ? (route.body as (i: RequestInit) => unknown)(init ?? {}) : route.body;
-    return new Response(JSON.stringify(body), { status: route.status ?? 200, headers: { "content-type": "application/json" } });
+    // A body function may return a promise, to hold a response until the test releases it.
+    const body = await (typeof route.body === "function" ? (route.body as (i: RequestInit) => unknown)(init ?? {}) : route.body);
+    const status = typeof route.status === "function" ? route.status(init ?? {}) : (route.status ?? 200);
+    return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
   });
   return calls;
 }

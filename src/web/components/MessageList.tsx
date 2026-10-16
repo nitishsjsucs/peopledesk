@@ -8,25 +8,34 @@ export type ChatEntry =
   | { key: string; role: "user"; text: string }
   | { key: string; role: "assistant"; result: TurnResult; retryText?: string }
   | { key: string; role: "system"; text: string }
-  | { key: string; role: "failure"; message: string; retryText: string };
+  /** A send that failed over HTTP; `pending` while the page waits for a previous reply to finish. */
+  | { key: string; role: "failure"; message: string; retryText: string; pending?: boolean };
 
 type Props = {
   entries: ChatEntry[];
   sending: boolean;
+  /** Seconds since the current turn started (shown after 5 s). */
+  elapsedSeconds: number;
   onOpenCitation: (c: Citation) => void;
-  onRetry: (text: string) => void;
+  onRetry: (entry: ChatEntry) => void;
+  retryDisabled: boolean;
 };
 
 /** Splits the deterministic "Source:" line from the answer; the chips show the sources. */
-function answerBody(text: string): string {
+export function answerBody(text: string): string {
   return text.replace(/\n\n(Sources?: .*)$/s, "").trim();
 }
 
-export function MessageList({ entries, sending, onOpenCitation, onRetry }: Props) {
+export function MessageList({ entries, sending, elapsedSeconds, onOpenCitation, onRetry, retryDisabled }: Props) {
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => {
     end.current?.scrollIntoView?.({ block: "end" });
   }, [entries.length, sending]);
+  const retry = (e: ChatEntry) => (
+    <button type="button" className="btn btn-link" onClick={() => onRetry(e)} disabled={retryDisabled}>
+      Retry
+    </button>
+  );
   return (
     <div className="message-list" aria-live="polite" aria-busy={sending}>
       {entries.map((e) => {
@@ -48,9 +57,7 @@ export function MessageList({ entries, sending, onOpenCitation, onRetry }: Props
           return (
             <div key={e.key} className="message message-assistant kind-error" data-kind="error">
               <div className="bubble">{e.message}</div>
-              <button type="button" className="btn btn-link" onClick={() => onRetry(e.retryText)}>
-                Retry
-              </button>
+              {e.pending ? null : retry(e)}
             </div>
           );
         }
@@ -71,15 +78,24 @@ export function MessageList({ entries, sending, onOpenCitation, onRetry }: Props
               </div>
             ) : null}
             {r.kind === "approval_required" && r.pendingAction ? <ApprovalCard action={r.pendingAction} /> : null}
-            {r.kind === "error" && e.retryText ? (
-              <button type="button" className="btn btn-link" onClick={() => onRetry(e.retryText ?? "")}>
-                Retry
-              </button>
-            ) : null}
+            {r.kind === "error" && e.retryText ? retry(e) : null}
           </div>
         );
       })}
-      {sending ? <div className="thinking">PeopleDesk is working on it...</div> : null}
+      {sending ? (
+        <div className="thinking">
+          PeopleDesk is working on it...
+          {elapsedSeconds >= 5 ? (
+            <>
+              {" "}
+              <span aria-hidden="true" data-testid="turn-elapsed">
+                {elapsedSeconds} s.
+              </span>{" "}
+              Answers can take up to a minute.
+            </>
+          ) : null}
+        </div>
+      ) : null}
       <div ref={end} />
     </div>
   );

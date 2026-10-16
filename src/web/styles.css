@@ -453,6 +453,21 @@ label {
   padding: 0;
 }
 
+.conversation-list-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* The toggle exists for narrow screens only; wide screens always show the list. */
+.conversation-toggle {
+  display: none;
+}
+
+.chat-status {
+  padding: 16px;
+}
+
 .conversation-list a {
   display: block;
   padding: 8px 10px;
@@ -608,10 +623,22 @@ label {
   max-height: 160px;
 }
 
+.composer-foot {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.composer-blocked {
+  font-size: 13px;
+  color: var(--warning);
+}
+
 .composer-count {
   font-size: 12px;
   color: var(--text-faint);
-  align-self: flex-end;
+  margin-left: auto;
 }
 
 .composer-count.over {
@@ -840,7 +867,17 @@ label {
     grid-template-columns: 1fr;
   }
   .conversation-list {
-    max-height: 200px;
+    max-height: 50vh;
+  }
+  .conversation-list-head {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .conversation-toggle {
+    display: inline-flex;
+  }
+  .conversation-list.collapsed .conversation-items {
+    display: none;
   }
   .message,
   .message-assistant {
