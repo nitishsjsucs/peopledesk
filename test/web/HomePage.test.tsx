@@ -1,54 +1,41 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
 import type { Me } from "../../src/shared/api-types.ts";
+import { BusinessDateContext } from "../../src/web/lib/business-date.tsx";
+import type { BusinessDate } from "../../src/web/lib/business-date.tsx";
 import { MeContext } from "../../src/web/lib/session.tsx";
 import { HomePage } from "../../src/web/pages/HomePage.tsx";
 import { installFetch, me, pendingTicket } from "./fixtures.ts";
 import type { Route } from "./fixtures.ts";
+import { bookingFor, DEEPA, deepaIds, everyoneIds, overviewFor, progressFor } from "./seed.ts";
 
-const renderHome = (who: Me = me) =>
+const ON_ASOF: BusinessDate = { asOf: "2026-10-01", settled: true };
+
+const renderHome = (who: Me = me, date: BusinessDate | null = ON_ASOF) =>
   render(
     <MemoryRouter>
       <MeContext.Provider value={who}>
-        <HomePage />
+        <BusinessDateContext.Provider value={date}>
+          <HomePage />
+        </BusinessDateContext.Provider>
       </MeContext.Provider>
     </MemoryRouter>,
   );
 
 const noPending: Route = { path: "/api/actions?status=awaiting_approval", body: { actions: [] } };
-const member = (employeeId: string, inOnboarding: boolean, booked: boolean) => ({
-  employeeId,
-  fullName: `Person ${employeeId}`,
-  inOnboarding,
-  booked,
-  percentComplete: inOnboarding ? 40 : null,
-  blockedTasks: 0,
-});
-const progress = (percent: number) => ({
-  employeeId: "E0025",
-  fullName: "Nadia Fernandes",
-  startDate: "2026-09-01",
-  targetCompletionDate: "2026-11-30",
-  percentComplete: percent,
-  counts: { done: 5, inProgress: 1, pending: 6, blocked: 0 },
-  tasks: [],
-});
-const booking = {
-  sessionId: "ORI-008",
-  title: "New Hire Orientation (US, in person)",
-  startsAt: "2026-10-31T16:00:00.000Z",
-  durationMin: 120,
-  format: "in_person",
-  region: "US",
-  location: "Austin Office, Training Room 2",
-};
+const ownRoutes = (id: string): Route[] => [noPending, { path: "/api/orientation-booking", body: bookingFor(id) }, { path: "/api/onboarding", body: progressFor(id) }];
+const emptyOverview = { asOf: "2026-10-01", people: [], steps: [] };
 
-const newHire: Me = { ...me, employeeId: "E0025", fullName: "Nadia Fernandes", inOnboarding: true };
-const manager: Me = { ...me, employeeId: "E0007", fullName: "Deepa Foster", role: "manager", directReportIds: ["E0031", "E0032", "E0033", "E0034"] };
-const hrAdmin: Me = { ...me, employeeId: "E0016", fullName: "Kenji Nakamura", role: "hr_admin" };
+const nadia: Me = { ...me, employeeId: "E0025", fullName: "Nadia Fernandes", inOnboarding: true };
+const gabriel: Me = { ...me, employeeId: "E0022", fullName: "Gabriel Kowalski", inOnboarding: true };
+const deepa: Me = { ...me, employeeId: DEEPA, fullName: "Deepa Foster", role: "manager", directReportIds: deepaIds };
+const chen: Me = { ...me, employeeId: "E0014", fullName: "Chen Varma", role: "manager", directReportIds: ["E0041"] };
+const kenji: Me = { ...me, employeeId: "E0016", fullName: "Kenji Nakamura", role: "hr_admin" };
 
 const link = (name: string) => screen.queryByRole("link", { name: new RegExp(`^${name}`) });
+const panel = () => screen.getByTestId("your-onboarding");
+const tiles = () => within(screen.getByRole("list", { name: "People in onboarding" })).getAllByRole("link");
 
 describe("HomePage", () => {
   it("greets with the role badge and counts requests awaiting approval", async () => {
@@ -78,8 +65,8 @@ describe("HomePage", () => {
     expect(calls).toHaveLength(2);
   });
 
-  it("offers a tenured employee the everyday actions, and no orientation or onboarding", async () => {
-    installFetch([noPending]);
+  it("offers a tenured employee the everyday actions, and no orientation or onboarding (Emeka, as before)", async () => {
+    const calls = installFetch([noPending]);
     renderHome();
     await screen.findByTestId("pending-count");
     for (const [name, href] of [
@@ -92,40 +79,90 @@ describe("HomePage", () => {
     }
     expect(screen.queryByTestId("quick-book-orientation")).toBeNull();
     expect(screen.queryByTestId("quick-onboarding")).toBeNull();
+    expect(screen.queryByTestId("your-onboarding")).toBeNull();
+    expect(screen.queryByTestId("team-onboarding")).toBeNull();
+    expect(calls.map((c) => c.path)).toEqual(["/api/actions?status=awaiting_approval"]);
   });
 
-  it("offers an unbooked new hire orientation, with their onboarding percent", async () => {
-    installFetch([noPending, { path: "/api/orientation-booking", body: { booking: null } }, { path: "/api/onboarding", body: progress(42) }]);
-    renderHome(newHire);
-    const book = await screen.findByTestId("quick-book-orientation");
-    expect(book.getAttribute("href")).toBe("/requests/orientation");
-    await waitFor(() => expect(screen.getByTestId("quick-onboarding").textContent).toContain("42% complete."));
-  });
-
-  it("shows a booked new hire their session instead of a booking action", async () => {
-    installFetch([noPending, { path: "/api/orientation-booking", body: { booking } }, { path: "/api/onboarding", body: progress(60) }]);
-    renderHome({ ...newHire, employeeId: "E0022", fullName: "Gabriel Kowalski" });
-    const own = await screen.findByTestId("quick-own-orientation");
-    expect(own.textContent).toContain("New Hire Orientation (US, in person), Oct 31, 2026 16:00 UTC.");
+  it("shows Nadia her onboarding at a glance, with booking as the next step, and no separate cards for herself", async () => {
+    const calls = installFetch(ownRoutes("E0025"));
+    renderHome(nadia);
+    await waitFor(() => expect(within(panel()).getByTestId("next-for-you").textContent).toBe("Next for you: Book orientation. Your orientation task was due Sep 21, 2026."));
+    expect(within(panel()).getByRole("img").getAttribute("aria-label")).toBe("9 of 12 done · 3 overdue · 2 waiting on your manager");
+    expect(within(panel()).getByRole("heading", { level: 2, name: "Your onboarding" })).toBeTruthy();
+    expect(within(panel()).getByRole("link", { name: "Book orientation" }).getAttribute("href")).toBe("/requests/orientation");
+    expect(within(panel()).getByRole("link", { name: "View checklist" }).getAttribute("href")).toBe("/onboarding");
+    expect(within(panel()).getByTestId("home-orientation").textContent).toBe("Orientation: not booked yet.");
     expect(screen.queryByTestId("quick-book-orientation")).toBeNull();
+    expect(screen.queryByTestId("quick-onboarding")).toBeNull();
+    expect(screen.queryByTestId("quick-own-orientation")).toBeNull();
+    expect(calls.map((c) => c.path).sort()).toEqual(["/api/actions?status=awaiting_approval", "/api/onboarding", "/api/orientation-booking"]);
   });
 
-  it("tells a manager how many reports still need a session", async () => {
-    installFetch([
-      noPending,
-      { path: "/api/team", body: { members: [member("E0031", true, false), member("E0032", true, false), member("E0033", true, true), member("E0034", false, false)] } },
+  it("shows Gabriel what is overdue, who he waits on, and when his session is", async () => {
+    installFetch(ownRoutes("E0022"));
+    renderHome(gabriel);
+    await waitFor(() => expect(within(panel()).getByTestId("next-for-you").textContent).toBe("Next for you: Enroll in multi-factor authentication, overdue since Sep 22, 2026"));
+    expect(within(panel()).getByRole("img").getAttribute("aria-label")).toBe("3 of 12 done · 3 overdue · 4 waiting on others: your manager 2, HR 2");
+    expect(within(panel()).getByTestId("home-orientation").textContent).toBe("Orientation: Oct 31, 2026 16:00 UTC, in 30 days");
+    expect(within(panel()).queryByRole("link", { name: "Book orientation" })).toBeNull();
+  });
+
+  it("shows done counts only, never overdue or waiting, while the business date is unknown or /api/health failed", async () => {
+    installFetch(ownRoutes("E0025"));
+    const view = renderHome(nadia, { asOf: null, settled: false });
+    await waitFor(() => expect(within(panel()).getByRole("img").getAttribute("aria-label")).toBe("9 of 12 done"));
+    expect(screen.queryByTestId("next-for-you")).toBeNull();
+    view.unmount();
+    installFetch(ownRoutes("E0025"));
+    renderHome(nadia, { asOf: null, settled: true });
+    await waitFor(() => expect(within(panel()).getByRole("img").getAttribute("aria-label")).toBe("9 of 12 done"));
+    expect(panel().textContent).not.toMatch(/overdue|waiting/);
+    expect(within(panel()).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["Done", "Not done"]);
+  });
+
+  it("gives Deepa tiles that open the filtered Onboarding view, and keeps Book orientation for her reports", async () => {
+    const calls = installFetch([noPending, { path: "/api/team/onboarding", body: overviewFor(deepaIds) }]);
+    renderHome(deepa);
+    const team = await screen.findByTestId("team-onboarding");
+    expect(team.textContent).toContain("5 in onboarding");
+    expect(tiles().map((a) => [a.getAttribute("aria-label"), a.getAttribute("href"), a.querySelector(".stat-value")?.textContent])).toEqual([
+      ["3 people not booked for orientation, show them", "/onboarding?show=unbooked", "3"],
+      ["1 person with blocked tasks, show them", "/onboarding?show=blocked", "1"],
+      ["3 people with overdue tasks, show them", "/onboarding?show=overdue", "3"],
     ]);
-    renderHome(manager);
-    const book = await screen.findByTestId("quick-book-orientation");
-    expect(book.textContent).toContain("2 people need an orientation session.");
-    expect(screen.getByTestId("quick-onboarding").textContent).toContain("Your direct reports in onboarding.");
+    expect(within(team).getByRole("link", { name: "See everyone" }).getAttribute("href")).toBe("/onboarding");
+    expect(screen.queryByTestId("quick-onboarding")).toBeNull();
+    expect(screen.getByTestId("quick-book-orientation").textContent).toContain("3 people need an orientation session.");
+    expect(calls.map((c) => c.path).sort()).toEqual(["/api/actions?status=awaiting_approval", "/api/team/onboarding"]);
+    expect(calls.some((c) => c.path === "/api/team")).toBe(false);
   });
 
-  it("offers a manager without unbooked reports in onboarding no orientation action", async () => {
-    installFetch([noPending, { path: "/api/team", body: { members: [member("E0041", false, false)] } }]);
-    renderHome({ ...manager, employeeId: "E0014", fullName: "Chen Varma" });
-    await screen.findByTestId("pending-count");
+  it("gives Kenji 30 in onboarding with 12, 14 and 19", async () => {
+    installFetch([noPending, { path: "/api/team/onboarding", body: overviewFor(everyoneIds) }]);
+    renderHome(kenji);
+    expect((await screen.findByTestId("team-onboarding")).textContent).toContain("30 in onboarding");
+    expect(tiles().map((a) => a.querySelector(".stat-value")?.textContent)).toEqual(["12", "14", "19"]);
+    expect(screen.getByTestId("quick-book-orientation").textContent).toContain("12 people need an orientation session.");
+  });
+
+  it("shows a zero tile as 0 with a check, still a link", async () => {
+    const none = overviewFor(deepaIds);
+    for (const p of none.people) p.tasks.blocked = 0;
+    installFetch([noPending, { path: "/api/team/onboarding", body: none }]);
+    renderHome(deepa);
+    await screen.findByTestId("team-onboarding");
+    const zero = screen.getByRole("link", { name: "0 people with blocked tasks, show them" });
+    expect(zero.querySelector(".stat-value")?.textContent).toBe("0");
+    expect(zero.getAttribute("href")).toBe("/onboarding?show=blocked");
+    expect(zero.querySelector("svg path")?.getAttribute("d")).toBe("M4.5 12.5l5 5 10-11");
+  });
+
+  it("keeps Chen's Home as before: the Onboarding card and no tiles or Book orientation", async () => {
+    installFetch([noPending, { path: "/api/team/onboarding", body: emptyOverview }]);
+    renderHome(chen);
     await waitFor(() => expect(screen.getByTestId("quick-onboarding").textContent).toContain("Your direct reports in onboarding."));
+    expect(screen.queryByTestId("team-onboarding")).toBeNull();
     expect(screen.queryByTestId("quick-book-orientation")).toBeNull();
   });
 
@@ -134,43 +171,36 @@ describe("HomePage", () => {
     const calls = installFetch([
       noPending,
       {
-        path: "/api/team",
+        path: "/api/team/onboarding",
         status: () => (fail ? 500 : 200),
-        body: () => (fail ? { error: { code: "internal", message: "Internal error.", requestId: "r" } } : { members: [member("E0031", true, false)] }),
+        body: () => (fail ? { error: { code: "internal", message: "Internal error.", requestId: "r" } } : overviewFor(["E0024"])),
       },
     ]);
-    renderHome(manager);
+    renderHome(deepa);
     expect((await screen.findByRole("alert")).textContent).toBe("Could not check who you support still needs an orientation session. Internal error.Try again");
     expect(screen.queryByTestId("quick-book-orientation")).toBeNull();
     fail = false;
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect((await screen.findByTestId("quick-book-orientation")).textContent).toContain("1 person needs an orientation session.");
     expect(screen.queryByRole("alert")).toBeNull();
-    expect(calls.filter((c) => c.path === "/api/team")).toHaveLength(2);
+    expect(calls.filter((c) => c.path === "/api/team/onboarding")).toHaveLength(2);
   });
 
   it("says when a new hire's booking cannot be checked, with Try again", async () => {
     let fail = true;
     installFetch([
       noPending,
-      { path: "/api/onboarding", body: progress(60) },
+      { path: "/api/onboarding", body: progressFor("E0022") },
       {
         path: "/api/orientation-booking",
         status: () => (fail ? 500 : 200),
-        body: () => (fail ? { error: { code: "internal", message: "Internal error.", requestId: "r" } } : { booking }),
+        body: () => (fail ? { error: { code: "internal", message: "Internal error.", requestId: "r" } } : bookingFor("E0022")),
       },
     ]);
-    renderHome({ ...newHire, employeeId: "E0022", fullName: "Gabriel Kowalski" });
+    renderHome(gabriel);
     expect((await screen.findByRole("alert")).textContent).toContain("Could not check your orientation booking. Internal error.");
     fail = false;
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
-    expect((await screen.findByTestId("quick-own-orientation")).textContent).toContain("New Hire Orientation (US, in person)");
-  });
-
-  it("describes HR's onboarding scope as everyone in onboarding", async () => {
-    installFetch([noPending, { path: "/api/team", body: { members: [member("E0031", true, false)] } }]);
-    renderHome(hrAdmin);
-    expect((await screen.findByTestId("quick-onboarding")).textContent).toContain("Everyone in onboarding.");
-    expect((await screen.findByTestId("quick-book-orientation")).textContent).toContain("1 person needs an orientation session.");
+    expect((await screen.findByTestId("home-orientation")).textContent).toBe("Orientation: Oct 31, 2026 16:00 UTC, in 30 days");
   });
 });

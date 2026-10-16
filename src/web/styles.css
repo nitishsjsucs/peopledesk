@@ -1627,3 +1627,53 @@ main h1[tabindex="-1"]:focus {
     padding: 12px;
   }
 }
+
+/* Home panels: a new hire's onboarding at a glance, or a manager's and HR's people in onboarding. */
+.home-panel {
+  margin-bottom: 14px;
+}
+
+.home-panel + .quick-actions {
+  margin-top: 0;
+}
+
+.home-panel-title {
+  font-size: 16px;
+  margin: 0 0 4px;
+}
+
+.home-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin-bottom: 8px;
+}
+
+.home-panel-count {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.home-panel .task-line {
+  font-size: 14px;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.home-next,
+.home-orientation {
+  margin: 6px 0 0;
+  font-size: 14px;
+}
+
+.home-links {
+  align-items: center;
+  margin-bottom: 0;
+}
+
+.home-panel .stat-tiles {
+  margin-bottom: 0;
+}

@@ -158,6 +158,14 @@ describe("OnboardingPage team overview", () => {
     expect(people().getByRole("button", { name: "Elijah Sullivan" }).getAttribute("aria-pressed")).toBe("true");
   });
 
+  it("arrives from a Home tile with that tile pressed (/onboarding?show=blocked)", async () => {
+    installFetch(teamRoutes());
+    renderAs(deepa, "/onboarding?show=blocked");
+    await screen.findByRole("list", { name: "People in onboarding" });
+    expect(tile(/blocked tasks$/).getAttribute("aria-pressed")).toBe("true");
+    expect(rowIds()).toEqual(["E0030"]);
+  });
+
   it("ignores invalid URL values", async () => {
     installFetch(teamRoutes());
     renderAs(deepa, "/onboarding?show=everyone&sort=height&person=E9999");
