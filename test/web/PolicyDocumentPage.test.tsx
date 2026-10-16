@@ -24,10 +24,28 @@ const versionBody = (v: (typeof doc.versions)[number]) => ({
   r2Key: `policies/r1-all/POL-014/v0${v.version}.md`,
 });
 
+function renderAtWithCalls(path: string) {
+  const calls = installFetch([
+    { path: "/api/policies/POL-014", body: doc },
+    ...doc.versions.map((v) => ({ path: `/api/policies/POL-014/versions/${v.version}`, body: versionBody(v) })),
+    { path: /\/api\/policies\/POL-014\/versions\/\d+$/, status: 404, body: { error: { code: "not_found", message: "Version not found.", requestId: "r" } } },
+  ]);
+  render(
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route path="/policies/:docId" element={<PolicyDocumentPage />} />
+        <Route path="/policies/:docId/v/:version" element={<PolicyDocumentPage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  return () => calls;
+}
+
 function renderAt(path: string) {
   installFetch([
     { path: "/api/policies/POL-014", body: doc },
     ...doc.versions.map((v) => ({ path: `/api/policies/POL-014/versions/${v.version}`, body: versionBody(v) })),
+    { path: /\/api\/policies\/POL-014\/versions\/\d+$/, status: 404, body: { error: { code: "not_found", message: "Version not found.", requestId: "r" } } },
   ]);
   return render(
     <MemoryRouter initialEntries={[path]}>
@@ -48,7 +66,43 @@ describe("PolicyDocumentPage", () => {
     expect(items.map((li) => li.getAttribute("data-status"))).toEqual(["scheduled", "current", "superseded"]);
     expect(items[0]?.textContent).toContain("effective Mar 1, 2027");
     expect(items[2]?.textContent).toContain("effective Jun 1, 2025 until Jun 1, 2026");
-    expect(container.querySelector(".superseded-note")).toBeNull();
+    // The current version is not marked superseded; it notes the scheduled version instead.
+    expect(container.querySelector(".superseded-note")?.getAttribute("data-testid")).toBe("scheduled-note");
+  });
+
+  it("notes on the current version when a scheduled version takes effect, with a link to it", async () => {
+    renderAt("/policies/POL-014");
+    const note = await screen.findByTestId("scheduled-note");
+    expect(note.textContent).toBe("Version 3 takes effect on Mar 1, 2027.");
+    expect(within(note).getByRole("link", { name: "Version 3" }).getAttribute("href")).toBe("/policies/POL-014/v/3");
+  });
+
+  it("says a malformed version does not exist, links to the current one, and offers no retry", async () => {
+    const calls = renderAtWithCalls("/policies/POL-014/v/abc");
+    expect((await screen.findByTestId("version-missing")).textContent).toBe("Version abc of POL-014 does not exist.");
+    expect(screen.getByRole("link", { name: "See the current version" }).getAttribute("href")).toBe("/policies/POL-014/v/2");
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    expect(screen.queryByText("Loading...")).toBeNull();
+    expect(calls().some((c) => c.path.includes("/versions/"))).toBe(false);
+  });
+
+  it("says a version number the document does not have does not exist, even when its body answers 404", async () => {
+    renderAt("/policies/POL-014/v/99");
+    expect((await screen.findByTestId("version-missing")).textContent).toBe("Version 99 of POL-014 does not exist.");
+    expect(screen.getByRole("link", { name: "See the current version" }).getAttribute("href")).toBe("/policies/POL-014/v/2");
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("answers 'Policy not found' for a document the reader cannot see", async () => {
+    installFetch([{ path: "/api/policies/POL-099", status: 404, body: { error: { code: "not_found", message: "Policy not found.", requestId: "r" } } }]);
+    render(
+      <MemoryRouter initialEntries={["/policies/POL-099"]}>
+        <Routes>
+          <Route path="/policies/:docId" element={<PolicyDocumentPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByRole("heading", { level: 1, name: "Policy not found" })).toBeTruthy();
   });
 
   it("lists what changed from the previous version", async () => {
