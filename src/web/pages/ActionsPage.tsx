@@ -35,6 +35,17 @@ export function ActionsPage() {
           Loading your requests...
         </p>
       ) : null}
+      {focus && actions.data && !list.some((a) => a.actionId === focus) ? (
+        <div className="banner banner-info" data-testid="focus-not-found">
+          <span>That request was not found among yours.</span>
+          {/* With no requests at all, the empty state below offers the next steps instead. */}
+          {list.length > 0 ? (
+            <Link className="btn" to="/actions">
+              See all your requests
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
       {actions.data && list.length === 0 ? (
         <EmptyState title="No requests yet">
           <p>A ticket or an orientation booking you request waits here for your approval.</p>
@@ -43,14 +54,6 @@ export function ActionsPage() {
             <Link to="/chat">Ask in chat</Link>
           </p>
         </EmptyState>
-      ) : null}
-      {focus && actions.data && !list.some((a) => a.actionId === focus) ? (
-        <div className="banner banner-info">
-          <span>That request was not found among yours.</span>
-          <Link className="btn" to="/actions">
-            See all your requests
-          </Link>
-        </div>
       ) : null}
       {pending.length > 0 ? <h2 style={{ fontSize: 17 }}>Awaiting approval</h2> : null}
       {pending.map((a) => (

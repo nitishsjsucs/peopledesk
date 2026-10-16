@@ -64,6 +64,17 @@ describe("ActionsPage", () => {
     expect(screen.queryByText("Loading your requests...")).toBeNull();
   });
 
+  it("with no requests at all, says the focused one was not found and offers only the empty state's next steps", async () => {
+    renderAt("/actions?focus=nope", []);
+    const notFound = await screen.findByTestId("focus-not-found");
+    expect(notFound.textContent).toBe("That request was not found among yours.");
+    expect(screen.queryByRole("link", { name: "See all your requests" })).toBeNull();
+    expect(screen.getByText("No requests yet")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Open a ticket" }).getAttribute("href")).toBe("/requests/ticket");
+    // The message about the link comes first, then what to do instead.
+    expect(notFound.compareDocumentPosition(screen.getByText("No requests yet")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("shows an empty state with the next steps when there are no requests", async () => {
     renderAt("/actions", []);
     await screen.findByText("No requests yet");
