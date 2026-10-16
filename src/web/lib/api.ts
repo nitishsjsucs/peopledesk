@@ -15,6 +15,7 @@ import {
   OnboardingProgressSchema,
   OrientationBookingSchema,
   PendingActionViewSchema,
+  PolicyChangesSchema,
   PolicyDocumentSchema,
   PolicyListSchema,
   PolicyVersionSchema,
@@ -115,6 +116,8 @@ export const api = {
     request("POST", `/api/conversations/${encodeURIComponent(id)}/messages`, TurnResultSchema, { text }),
   policies: (filter: { category?: PolicyCategory; q?: string } = {}) =>
     request("GET", `/api/policies${qs({ category: filter.category, q: filter.q })}`, PolicyListSchema),
+  policyChanges: (filter: { category?: PolicyCategory } = {}) =>
+    request("GET", `/api/policy-changes${qs({ category: filter.category })}`, PolicyChangesSchema),
   policy: (docId: string) => request("GET", `/api/policies/${encodeURIComponent(docId)}`, PolicyDocumentSchema),
   policyVersion: (docId: string, version: number) =>
     request("GET", `/api/policies/${encodeURIComponent(docId)}/versions/${version}`, PolicyVersionSchema),

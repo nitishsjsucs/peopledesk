@@ -125,6 +125,25 @@ export const PolicyListQuerySchema = z.object({
   q: z.string().max(100).optional(),
 });
 
+/**
+ * GET /api/policy-changes: versions of readable documents that took effect in the last 90 days
+ * (effectiveFrom after asOf - 90 days, up to asOf) or are scheduled within a year (up to asOf + 365
+ * days), oldest first, at most 50. Metadata only: no document text.
+ */
+export const PolicyChangesQuerySchema = z.object({ category: z.enum(POLICY_CATEGORIES).optional() });
+export const PolicyChangeSchema = z.object({
+  docId: z.string(),
+  title: z.string(),
+  category: z.enum(POLICY_CATEGORIES),
+  audience: z.enum(AUDIENCES),
+  version: z.number().int(),
+  effectiveFrom: z.string(),
+  status: z.enum(VERSION_STATUSES),
+  changeSummary: z.string(),
+});
+export type PolicyChange = z.infer<typeof PolicyChangeSchema>;
+export const PolicyChangesSchema = z.object({ asOf: z.string(), changes: z.array(PolicyChangeSchema), truncated: z.boolean() });
+export type PolicyChanges = z.infer<typeof PolicyChangesSchema>;
 
 // Tickets
 

@@ -5,6 +5,7 @@ import type { PolicyCategory } from "../../shared/domain.ts";
 import { EffectiveDateBadge } from "../components/EffectiveDateBadge.tsx";
 import { EmptyState } from "../components/EmptyState.tsx";
 import { ErrorBanner } from "../components/ErrorBanner.tsx";
+import { PolicyChangesPanel } from "../components/PolicyChangesPanel.tsx";
 import { api } from "../lib/api.ts";
 import { useAsync } from "../lib/use-async.ts";
 import { useDebounced } from "../lib/use-debounced.ts";
@@ -25,7 +26,10 @@ export const CATEGORY_LABEL: Record<PolicyCategory, string> = {
 /** How long typing must pause before the list is asked for again. */
 export const SEARCH_DEBOUNCE_MS = 300;
 
-/** The readable policies. The filters live in ?q= and ?category=, so Back from a document keeps them. */
+/**
+ * The readable policies. The filters live in ?q= and ?category=, so Back from a document keeps them.
+ * Above the list, Policy changes follows the category (not the search).
+ */
 export function PoliciesPage() {
   const [params, setParams] = useSearchParams();
   const q = params.get("q") ?? "";
@@ -71,6 +75,7 @@ export function PoliciesPage() {
           <input id="policy-search" ref={searchRef} type="search" value={q} onChange={(e) => update("q", e.target.value)} placeholder="stipend, leave, travel..." />
         </div>
       </div>
+      <PolicyChangesPanel category={category} categoryLabel={category ? CATEGORY_LABEL[category] : null} />
       {list.error ? <ErrorBanner error={list.error} onRetry={list.reload} /> : null}
       {list.loading && !list.error ? (
         <p className="thinking" role="status">

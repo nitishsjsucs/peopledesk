@@ -18,6 +18,7 @@ import {
   OrientationBookingSchema,
   PendingActionViewSchema,
   PersonasSchema,
+  PolicyChangesSchema,
   PolicyDocumentSchema,
   PolicyListSchema,
   PolicyVersionSchema,
@@ -175,6 +176,16 @@ describe("policy routes", () => {
     const q = await expectJson(await api(`/api/policies?q=${encodeURIComponent(doc.title)}`, { as: "tenured_employee" }), PolicyListSchema);
     expect(q.documents.map((d) => d.docId)).toContain(doc.docId);
     await expectError(await api("/api/policies?category=snacks", { as: "tenured_employee" }), 400, "validation_error");
+  });
+
+  it("GET /api/policy-changes is clearance-filtered and accepts category", async () => {
+    const employee = await expectJson(await api("/api/policy-changes", { as: "tenured_employee" }), PolicyChangesSchema);
+    expect(employee.changes).toHaveLength(18);
+    expect(employee.changes.every((c) => c.audience === "all")).toBe(true);
+    expect((await expectJson(await api("/api/policy-changes", { as: "hr_admin" }), PolicyChangesSchema)).changes).toHaveLength(25);
+    const travel = await expectJson(await api("/api/policy-changes?category=travel_expense", { as: "hr_admin" }), PolicyChangesSchema);
+    expect(travel.changes.every((c) => c.category === "travel_expense")).toBe(true);
+    await expectError(await api("/api/policy-changes?category=snacks", { as: "tenured_employee" }), 400, "validation_error");
   });
 
   it("GET /api/policies/:docId and /versions/:version, with 404 above clearance", async () => {
@@ -398,6 +409,7 @@ describe("route inventory", () => {
     "GET /api/health",
     "GET /api/me",
     "GET /api/policies",
+    "GET /api/policy-changes",
     "GET /api/policies/:docId",
     "GET /api/policies/:docId/versions/:version",
     "GET /api/tickets",

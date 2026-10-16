@@ -1,11 +1,14 @@
 // Response fixtures computed from the committed seed (org.json) at the business date the tests pin,
 // with the definitions of SPEC section 8, so the web tests show what the personas see locally.
-import type { OnboardingOverview, OnboardingProgress, Ticket } from "../../src/shared/api-types.ts";
-import { addDaysIso } from "../../src/shared/dates.ts";
+import type { OnboardingOverview, OnboardingProgress, PolicyChanges, Ticket } from "../../src/shared/api-types.ts";
+import { addDaysIso, versionStatusAt } from "../../src/shared/dates.ts";
+import type { Manifest } from "../../src/shared/synth/dataset.ts";
 import type { Org } from "../../src/shared/synth/org.ts";
+import manifestJson from "../../data/generated/asof-2026-10-01/manifest.json";
 import orgJson from "../../data/generated/asof-2026-10-01/org.json";
 
 export const org = orgJson as unknown as Org;
+const manifest = manifestJson as unknown as Manifest;
 export const AS_OF = "2026-10-01";
 const NEXT7 = addDaysIso(AS_OF, 7);
 
@@ -123,4 +126,25 @@ export function sessionsAt() {
         seatsRemaining: Math.max(0, s.capacity - org.bookings.filter((b) => b.sessionId === s.id).length),
       })),
   };
+}
+
+/** GET /api/policy-changes for a clearance, from the committed manifest. */
+export function policyChangesFor(rank: 1 | 2 | 3, category?: string): PolicyChanges {
+  const lo = addDaysIso(AS_OF, -90);
+  const hi = addDaysIso(AS_OF, 365);
+  const changes = manifest.documents
+    .filter((d) => d.rank <= rank && (category === undefined || d.category === category))
+    .flatMap((d) => d.versions.filter((v) => v.effectiveFrom > lo && v.effectiveFrom <= hi).map((v) => ({ d, v })))
+    .sort((a, b) => (a.v.effectiveFrom === b.v.effectiveFrom ? (a.d.docId < b.d.docId ? -1 : 1) : a.v.effectiveFrom < b.v.effectiveFrom ? -1 : 1))
+    .map(({ d, v }) => ({
+      docId: d.docId,
+      title: d.title,
+      category: d.category,
+      audience: d.audience,
+      version: v.version,
+      effectiveFrom: v.effectiveFrom,
+      status: versionStatusAt({ effectiveFrom: v.effectiveFrom, effectiveTo: v.effectiveTo }, AS_OF),
+      changeSummary: v.changeSummary,
+    }));
+  return { asOf: AS_OF, changes: changes.slice(0, 50), truncated: changes.length > 50 };
 }

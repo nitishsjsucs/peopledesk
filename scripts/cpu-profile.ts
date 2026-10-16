@@ -465,6 +465,7 @@ for (let pass = 0; pass < passes; pass++) {
     await call("GET /api/me", p.email, "GET", "/api/me");
     await call("GET /api/conversations", p.email, "GET", "/api/conversations");
     await call("GET /api/policies", p.email, "GET", "/api/policies");
+    await call("GET /api/policy-changes", p.email, "GET", "/api/policy-changes");
     await call("GET /api/policies/:docId", p.email, "GET", `/api/policies/${doc.docId}`);
     await call("GET /api/policies/:docId/versions/:v", p.email, "GET", `/api/policies/${doc.docId}/versions/${v.version}`);
     await call("GET /api/tickets", p.email, "GET", "/api/tickets");

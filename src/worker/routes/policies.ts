@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { PolicyListQuerySchema } from "../../shared/api-types.ts";
+import { PolicyChangesQuerySchema, PolicyListQuerySchema } from "../../shared/api-types.ts";
 import { DOC_ID_RE } from "../../shared/domain.ts";
 import { AppError } from "../errors.ts";
 import type { AppEnv } from "../hono-env.ts";
@@ -16,6 +16,13 @@ export const policyRoutes = new Hono<AppEnv>()
     const s = c.get("services");
     const q = c.req.valid("query");
     return c.json({ documents: await s.policies.list(p.clearance, s.clock.asOf(), q) });
+  })
+  // Recent and scheduled versions of the documents the caller can read (metadata only). Not under
+  // /api/policies/, where GET /api/policies/:docId would take the path.
+  .get("/policy-changes", validate("query", PolicyChangesQuerySchema), async (c) => {
+    const s = c.get("services");
+    const { category } = c.req.valid("query");
+    return c.json(await s.policies.changes(c.get("principal").clearance, s.clock.asOf(), category ? { category } : {}));
   })
   .get("/policies/:docId", async (c) => {
     const docId = c.req.param("docId");

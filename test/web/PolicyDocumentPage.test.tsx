@@ -1,6 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { describe, expect, it } from "vitest";
+import { BusinessDateContext } from "../../src/web/lib/business-date.tsx";
 import { PolicyDocumentPage } from "../../src/web/pages/PolicyDocumentPage.tsx";
 import { installFetch } from "./fixtures.ts";
 
@@ -135,5 +136,36 @@ describe("PolicyDocumentPage", () => {
     renderAt("/policies/POL-014/v/3");
     await screen.findByText("Version 3 text.", { selector: ".markdown li" });
     expect(screen.getByRole("note").textContent).toContain("takes effect on Mar 1, 2027");
+  });
+
+  it("marks today between the scheduled and current versions, and how soon the scheduled one takes effect", async () => {
+    installFetch([
+      { path: "/api/policies/POL-014", body: doc },
+      ...doc.versions.map((v) => ({ path: `/api/policies/POL-014/versions/${v.version}`, body: versionBody(v) })),
+    ]);
+    render(
+      <MemoryRouter initialEntries={["/policies/POL-014"]}>
+        <BusinessDateContext.Provider value={{ asOf: "2026-10-01", settled: true }}>
+          <Routes>
+            <Route path="/policies/:docId" element={<PolicyDocumentPage />} />
+          </Routes>
+        </BusinessDateContext.Provider>
+      </MemoryRouter>,
+    );
+    await screen.findByText("Version 2 text.", { selector: ".markdown li" });
+    const items = within(screen.getByRole("list", { name: "Version history" })).getAllByRole("listitem");
+    expect(items.map((li) => li.getAttribute("data-status"))).toEqual(["scheduled", "today", "current", "superseded"]);
+    expect(items[1]?.textContent).toBe("Today: Oct 1, 2026");
+    expect(items[0]?.querySelector(".timeline-when")?.textContent).toBe("in 151 days");
+    expect(items[2]?.querySelector(".timeline-when")).toBeNull();
+  });
+
+  it("shows no Today item without a business date", async () => {
+    renderAt("/policies/POL-014");
+    await screen.findByText("Version 2 text.", { selector: ".markdown li" });
+    const timeline = screen.getByRole("list", { name: "Version history" });
+    expect(within(timeline).getAllByRole("listitem")).toHaveLength(3);
+    expect(timeline.textContent).not.toContain("Today");
+    expect(timeline.querySelector(".timeline-when")).toBeNull();
   });
 });

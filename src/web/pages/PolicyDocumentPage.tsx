@@ -4,6 +4,7 @@ import { EmptyState } from "../components/EmptyState.tsx";
 import { ErrorBanner } from "../components/ErrorBanner.tsx";
 import { VersionTimeline } from "../components/VersionTimeline.tsx";
 import { api, ApiClientError } from "../lib/api.ts";
+import { useBusinessDate } from "../lib/business-date.tsx";
 import { lineChanges } from "../lib/diff.ts";
 import { formatDate } from "../lib/format.ts";
 import { Markdown } from "../lib/markdown.tsx";
@@ -14,6 +15,7 @@ const isNotFound = (e: unknown) => e instanceof ApiClientError && e.status === 4
 
 export function PolicyDocumentPage() {
   const { docId = "", version } = useParams();
+  const { asOf } = useBusinessDate();
   const doc = useAsync(() => api.policy(docId), [docId]);
   const current = doc.data?.versions.find((v) => v.status === "current")?.version;
   const scheduled = doc.data?.versions.find((v) => v.status === "scheduled");
@@ -106,7 +108,7 @@ export function PolicyDocumentPage() {
         </article>
         <aside className="card">
           <h2 style={{ fontSize: 16, marginTop: 0 }}>{doc.data.title}</h2>
-          <VersionTimeline docId={docId} versions={doc.data.versions} selected={selected ?? 0} />
+          <VersionTimeline docId={docId} versions={doc.data.versions} selected={selected ?? 0} asOf={asOf} />
         </aside>
       </div>
     </>

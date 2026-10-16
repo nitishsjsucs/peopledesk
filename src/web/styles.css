@@ -1813,3 +1813,68 @@ main h1[tabindex="-1"]:focus {
   margin-right: 4px;
   vertical-align: -2px;
 }
+
+/* Policy changes: two dated groups above the policy list, four items each until Show all. */
+.policy-changes {
+  margin-bottom: 16px;
+}
+
+.policy-changes-title {
+  font-size: 16px;
+  margin: 0 0 4px;
+}
+
+.change-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 24px;
+}
+
+.change-group-title {
+  font-size: 14px;
+  margin: 10px 0 2px;
+}
+
+.change-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.change-item {
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.change-when {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.change-summary {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.change-more {
+  margin-top: 4px;
+  font-size: 14px;
+}
+
+.timeline-today {
+  border-left-color: var(--warning) !important;
+  font-size: 13px;
+  color: var(--warning);
+}
+
+.timeline-when {
+  font-size: 12px;
+  color: var(--warning);
+}
+
+@media (max-width: 800px) {
+  .change-groups {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
