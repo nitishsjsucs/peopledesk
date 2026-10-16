@@ -33,6 +33,9 @@ describe("dev login routes", () => {
     expect(await nextOf("/requests/ticket?review=6f1c2b8e-3d1a-4c9b-9e1f-2a3b4c5d6e7f")).toBe(
       '"/requests/ticket?review=6f1c2b8e-3d1a-4c9b-9e1f-2a3b4c5d6e7f"',
     );
+    // Dot segments are resolved as the browser resolves them, and the resolved path is what is returned.
+    expect(await nextOf("/policies/./POL-001")).toBe('"/policies/POL-001"');
+    expect(await nextOf("/x/../tickets?status=open")).toBe('"/tickets?status=open"');
     for (const bad of [
       "//evil.example",
       "https://evil.example",
@@ -43,6 +46,12 @@ describe("dev login routes", () => {
       "/DEV/login",
       "/%2Fdev/login",
       "/%64ev/login",
+      // Dot segments that the browser resolves to /dev/...
+      "/x/../dev/login",
+      "/%2e%2e/dev/token",
+      "/./dev/login",
+      "/x/%2E%2E/dev/login",
+      "/x/%2e%2e%2fdev/login",
       "/a<script>",
       "/a\"b",
       "",

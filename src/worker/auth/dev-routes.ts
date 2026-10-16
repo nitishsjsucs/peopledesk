@@ -107,17 +107,25 @@ const NEXT_RE = /^\/[A-Za-z0-9\-._~/?=&%]*$/;
 /**
  * Where /dev/login goes after a persona is picked: a same-origin path only (it starts with one "/", not
  * "//" or "/\\", uses only path and query characters, and is not under /dev/). Anything else is "/".
+ * The check applies to the path the browser will open: dot segments are resolved first, as the browser
+ * resolves them ("/x/../dev/login" and "/%2e%2e/dev/token" open /dev/...), and the resolved path and
+ * query are what is returned.
  */
 export function safeNext(raw: string | undefined): string {
   if (!raw || !NEXT_RE.test(raw) || raw.startsWith("//") || raw.startsWith("/\\")) return "/";
+  let url: URL;
   let path: string;
   try {
-    path = decodeURIComponent((raw.split("?")[0] as string).toLowerCase());
+    url = new URL(raw, "http://localhost");
+    path = decodeURIComponent(url.pathname.toLowerCase());
   } catch {
     return "/";
   }
-  if (path === "/dev" || path.startsWith("/dev/") || path.startsWith("//") || path.includes("\\")) return "/";
-  return raw;
+  if (url.origin !== "http://localhost") return "/";
+  // After decoding, a segment like "%2e%2e%2fdev" can still spell a dot segment; refuse those too.
+  const dotSegment = path.split("/").some((segment) => segment === "." || segment === "..");
+  if (path === "/dev" || path.startsWith("/dev/") || path.startsWith("//") || path.includes("\\") || dotSegment) return "/";
+  return `${url.pathname}${url.search}`;
 }
 
 // The target is embedded as a JSON string literal; "<" is escaped so it can never close the script.
