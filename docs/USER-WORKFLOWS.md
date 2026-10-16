@@ -1,6 +1,6 @@
 # User workflows
 
-How each kind of person moves through PeopleDesk, as the app works after the 2026-10-15 workflow round and the review fixes that followed it. The personas are the six seeded employees from `/dev/login` (all synthetic). The steps are covered by the web and Worker tests, and the main ones were also driven by a scripted browser (Playwright) against `npm run dev` with these personas, at 1280px and 375px wide. None of it was checked in production.
+How each kind of person moves through PeopleDesk, as the app works after the 2026-10-15 workflow round, the review fixes that followed it, and the 2026-10-16 round of status views and charts (see [Changed on 2026-10-16](#changed-on-2026-10-16), with screenshots). The personas are the six seeded employees from `/dev/login` (all synthetic). The steps are covered by the web and Worker tests, and the main ones were also driven by a scripted browser (Playwright) against `npm run dev` with these personas, at 1280px and 375px wide, in light and dark themes. Dates and counts below are those of the local dataset, whose business date is 2026-10-01. None of it was checked in production.
 
 Two rules hold in every workflow:
 
@@ -70,28 +70,31 @@ Locally, a reviewer signs in as any of them; in production, Cloudflare Access si
 ### Follow your tickets
 
 1. My tickets lists the tickets you opened, labeled as the form labels them (IT, HR (general), In progress).
-2. The status filter is part of the URL (`/tickets?status=open`), so it survives a reload and Back. A filter with no tickets offers to show all statuses, which leaves focus on the filter.
+2. The status buttons are also the counts ("All 5", "Open 3", "In progress 0", "Resolved 2", "Closed 0"). The list is asked for once, so changing the filter makes no request. The filter is part of the URL (`/tickets?status=open`), so it survives a reload and Back. A filter with no tickets offers to show all statuses, which moves focus to All.
+3. Last update, right after Subject, says how long each ticket has gone without an update ("Mar 22, 2026, 193 days ago"). An open or in progress ticket with no update for 30 days or more also says "No update in 193 days", so the one to chase stands out.
 
 ### Read policies
 
 1. Policies lists what you can read at today's version. Search and category are part of the URL, and the list is asked for once typing pauses; Back from a document returns to the same filtered list.
-2. Nothing matching offers Clear filters (focus then goes to the search box) and Ask in chat.
-3. A document shows its version timeline and what changed from the previous version. The current version notes a scheduled version ("Version N takes effect on <date>.") with a link; a superseded version links to the current one.
-4. A version that does not exist (`/v/abc`, `/v/99`) says so and links to the current version. A document above your clearance reads "Policy not found", the same as a missing one.
+2. Above the list, Policy changes shows what is coming up (soonest first) and what took effect in the last 90 days (newest first), among the policies you can read, for the chosen category: the date and how soon or how long ago ("Jan 1, 2027, in 92 days"), the title linked to that version, "version 1 to 2" or "new policy", and the change summary. Each group shows four until Show all. An employee sees 8 coming up and 10 recent; a manager 14 recent and HR 17.
+3. Nothing matching offers Clear filters (focus then goes to the search box) and Ask in chat.
+4. A document shows its version timeline and what changed from the previous version. The timeline marks "Today: Oct 1, 2026" between scheduled and earlier versions, and a scheduled version says how soon ("in 151 days"). The current version notes a scheduled version ("Version N takes effect on <date>.") with a link; a superseded version links to the current one.
+5. A version that does not exist (`/v/abc`, `/v/99`) says so and links to the current version. A document above your clearance reads "Policy not found", the same as a missing one.
 
 ## New hire, not booked (Nadia)
 
-1. Home shows "Book orientation" (you have not booked your session yet) and "My onboarding" with your percent complete. If the booking cannot be checked, Home says so, with Try again.
-2. Book orientation lists sessions in your region and Global first (the Region filter has the others and "All regions"). Click a session's title to choose it; full sessions cannot be chosen. A screen reader hears each session's title, id, place and start.
+1. Home shows "Your onboarding": the task bar with "9 of 12 done · 3 overdue · 2 waiting on your manager", "Next for you: Book orientation. Your orientation task was due Sep 21, 2026.", "Orientation: not booked yet.", Book orientation and View checklist. If the booking cannot be checked, Home says so, with Try again.
+2. Book orientation lists sessions in your region and Global first (the Region filter has the others and "All regions"), grouped by week. Above the table: "Your orientation task was due Sep 21, 2026." and "Soonest open session: New Hire Orientation (Global, virtual) (ORI-004), Oct 22, 2026 15:00 UTC, in 21 days" with Choose it, which checks that session and moves focus to it. Seats read "Full", "Only 2 left" or "18 of 19 left". Click a session's title to choose it; full sessions cannot be chosen. A screen reader hears each session's title, id, place and start, then its seats.
 3. Review request without a session says "Choose a session." and moves focus to the first open session.
 4. Review, Edit or Approve as in the ticket workflow. The approved card names the attendee, the session and its start (in the scripted run: "Done: Nadia Fernandes (E0025) is booked into New Hire Orientation (UK, virtual) (ORI-003), starting 2026-10-19 10:00 UTC.", a session picked on the edit step, which shows all regions) with "View onboarding".
-5. Onboarding shows your checklist and that you are booked. If the session filled up first, the card offers "Pick another session", which opens the form with that session marked full and nothing chosen ("ORI-003 is full now. Choose another session."); it cannot be sent again.
+5. Onboarding shows your checklist as next steps: the plan header ("Day 55 of 90 · target Nov 5, 2026 · 9 of 12 done · 3 overdue", then whether you are booked), Overdue (your orientation task, with Book orientation while unbooked), Waiting on someone else (two tasks owned by your manager, blocked and overdue), and Done (9) folded. After a booking is approved, the header says which session and how soon.
+6. If the session filled up before the approval, the card offers "Pick another session", which opens the form with that session marked full and nothing chosen ("ORI-003 is full now. Choose another session."); it cannot be sent again.
 
 ## New hire, booked (Gabriel)
 
-1. Home shows "Your orientation" with the session and start time instead of a booking action.
+1. Home shows "Your onboarding" with "3 of 12 done · 3 overdue · 4 waiting on others: your manager 2, HR 2", "Next for you: Enroll in multi-factor authentication, overdue since Sep 22, 2026" and "Orientation: Oct 31, 2026 16:00 UTC, in 30 days".
 2. Orientation says "You're booked into New Hire Orientation (US, in person) (ORI-008) on Oct 31, 2026 16:00 UTC, Austin Office, Training Room 2." with a link to Onboarding, and no form (and no subtitle about picking a session).
-3. Onboarding shows the same booking above the checklist.
+3. Onboarding shows the same booking, with "(in 30 days)", in the plan header, then Overdue (2), Due in the next 7 days (2), Later (1), Waiting on someone else (4, with Team introductions "Due today", not overdue) and Done (3).
 
 ## Tenured employee (Emeka)
 
@@ -101,10 +104,10 @@ Locally, a reviewer signs in as any of them; in production, Cloudflare Access si
 
 ## Manager with new hires (Deepa)
 
-1. Home says how many reports still need a session ("3 people need an orientation session") and offers Onboarding for your direct reports.
-2. Onboarding summarizes your reports in onboarding ("5 in onboarding · 3 without orientation · 1 with blocked tasks") and filters them: All, Not booked, Has blocked tasks.
-3. Each row shows the person's percent complete, blocked tasks and booking. Select a name to see their checklist; while it loads the pane says so, and a failure offers Try again. The list comes first, on screen and for a screen reader: left of the checklist on a laptop, above it on a phone. On a phone, selecting a name moves focus to the checklist's heading ("Zara Kim's checklist") and scrolls it to the top.
-4. "Book orientation" on an unbooked row opens the booking form with that person chosen (`?employee=E0024`), all regions shown. Opened from Home, with several people to book for, the form asks you to choose an attendee instead of picking the first.
+1. Home shows an Onboarding panel: "5 in onboarding" and three tiles, 3 not booked, 1 with blocked tasks and 3 with overdue tasks, each a link to Onboarding filtered that way (focus lands on the page heading, with that tile pressed). Book orientation still says how many reports need a session ("3 people need an orientation session").
+2. Onboarding counts your reports in four tiles that filter the list (In onboarding 5, Not booked 3, With blocked tasks 1, With overdue tasks 3; they can overlap). "Where onboarding is stuck" lists the checklist steps with blocked or overdue tasks among your reports ("7 stuck tasks: 1 blocked, 6 overdue. Owners: New hire 6, You 1"); a step's name filters the list to the people stuck on it and moves focus to "Showing 1 person stuck on First one-on-one with your manager", with Show everyone.
+3. Each row shows the person's name, their orientation date or Not booked, a task bar (done, overdue, not due yet) and a line such as "6 of 12 done · 3 overdue · day 25 of 90". The list starts with whoever needs attention (Elijah, Jasmine, Olivia, Zara, then Hana, who starts in 15 days); Sort offers Name and Start date. The filter, step, sort and selected person are in the URL. Select a name to see their checklist as next steps, with your own tasks as "You" (for Elijah, "First one-on-one with your manager" is overdue and yours) and Book orientation on the orientation task while unbooked; while it loads the pane says so, and a failure offers Try again. The list comes first, on screen and for a screen reader: left of the checklist on a laptop, above it on a phone. On a phone, selecting a name moves focus to the checklist's heading ("Zara Kim's checklist") and scrolls it to the top.
+4. "Book orientation" on an unbooked row opens the booking form with that person chosen (`?employee=E0024`), all regions shown. For Olivia the table has a row "Orientation task due Oct 21, 2026 for Olivia Morgan" after ORI-003 (Oct 19); ORI-004 onward say "after the due date". Every open session can still be chosen. Opened from Home, with several people to book for, the form asks you to choose an attendee instead of picking the first.
 5. Review and approve as above. Reports who are already booked are not offered. If the person a link or an edited request names was booked in the meantime, the form says so ("Zara Kim (E0033) already has an orientation session.") and asks you to choose an attendee; it never puts someone else in their place.
 6. If your team cannot be loaded, Home says so with Try again, instead of leaving out Book orientation.
 
@@ -115,7 +118,7 @@ Locally, a reviewer signs in as any of them; in production, Cloudflare Access si
 
 ## HR admin (Kenji)
 
-1. Home and Onboarding cover everyone in onboarding, with the same summary, filters and Book links as a manager.
+1. Home and Onboarding cover everyone in onboarding (30 people: 12 not booked, 14 with blocked tasks, 19 with overdue tasks), with the same tiles, task bars, sort and Book links as a manager. "Where onboarding is stuck" shows that 9 people are stuck on "Enroll in multi-factor authentication" (3 blocked, 6 overdue) and 6 on "First one-on-one with your manager", owned by their managers; HR's own steps read "HR (you)".
 2. Orientation lets HR choose any unbooked person in onboarding as the attendee; the attendee list starts on "Choose an attendee" unless a link names someone.
 
 ## Changed on 2026-10-15
@@ -143,3 +146,51 @@ A review walked the same personas by keyboard, screen reader output and at 375px
 - **Phone layouts.** The folded conversation list no longer stretches into an empty box above the composer. On Onboarding the people list is first in the page as well as on screen, so selecting someone no longer leaves focus far above the checklist.
 - **No dead ends or silent gaps.** The orientation subtitle no longer sits above "you're booked" or "you cannot book"; Onboarding no longer offers a booking link to a manager with no one in onboarding; Home says when the booking or the team cannot be checked; a focus link with no requests shows one message. The user badge keeps the name readable to screen readers on a phone.
 - **Dev login.** `?next=` resolves dot segments before refusing `/dev/` targets (`/x/../dev/login` used to pass). It was never an open redirect.
+
+## Changed on 2026-10-16
+
+A round of status views and charts, each answering a question one of the personas has. The data comes from what the API already returned, plus two small read-only routes: `GET /api/team/onboarding` (the people a manager or HR admin may already open one by one, with task counts against due dates and the stuck checklist steps, in one D1 batch after the directory slice) and `GET /api/policy-changes` (one indexed statement, metadata only). The business date that "overdue" and "in 21 days" are measured against is the `/api/health` answer the app already asked for. Every chart prints its numbers as text, uses the app's tokens in light and dark (`--chart-done` and `--chart-overdue` pass the dataviz palette checks against each other), and was checked at 375px and 1280px in both themes with no sideways scroll.
+
+- **Onboarding is an overview with status at a glance (Kenji, Deepa).** "Of the people I support, who is behind, who is blocked, who still needs orientation, and whom do I open first?" Before, the list showed 30 rows in employee id order with "58% complete · 1 blocked", and nothing was measured against due dates. Now four tiles count people and filter, each person has a task bar and a text line, and the list puts whoever needs attention first.
+
+  ![Kenji's Onboarding at 1280px: tiles, Where onboarding is stuck, and the people list with task bars](screenshots/onboarding-hr-1280-light.png)
+
+  ![Deepa's Onboarding at 375px in the dark theme](screenshots/onboarding-manager-375-dark.png)
+
+- **Where onboarding is stuck (Kenji, Deepa).** "Which step is holding people up, and who owns it?" A table of checklist steps with blocked and overdue tasks, with bars on one scale beside the numbers; a step filters the list to its people. Owner says who owns the step, not who must unblock it.
+- **Checklists are next steps (Nadia, Gabriel, and the manager and HR pane).** "What do I need to do now, what is overdue, and what am I waiting on?" Before, a 12-row table in template order with blocked manager tasks among done rows, and nothing marked overdue. Now a plan header with the task bar, then Overdue, Due in the next 7 days, Later, Waiting on someone else (your own checklist only) and Done folded. Nadia's page at 375px went from 1,548px to 900px tall. Without the business date the page shows the old table and never says overdue; the chat's onboarding card is unchanged.
+
+  ![Nadia's checklist at 1280px](screenshots/my-checklist-1280-light.png)
+
+  ![Gabriel's checklist at 375px in the dark theme](screenshots/my-checklist-375-dark.png)
+
+  ![Deepa viewing Elijah's checklist: her own task reads You, and the orientation task has Book orientation](screenshots/onboarding-report-checklist-1280-light.png)
+
+- **Home at a glance (everyone in onboarding, and the people who support them).** A new hire sees their task bar, the next thing to do and their booking; a manager or HR admin sees link tiles that open Onboarding filtered. Home makes the same number of requests as before (`/api/team/onboarding` replaced `/api/team` there).
+
+  ![Nadia's Home at 375px](screenshots/home-new-hire-375-light.png)
+
+  ![Deepa's Home at 1280px in the dark theme](screenshots/home-manager-1280-dark.png)
+
+- **The orientation picker shows the soonest session and the due date (Nadia, Deepa, Kenji).** "Which is the soonest session with seats, and is it before this person's orientation task is due?" Sessions are grouped by week, seats are plain text, Choose it picks the soonest open session in the filter, and the attendee's due date sits among the sessions. It is information only; the server still decides. Nadia's page at 375px went from 2,025px to 1,975px tall.
+
+  ![Deepa booking for Olivia at 1280px: the due date row after ORI-003](screenshots/orientation-picker-1280-light.png)
+
+  ![Nadia's picker at 375px in the dark theme](screenshots/orientation-picker-375-dark.png)
+
+- **My tickets says which ticket has waited longest (everyone).** The status buttons carry the counts, and Last update shows each ticket's age; Emeka's three open tickets were last updated 193, 120 and 118 days before the business date. The chat's ticket card is unchanged.
+
+  ![Emeka's tickets at 1280px](screenshots/tickets-1280-light.png)
+
+  ![Emeka's tickets at 375px in the dark theme](screenshots/tickets-375-dark.png)
+
+- **Policies say what changed and what is coming (everyone).** Before, a scheduled version was visible only inside its own document. Now Policy changes sits above the list, and a document's timeline marks today.
+
+  ![Policy changes at 1280px](screenshots/policy-changes-1280-light.png)
+
+  ![The Wellness Stipend timeline with Today at 375px in the dark theme](screenshots/policy-timeline-375-dark.png)
+
+- **Without color.** In forced colors (Windows high contrast) the task bar's segments are solid, hatched and outlined, and every value is also in the text line.
+
+  ![Task bars in forced colors](screenshots/task-bars-forced-colors.png)
+
