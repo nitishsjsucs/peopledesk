@@ -167,6 +167,44 @@ describe("HomePage", () => {
     expect(zero.querySelector("svg path")?.getAttribute("d")).toBe("M4.5 12.5l5 5 10-11");
   });
 
+  it("holds the Onboarding panel's place with a loading line while the overview loads, and never flashes the Onboarding card", async () => {
+    let release: (v: unknown) => void = () => {};
+    const held = new Promise((r) => (release = r));
+    installFetch([noPending, { path: "/api/team/onboarding", body: () => held.then(() => overviewFor(everyoneIds)) }]);
+    renderHome(kenji);
+    await screen.findByTestId("pending-count");
+    const loading = screen.getByTestId("team-onboarding-loading");
+    expect(within(loading).getByRole("heading", { level: 2, name: "Onboarding" })).toBeTruthy();
+    expect(within(loading).getByRole("status").textContent).toBe("Loading the people you support...");
+    expect(screen.queryByTestId("quick-onboarding")).toBeNull();
+    expect(screen.queryByTestId("team-onboarding")).toBeNull();
+    release(null);
+    expect(await screen.findByTestId("team-onboarding")).toBeTruthy();
+    expect(screen.queryByTestId("team-onboarding-loading")).toBeNull();
+    expect(screen.queryByTestId("quick-onboarding")).toBeNull();
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("shows the Onboarding card only after the overview has loaded with no one in it (Chen)", async () => {
+    let release: (v: unknown) => void = () => {};
+    const held = new Promise((r) => (release = r));
+    installFetch([noPending, { path: "/api/team/onboarding", body: () => held.then(() => emptyOverview) }]);
+    renderHome(chen);
+    await screen.findByTestId("pending-count");
+    expect(screen.getByTestId("team-onboarding-loading")).toBeTruthy();
+    expect(screen.queryByTestId("quick-onboarding")).toBeNull();
+    release(null);
+    expect((await screen.findByTestId("quick-onboarding")).textContent).toContain("Your direct reports in onboarding.");
+    expect(screen.queryByTestId("team-onboarding-loading")).toBeNull();
+  });
+
+  it("never shows the team loading frame to an employee", async () => {
+    installFetch(ownRoutes("E0025"));
+    renderHome(nadia);
+    await screen.findByTestId("pending-count");
+    expect(screen.queryByTestId("team-onboarding-loading")).toBeNull();
+  });
+
   it("keeps Chen's Home as before: the Onboarding card and no tiles or Book orientation", async () => {
     installFetch([noPending, { path: "/api/team/onboarding", body: emptyOverview }]);
     renderHome(chen);
@@ -188,6 +226,9 @@ describe("HomePage", () => {
     renderHome(deepa);
     expect((await screen.findByRole("alert")).textContent).toBe("Could not check who you support still needs an orientation session. Internal error.Try again");
     expect(screen.queryByTestId("quick-book-orientation")).toBeNull();
+    // After a failure the loading frame is gone and the Onboarding card still leads to the full page.
+    expect(screen.queryByTestId("team-onboarding-loading")).toBeNull();
+    expect(screen.getByTestId("quick-onboarding")).toBeTruthy();
     fail = false;
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect((await screen.findByTestId("quick-book-orientation")).textContent).toContain("1 person needs an orientation session.");

@@ -145,12 +145,15 @@ export function HomePage() {
   const teamPeople = overview.data?.people ?? [];
   const teamUnbooked = teamPeople.filter((p) => needsOrientation(p) && p.employeeId !== me.employeeId).length;
   const showTeamPanel = teamPeople.length > 0;
+  // While the overview loads, the panel's frame says so where the panel will be, and the Onboarding
+  // quick card waits: it appears only once the overview has loaded with no one in it, or failed.
+  const teamLoading = me.role !== "employee" && !overview.data && !overview.error;
 
   const quick: QuickAction[] = [{ to: "/chat", title: "Ask a question", hint: "Policy answers cite the version they come from." }];
   if (teamUnbooked > 0) {
     quick.push({ to: "/requests/orientation", title: "Book orientation", hint: `${people(teamUnbooked)}.`, testId: "quick-book-orientation" });
   }
-  if (me.role !== "employee" && !showTeamPanel) {
+  if (me.role !== "employee" && !teamLoading && !showTeamPanel) {
     const scope = me.role === "hr_admin" ? "Everyone in onboarding" : "Your direct reports in onboarding";
     quick.push({ to: "/onboarding", title: "Onboarding", hint: me.inOnboarding ? `${scope}, and your own checklist.` : `${scope}.`, testId: "quick-onboarding" });
   }
@@ -200,6 +203,16 @@ export function HomePage() {
           booking={booking.data ? booking.data.booking : undefined}
           asOf={asOf}
         />
+      ) : null}
+      {teamLoading ? (
+        <section className="card home-panel" aria-labelledby="home-team" data-testid="team-onboarding-loading">
+          <h2 id="home-team" className="home-panel-title">
+            Onboarding
+          </h2>
+          <p className="thinking" role="status">
+            Loading the people you support...
+          </p>
+        </section>
       ) : null}
       {showTeamPanel && overview.data ? <TeamPanel overview={overview.data} /> : null}
       <div className="quick-actions">
