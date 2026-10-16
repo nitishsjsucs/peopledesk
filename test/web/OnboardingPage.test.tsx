@@ -233,7 +233,7 @@ describe("OnboardingPage team overview", () => {
   it("shows where a manager's reports are stuck, with her own step as You", async () => {
     installFetch(teamRoutes());
     renderAs(deepa);
-    expect((await screen.findByTestId("stuck-summary")).textContent).toBe("7 stuck tasks: 1 blocked, 6 overdue. Owners: New hire 6, You 1");
+    expect((await screen.findByTestId("stuck-summary")).textContent).toBe("7 stuck tasks: 1 blocked, 6 overdue and not blocked. Owners: New hire 6, You 1");
     const table = screen.getByRole("table", { name: "Where onboarding is stuck" });
     const stuckRows = within(table).getAllByRole("row").slice(1);
     expect(stuckRows).toHaveLength(6);

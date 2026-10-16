@@ -19,7 +19,11 @@ export function ownerLabel(role: OnboardingOwnerRole, viewer: Viewer): string {
 
 const ROLE_ORDER: OnboardingOwnerRole[] = ["employee", "manager", "hr_admin", "it"];
 
-/** "46 stuck tasks: 20 blocked, 26 overdue. Owners: New hire 32, Manager 7, HR (you) 5, IT 2", from the rows only. */
+/**
+ * "46 stuck tasks: 20 blocked, 26 overdue and not blocked. Owners: New hire 32, Manager 7, HR (you) 5,
+ * IT 2", from the rows only. The second number is the table's "Overdue, not blocked" column, so it
+ * says so: the tiles and each person's line count every overdue task, blocked or not.
+ */
 export function stuckSummary(steps: readonly OnboardingOverviewStep[], viewer: Viewer): string {
   const blocked = steps.reduce((n, s) => n + s.blocked, 0);
   const overdue = steps.reduce((n, s) => n + s.overdueNotBlocked, 0);
@@ -28,7 +32,7 @@ export function stuckSummary(steps: readonly OnboardingOverviewStep[], viewer: V
   const owners = [...byOwner.entries()]
     .sort((a, b) => b[1] - a[1] || ROLE_ORDER.indexOf(a[0]) - ROLE_ORDER.indexOf(b[0]))
     .map(([role, n]) => `${ownerLabel(role, viewer)} ${n}`);
-  return `${plural(blocked + overdue, "stuck task")}: ${blocked} blocked, ${overdue} overdue. Owners: ${owners.join(", ")}`;
+  return `${plural(blocked + overdue, "stuck task")}: ${blocked} blocked, ${overdue} overdue and not blocked. Owners: ${owners.join(", ")}`;
 }
 
 /** "Show the 9 people stuck on Enroll in multi-factor authentication" (the count is of people, not tasks). */

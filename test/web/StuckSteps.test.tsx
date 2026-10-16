@@ -11,11 +11,21 @@ const barOf = (row: HTMLElement, i: 0 | 1) => row.querySelectorAll(".stuck-cell"
 
 describe("stuckSummary and owner labels", () => {
   it("sums the rows for HR, with owners relative to the viewer, largest first", () => {
-    expect(stuckSummary(kenjiSteps, "hr_admin")).toBe("46 stuck tasks: 20 blocked, 26 overdue. Owners: New hire 32, Manager 7, HR (you) 5, IT 2");
+    expect(stuckSummary(kenjiSteps, "hr_admin")).toBe("46 stuck tasks: 20 blocked, 26 overdue and not blocked. Owners: New hire 32, Manager 7, HR (you) 5, IT 2");
+  });
+
+  it("never calls the not-blocked count plain overdue, since the people's overdue tasks include blocked ones", () => {
+    const people = overviewFor(everyoneIds).people;
+    const overdueTasks = people.reduce((n, p) => n + p.tasks.overdue, 0);
+    const notBlocked = kenjiSteps.reduce((n, s) => n + s.overdueNotBlocked, 0);
+    // In the seed every blocked task is also past due, so the two counts differ by the blocked total.
+    expect([overdueTasks, notBlocked]).toEqual([46, 26]);
+    expect(stuckSummary(kenjiSteps, "hr_admin")).not.toMatch(/\b26 overdue\./);
+    expect(stuckSummary(kenjiSteps, "hr_admin")).toContain(`${notBlocked} overdue and not blocked`);
   });
 
   it("calls a manager's own steps You", () => {
-    expect(stuckSummary(deepaSteps, "manager")).toBe("7 stuck tasks: 1 blocked, 6 overdue. Owners: New hire 6, You 1");
+    expect(stuckSummary(deepaSteps, "manager")).toBe("7 stuck tasks: 1 blocked, 6 overdue and not blocked. Owners: New hire 6, You 1");
     expect(ownerLabel("manager", "manager")).toBe("You");
     expect(ownerLabel("manager", "hr_admin")).toBe("Manager");
     expect(ownerLabel("hr_admin", "hr_admin")).toBe("HR (you)");
@@ -47,7 +57,7 @@ describe("StuckSteps", () => {
     );
     expect([...first.querySelectorAll(".stuck-num")].map((n) => n.textContent)).toEqual(["3", "6", "1"]);
     expect(within(rows()[1]!).getByRole("button", { name: "Show the 6 people stuck on First one-on-one with your manager" })).toBeTruthy();
-    expect(screen.getByTestId("stuck-summary").textContent).toBe("46 stuck tasks: 20 blocked, 26 overdue. Owners: New hire 32, Manager 7, HR (you) 5, IT 2");
+    expect(screen.getByTestId("stuck-summary").textContent).toBe("46 stuck tasks: 20 blocked, 26 overdue and not blocked. Owners: New hire 32, Manager 7, HR (you) 5, IT 2");
   });
 
   it("draws both bar columns on one scale, hides the bars from assistive technology and draws none for 0", () => {
