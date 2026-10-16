@@ -9,8 +9,12 @@ type Props = { me: Me; authMode: AuthMode | null; next: string };
 export function UserBadge({ me, authMode, next }: Props) {
   return (
     <div className="user-badge">
-      <span className="user-badge-who" aria-label={`Signed in as ${me.fullName}, ${ROLE_LABEL[me.role]}`} title={me.fullName}>
+      {/* Plain text, not an aria-label (which a generic span cannot carry): on a phone the name is only
+          visually hidden, so a screen reader still reads "Signed in as <name>, <role>". */}
+      <span className="user-badge-who" title={me.fullName}>
+        <span className="visually-hidden">Signed in as </span>
         <span className="user-badge-name">{me.fullName}</span>
+        <span className="visually-hidden">, </span>
         <span className="role-badge">{ROLE_LABEL[me.role]}</span>
       </span>
       {authMode === "dev" ? (

@@ -95,6 +95,17 @@ describe("UserBadge", () => {
     expect(screen.queryByRole("link", { name: "Sign out" })).toBeNull();
   });
 
+  it("says who is signed in as text, not as an aria-label on a generic element", async () => {
+    installFetch([...signedIn("dev"), { path: "/api/tickets", body: { tickets: [] } }]);
+    renderAt("/tickets");
+    await screen.findByRole("link", { name: "Switch persona" });
+    const who = document.querySelector(".user-badge-who") as HTMLElement;
+    expect(who.getAttribute("aria-label")).toBeNull();
+    expect(who.textContent).toBe("Signed in as Emeka Adeyemi, Employee");
+    // On a phone styles.css only visually hides the name, so this text stays readable.
+    expect(who.querySelector(".user-badge-name")?.textContent).toBe("Emeka Adeyemi");
+  });
+
   it("offers Sign out in access mode", async () => {
     installFetch([...signedIn("access"), { path: "/api/tickets", body: { tickets: [] } }]);
     renderAt("/tickets");

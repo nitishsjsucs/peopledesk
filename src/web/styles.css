@@ -967,10 +967,16 @@ label {
   }
 }
 
-/* On a phone the badge shows the role only; the full name stays in its accessible label and tooltip. */
+/* On a phone the badge shows the role only; the name stays in the text (visually hidden, as in
+   .visually-hidden) for screen readers, and in the tooltip. */
 @media (max-width: 480px) {
   .user-badge-name {
-    display: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
 }
 
