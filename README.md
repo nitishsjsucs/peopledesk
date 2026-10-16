@@ -16,12 +16,14 @@ All people, policies, tickets and numbers are synthetic, generated deterministic
 | **No recorded production run** | `doctor`, the R2 S3 API fallback of `seed:remote` (its SigV4 signer is tested against AWS's documented example), a browser sign-in with a One-time PIN, and an approval by a user identity in production |
 | **Measured locally** | CPU time per route and per chat turn, excluding awaited I/O (`npm run cpu:profile`; see [CPU time](#cpu-time)) |
 | **Measured in production** | CPU time per invocation for one hour of eval and verification traffic, from Cloudflare's GraphQL Analytics API: Worker p50 4.8 ms, p99 56.2 ms; chat Durable Object p50 26.9 ms, p99 94.8 ms; none stopped (see [CPU time](#cpu-time)) |
-| **Tests** | 533 tests in 69 files across five Vitest projects, all passing (`npm test`, 2026-10-15) |
+| **Tests** | 627 tests in 72 files across five Vitest projects, all passing (`npm test`, 2026-10-15, after the workflow round) |
 | **Not done yet** | The checks in the "No recorded production run" row; a production eval with `--gateway-report`, so that cost comes from AI Gateway rather than a list-price estimate; reseeding production before its dataset expires on 2026-10-29 |
 | **Deployed** | Yes, since 2026-10-15, at `https://peopledesk.nitish-ratakonda.workers.dev` behind Cloudflare Access. Service tokens are refused (403) outside an eval window, and production is left with the window closed |
 | **CI** | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs typecheck, dataset determinism, tests, build, an offline deploy dry run and a generated-types check. All six pass locally at this commit (2026-10-15) |
 
 [PROGRESS.md](PROGRESS.md) records where the build stands against the spec's commit plan and every deviation from the spec. [CONTEXT.md](CONTEXT.md) defines the domain vocabulary and [`docs/adr/`](docs/adr/) records the main design decisions.
+
+[docs/USER-WORKFLOWS.md](docs/USER-WORKFLOWS.md) walks through each persona's workflows and lists what the 2026-10-15 workflow round changed (tested locally; production still runs the code deployed before it).
 
 ## Why
 
@@ -143,7 +145,7 @@ Tests run in the Workers Vitest integration (`@cloudflare/vitest-plugin`, the re
 | `worker-access` | workerd, `AUTH_MODE=access` | The production remote-JWKS path offline (served by `outboundService`), service tokens that can propose but never approve, and provider failure handling |
 | `worker-adversarial` | workerd, adversarial model | A model that always reaches for other people's data and fabricates citations; server checks keep every turn safe |
 | `node` | Node | Generator determinism and exact counts, the seed file round trip through `wrangler d1 execute`, the authorization matrix, the eval dataset invariants, scorer, leak check and report |
-| `web` | happy-dom | Chat page (including approval cards in a reloaded transcript), approval card, ticket and orientation forms with their edit round trip, restricted markdown renderer, policy viewer, home, tickets, onboarding and requests pages |
+| `web` | happy-dom | Chat page (including approval cards in a reloaded transcript, retries, rate limit and turn-in-progress handling, focus and announcements), approval card outcomes, ticket and orientation forms with their URL-addressed review and edit steps, restricted markdown renderer, policy list and viewer, home, tickets, onboarding and requests pages, and the app shell (session errors, skip link, titles, focus on navigation) |
 
 Every workerd test file starts from the same seeded dataset, applied with `DB.batch` (never `exec`, which splits multi-line text).
 
