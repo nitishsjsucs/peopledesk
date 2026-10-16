@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router";
 import { api, ApiClientError, onUnauthenticated } from "../lib/api.ts";
+import { BusinessDateContext } from "../lib/business-date.tsx";
 import { pageKeyOf, titleFor } from "../lib/page-titles.ts";
 import { MeContext } from "../lib/session.tsx";
 import { applyTheme, nextTheme, readTheme } from "../lib/theme.ts";
@@ -33,6 +34,11 @@ export function AppShell() {
   // The auth mode decides the badge's way out (switch persona locally, sign out in production).
   const health = useAsync(() => (signedIn ? api.health() : Promise.resolve(null)), [signedIn]);
   const authMode = health.data?.authMode ?? null;
+  // The same answer gives the pages the business date. It is settled once /api/health has answered
+  // or failed; a null result means the request has not been made for this sign-in yet.
+  const healthAsOf = health.data?.asOf ?? null;
+  const healthFailed = Boolean(health.error);
+  const businessDate = useMemo(() => ({ asOf: healthAsOf, settled: healthAsOf !== null || healthFailed }), [healthAsOf, healthFailed]);
   const [sessionEnded, setSessionEnded] = useState(false);
   useEffect(() => (signedIn ? onUnauthenticated(() => setSessionEnded(true)) : undefined), [signedIn]);
   const [theme, setTheme] = useState<ThemeChoice>(() => readTheme());
@@ -133,7 +139,9 @@ export function AppShell() {
         ) : null}
         {me.data ? (
           <MeContext.Provider value={me.data}>
-            <Outlet />
+            <BusinessDateContext.Provider value={businessDate}>
+              <Outlet />
+            </BusinessDateContext.Provider>
           </MeContext.Provider>
         ) : null}
       </main>

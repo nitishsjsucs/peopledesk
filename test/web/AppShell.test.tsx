@@ -4,7 +4,9 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { describe, expect, it } from "vitest";
 import type { Health } from "../../src/shared/api-types.ts";
+import { AppShell } from "../../src/web/components/AppShell.tsx";
 import { NETWORK_MESSAGE, setFetch } from "../../src/web/lib/api.ts";
+import { useBusinessDate } from "../../src/web/lib/business-date.tsx";
 import { routes } from "../../src/web/router.tsx";
 import { installFetch, me } from "./fixtures.ts";
 import type { Route } from "./fixtures.ts";
@@ -182,5 +184,38 @@ describe("AppShell navigation and structure", () => {
     await screen.findByText("Page not found");
     expect(screen.getAllByRole("heading", { level: 1 }).map((h) => h.textContent)).toEqual(["Page not found"]);
     expect(document.title).toBe("Page not found | PeopleDesk");
+  });
+});
+
+describe("AppShell business date", () => {
+  function DateProbe() {
+    const d = useBusinessDate();
+    return <p data-testid="business-date">{`${d.asOf ?? "none"} ${d.settled ? "settled" : "waiting"}`}</p>;
+  }
+  const renderProbe = () => {
+    const router = createMemoryRouter([{ path: "/", element: <AppShell />, children: [{ index: true, element: <DateProbe /> }] }], { initialEntries: ["/"] });
+    render(<RouterProvider router={router} />);
+  };
+
+  it("passes /api/health's asOf to the pages, waiting until it answers, with no request of its own", async () => {
+    let release: () => void = () => {};
+    const held = new Promise<void>((r) => (release = r));
+    const calls = installFetch([{ path: "/api/me", body: me }, { path: "/api/health", body: async () => (await held, health("dev")) }]);
+    renderProbe();
+    expect((await screen.findByTestId("business-date")).textContent).toBe("none waiting");
+    release();
+    await waitFor(() => expect(screen.getByTestId("business-date").textContent).toBe("2026-10-01 settled"));
+    expect(calls.map((c) => c.path).sort()).toEqual(["/api/health", "/api/me"]);
+  });
+
+  it("settles with no date when /api/health fails", async () => {
+    installFetch([{ path: "/api/me", body: me }, { path: "/api/health", status: 500, body: { error: { code: "internal", message: "Internal error.", requestId: "r" } } }]);
+    renderProbe();
+    await waitFor(() => expect(screen.getByTestId("business-date").textContent).toBe("none settled"));
+  });
+
+  it("is unknown and settled outside the shell, so a page rendered alone does not wait", () => {
+    render(<DateProbe />);
+    expect(screen.getByTestId("business-date").textContent).toBe("none settled");
   });
 });

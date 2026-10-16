@@ -3,7 +3,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const css = readFileSync(new URL("../../src/web/styles.css", import.meta.url), "utf8");
+// Comments are dropped first, so a comment inside a rule never reads as part of a declaration.
+const css = readFileSync(new URL("../../src/web/styles.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
 
 /** The declarations of the first rule whose selector list is exactly `selector`. */
 function rule(selector: string): Record<string, string> {
@@ -46,6 +47,19 @@ function contrast(a: string, b: string): number {
 
 const light = rule(":root");
 const dark = rule(':root[data-theme="dark"]');
+/** The dark tokens that follow the OS setting, inside @media (prefers-color-scheme: dark). */
+const darkMedia = (() => {
+  const m = /@media \(prefers-color-scheme: dark\) \{\s*:root:not\(\[data-theme="light"\]\) \{([^}]*)\}/.exec(css);
+  if (!m) throw new Error("no dark media block");
+  const out: Record<string, string> = {};
+  for (const decl of (m[1] ?? "").split(";")) {
+    const i = decl.indexOf(":");
+    if (i > 0) out[decl.slice(0, i).trim()] = decl.slice(i + 1).trim();
+  }
+  return out;
+})();
+
+const CHART_TOKENS = ["--chart-done", "--chart-overdue", "--chart-track"] as const;
 
 describe("theme contrast (styles.css)", () => {
   it("computes contrast like WCAG", () => {
@@ -74,5 +88,23 @@ describe("theme contrast (styles.css)", () => {
     expect(withBackground[0]?.["color"]).toBe("#fff");
     // .btn (same specificity) must come before that rule for it to win.
     expect(css.indexOf("\n.btn {")).toBeLessThan(css.search(/\n\.btn-primary \{\s*background/));
+  });
+
+  it("defines the chart tokens in :root, the dark media block and [data-theme=dark], with the two dark blocks agreeing", () => {
+    for (const t of CHART_TOKENS) {
+      expect(light[t], t).toMatch(/^#[0-9a-f]{6}$/);
+      expect(dark[t], t).toMatch(/^#[0-9a-f]{6}$/);
+      expect(darkMedia[t], t).toBe(dark[t]);
+    }
+    expect(CHART_TOKENS.map((t) => light[t])).toEqual(["#2556c7", "#9a5b00", "#d9dde4"]);
+    expect(CHART_TOKENS.map((t) => dark[t])).toEqual(["#5a88ee", "#c4862a", "#3d4757"]);
+  });
+
+  it("done and overdue marks reach 3:1 against --surface in both themes", () => {
+    for (const theme of [light, dark]) {
+      for (const t of ["--chart-done", "--chart-overdue"]) {
+        expect(contrast(theme[t] as string, theme["--surface"] as string), t).toBeGreaterThanOrEqual(3);
+      }
+    }
   });
 });
