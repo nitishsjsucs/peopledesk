@@ -87,8 +87,12 @@ describe("TicketsPage", () => {
     ]);
     renderAt("/tickets?status=resolved");
     await screen.findByText("No resolved tickets");
-    fireEvent.click(screen.getByRole("button", { name: "Show all statuses" }));
+    const showAll = screen.getByRole("button", { name: "Show all statuses" });
+    showAll.focus();
+    fireEvent.click(showAll);
     await screen.findByText("TKT-000001");
     expect(screen.getByTestId("location").textContent).toBe("/tickets");
+    // The button is gone with the empty state, so focus is on the status filter, not on the page.
+    expect(document.activeElement).toBe(screen.getByLabelText("Status"));
   });
 });

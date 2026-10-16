@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { Link, useSearchParams } from "react-router";
 import { POLICY_CATEGORIES } from "../../shared/domain.ts";
 import type { PolicyCategory } from "../../shared/domain.ts";
@@ -42,7 +43,12 @@ export function PoliciesPage() {
       },
       { replace: true },
     );
-  const clear = () => setParams(new URLSearchParams(), { replace: true });
+  const searchRef = useRef<HTMLInputElement>(null);
+  // Clearing removes the empty state and its button, so focus goes to the search box.
+  const clear = () => {
+    setParams(new URLSearchParams(), { replace: true });
+    searchRef.current?.focus();
+  };
   const documents = list.data?.documents ?? [];
   return (
     <>
@@ -62,7 +68,7 @@ export function PoliciesPage() {
         </div>
         <div className="field">
           <label htmlFor="policy-search">Search titles</label>
-          <input id="policy-search" type="search" value={q} onChange={(e) => update("q", e.target.value)} placeholder="stipend, leave, travel..." />
+          <input id="policy-search" ref={searchRef} type="search" value={q} onChange={(e) => update("q", e.target.value)} placeholder="stipend, leave, travel..." />
         </div>
       </div>
       {list.error ? <ErrorBanner error={list.error} onRetry={list.reload} /> : null}

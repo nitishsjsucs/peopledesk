@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { Link, useSearchParams } from "react-router";
 import { TICKET_STATUSES } from "../../shared/domain.ts";
 import type { TicketStatus } from "../../shared/domain.ts";
@@ -25,6 +26,12 @@ export function TicketsPage() {
       { replace: true },
     );
   const shown = tickets.data && !tickets.loading ? tickets.data.tickets : null;
+  const statusRef = useRef<HTMLSelectElement>(null);
+  // Showing all statuses removes the empty state and its button, so focus goes to the filter.
+  const showAll = () => {
+    setStatus("");
+    statusRef.current?.focus();
+  };
   return (
     <>
       <h1 className="page-title">My tickets</h1>
@@ -34,7 +41,7 @@ export function TicketsPage() {
       <div className="filters">
         <div className="field" style={{ maxWidth: 240 }}>
           <label htmlFor="ticket-status">Status</label>
-          <select id="ticket-status" value={status} onChange={(e) => setStatus(e.target.value as TicketStatus | "")}>
+          <select id="ticket-status" ref={statusRef} value={status} onChange={(e) => setStatus(e.target.value as TicketStatus | "")}>
             <option value="">All statuses</option>
             {TICKET_STATUSES.map((s) => (
               <option key={s} value={s}>
@@ -54,7 +61,7 @@ export function TicketsPage() {
         <EmptyState title={status ? `No ${TICKET_STATUS_LABEL[status].toLowerCase()} tickets` : "No tickets yet"}>
           <p className="request-links" style={{ justifyContent: "center" }}>
             {status ? (
-              <button type="button" className="btn" onClick={() => setStatus("")}>
+              <button type="button" className="btn" onClick={showAll}>
                 Show all statuses
               </button>
             ) : null}

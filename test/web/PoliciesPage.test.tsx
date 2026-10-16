@@ -71,9 +71,13 @@ describe("PoliciesPage", () => {
     await screen.findByText("No policies match");
     expect(screen.queryByTestId("policy-list")).toBeNull();
     expect(screen.getByRole("link", { name: "Ask in chat" }).getAttribute("href")).toBe("/chat");
-    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    const clear = screen.getByRole("button", { name: "Clear filters" });
+    clear.focus();
+    fireEvent.click(clear);
     await screen.findByRole("link", { name: "Wellness Stipend" });
     expect(screen.getByTestId("location").textContent).toBe("/policies");
+    // The button is gone with the empty state, so focus is on the search box, not on the page.
+    expect(document.activeElement).toBe(screen.getByLabelText("Search titles"));
     expect((screen.getByLabelText("Search titles") as HTMLInputElement).value).toBe("");
     expect((screen.getByLabelText("Category") as HTMLSelectElement).value).toBe("");
   });
