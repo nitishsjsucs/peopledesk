@@ -6,8 +6,8 @@ import { ApprovalCard, describeOutcome } from "../../src/web/components/Approval
 import { installFetch, pendingTicket } from "./fixtures.ts";
 
 function EditTarget() {
-  const state = useLocation().state as { edit?: PendingActionView } | null;
-  return <p data-testid="edit-target">editing {(state?.edit?.arguments as { subject?: string } | undefined)?.subject}</p>;
+  const l = useLocation();
+  return <p data-testid="edit-target">{`${l.pathname}${l.search}`}</p>;
 }
 
 function renderCard(action: PendingActionView) {
@@ -16,6 +16,7 @@ function renderCard(action: PendingActionView) {
       <Routes>
         <Route path="/chat/:id" element={<ApprovalCard action={action} />} />
         <Route path="/requests/ticket" element={<EditTarget />} />
+        <Route path="/requests/orientation" element={<EditTarget />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -76,11 +77,17 @@ describe("ApprovalCard", () => {
     );
   });
 
-  it("opens the prefilled form on Edit", async () => {
+  it("opens the edit step of the request's page on Edit, addressed by the URL", async () => {
     installFetch([]);
-    renderCard(pendingTicket());
+    const action = pendingTicket();
+    const view = renderCard(action);
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
-    expect((await screen.findByTestId("edit-target")).textContent).toBe("editing Laptop will not boot");
+    expect((await screen.findByTestId("edit-target")).textContent).toBe(`/requests/ticket?edit=${action.actionId}`);
+    view.unmount();
+    const booking = pendingTicket({ tool: "schedule_orientation_session", arguments: { sessionId: "ORI-002" } });
+    renderCard(booking);
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    expect((await screen.findByTestId("edit-target")).textContent).toBe(`/requests/orientation?edit=${booking.actionId}`);
   });
 
   it("renders an already decided action without buttons enabled", () => {

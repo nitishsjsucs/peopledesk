@@ -6,6 +6,7 @@ import { useNavigate } from "react-router";
 import type { ApproveResponse, PendingActionView } from "../../shared/api-types.ts";
 import { api, ApiClientError } from "../lib/api.ts";
 import { formatRelativeExpiry } from "../lib/format.ts";
+import { editUrl } from "../lib/requests.ts";
 import { errorMessage } from "./ErrorBanner.tsx";
 
 type Props = { action: PendingActionView; highlight?: boolean };
@@ -86,8 +87,7 @@ export function ApprovalCard({ action, highlight }: Props) {
   }
 
   function edit() {
-    const path = action.tool === "create_support_ticket" ? "/requests/ticket" : "/requests/orientation";
-    navigate(path, { state: { edit: action } });
+    navigate(editUrl(action));
   }
 
   return (

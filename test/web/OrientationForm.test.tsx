@@ -5,7 +5,8 @@ import type { Me, PendingActionView } from "../../src/shared/api-types.ts";
 import { OrientationForm } from "../../src/web/components/OrientationForm.tsx";
 import { MeContext } from "../../src/web/lib/session.tsx";
 import { ScheduleOrientationPage } from "../../src/web/pages/ScheduleOrientationPage.tsx";
-import { installFetch, me, pendingTicket } from "./fixtures.ts";
+import { actionsServer, installFetch, me, pendingTicket } from "./fixtures.ts";
+import { LocationProbe } from "./probe.tsx";
 
 const session = (id: string, seatsRemaining: number, capacity = 10) => ({
   id,
@@ -121,46 +122,76 @@ describe("OrientationForm", () => {
 });
 
 describe("ScheduleOrientationPage", () => {
-  it("goes back from the review step to the prefilled form on Edit, and the update supersedes the proposal", async () => {
-    let n = 0;
-    const calls = installFetch([
-      { path: "/api/orientation-sessions", body: sessions },
-      {
-        method: "POST",
-        path: "/api/actions",
-        status: 201,
-        body: (init: RequestInit) => {
-          n++;
-          return { ...proposed(JSON.parse(String(init.body)).arguments), actionId: `00000000-0000-4000-8000-00000000000${n}` };
-        },
-      },
-    ]);
+  const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+  const renderPage = (url: string) =>
     render(
-      <MemoryRouter initialEntries={["/requests/orientation"]}>
+      <MemoryRouter initialEntries={[url]}>
         <MeContext.Provider value={newHire}>
           <Routes>
             <Route path="/requests/orientation" element={<ScheduleOrientationPage />} />
           </Routes>
+          <LocationProbe />
         </MeContext.Provider>
       </MemoryRouter>,
     );
+  const location = () => screen.getByTestId("location").textContent;
+
+  it("goes from the review step to the prefilled form on Edit, and the update supersedes the proposal", async () => {
+    const server = actionsServer();
+    const calls = installFetch([{ path: "/api/orientation-sessions", body: sessions }, ...server.routes]);
+    renderPage("/requests/orientation");
     fireEvent.click(await screen.findByLabelText("New hire orientation ORI-002, ORI-002"));
     fireEvent.click(screen.getByRole("button", { name: "Review request" }));
     await screen.findByTestId("approval-card");
+    expect(location()).toBe(`/requests/orientation?review=${id(1)}`);
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     expect(await screen.findByRole("heading", { name: "Edit orientation request" })).toBeTruthy();
+    expect(location()).toBe(`/requests/orientation?edit=${id(1)}`);
     expect(screen.queryByTestId("approval-card")).toBeNull();
     const prefilled = (await screen.findByLabelText("New hire orientation ORI-002, ORI-002")) as HTMLInputElement;
     expect(prefilled.checked).toBe(true);
     fireEvent.click(screen.getByLabelText("New hire orientation ORI-003, ORI-003"));
     fireEvent.click(screen.getByRole("button", { name: "Update request" }));
+    await screen.findByRole("heading", { name: "Review orientation request" });
     await screen.findByTestId("approval-card");
+    expect(location()).toBe(`/requests/orientation?review=${id(2)}`);
     const posts = calls.filter((c) => c.method === "POST");
     expect(posts).toHaveLength(2);
     expect(posts[1]!.body).toEqual({
       tool: "schedule_orientation_session",
       arguments: { sessionId: "ORI-003" },
-      supersedes: "00000000-0000-4000-8000-000000000001",
+      supersedes: id(1),
     });
+  });
+
+  it("shows the review card again when the review URL is reopened", async () => {
+    const proposedEarlier = proposed({ sessionId: "ORI-002" });
+    installFetch([{ path: "/api/orientation-sessions", body: sessions }, ...actionsServer([proposedEarlier]).routes]);
+    renderPage(`/requests/orientation?review=${proposedEarlier.actionId}`);
+    await screen.findByTestId("approval-card");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Review orientation request");
+  });
+
+  it("starts again from an expired request without superseding it", async () => {
+    const old = { ...proposed({ sessionId: "ORI-002" }), status: "expired" as const };
+    const calls = installFetch([{ path: "/api/orientation-sessions", body: sessions }, ...actionsServer([old]).routes]);
+    renderPage(`/requests/orientation?from=${old.actionId}`);
+    const prefilled = (await screen.findByLabelText("New hire orientation ORI-002, ORI-002")) as HTMLInputElement;
+    expect(prefilled.checked).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Review request" }));
+    await screen.findByTestId("approval-card");
+    expect(calls.filter((c) => c.method === "POST").map((c) => c.body)).toEqual([
+      { tool: "schedule_orientation_session", arguments: { sessionId: "ORI-002" } },
+    ]);
+    expect(location()).toBe(`/requests/orientation?review=${id(1)}`);
+  });
+
+  it("renders no Update request button for an edit of a decided request", async () => {
+    const old = { ...proposed({ sessionId: "ORI-002" }), status: "rejected" as const, supersededBy: id(5) };
+    installFetch([{ path: "/api/orientation-sessions", body: sessions }, ...actionsServer([old]).routes]);
+    renderPage(`/requests/orientation?edit=${old.actionId}`);
+    expect((await screen.findByTestId("not-editable")).textContent).toContain("replaced by an edited request");
+    expect(screen.getByRole("link", { name: "See the new request" }).getAttribute("href")).toBe(`/actions?focus=${id(5)}`);
+    expect(screen.queryByRole("button", { name: "Update request" })).toBeNull();
   });
 });

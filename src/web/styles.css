@@ -397,6 +397,7 @@ label {
   padding: 10px 14px;
   margin-bottom: 12px;
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   align-items: center;
   justify-content: space-between;
@@ -945,4 +946,18 @@ label {
   height: 64px;
   color: var(--border-strong);
   margin-bottom: 8px;
+}
+
+/* Request pages: the links under a review card or an edit form, and buttons inside a banner. */
+.request-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 12px;
+}
+
+.banner-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }

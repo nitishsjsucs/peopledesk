@@ -1,34 +1,17 @@
-import { useState } from "react";
-import { Link, useLocation } from "react-router";
-import type { PendingActionView } from "../../shared/api-types.ts";
-import { ApprovalCard } from "../components/ApprovalCard.tsx";
+import { RequestSteps } from "../components/RequestSteps.tsx";
 import { TicketForm } from "../components/TicketForm.tsx";
 import type { TicketValues } from "../components/TicketForm.tsx";
 
+/** /requests/ticket: the form, then the review card. ?review=, ?edit= and ?from= address the steps. */
 export function NewTicketPage() {
-  // Edit on the review card navigates to this same route with new state. Keying by the location
-  // remounts the page, so the prefilled form replaces the review card instead of being hidden by it.
-  return <NewTicket key={useLocation().key} />;
-}
-
-function NewTicket() {
-  const edit = (useLocation().state as { edit?: PendingActionView } | null)?.edit;
-  const [proposed, setProposed] = useState<PendingActionView | null>(null);
-  const initial = edit && edit.tool === "create_support_ticket" ? (edit.arguments as Partial<TicketValues>) : undefined;
   return (
-    <>
-      <h1 className="page-title">{edit ? "Edit ticket request" : "New support ticket"}</h1>
-      <p className="page-subtitle">Nothing is created until you approve the request on the next step.</p>
-      {proposed ? (
-        <>
-          <ApprovalCard action={proposed} />
-          <p>
-            <Link to="/actions">All my requests</Link>
-          </p>
-        </>
-      ) : (
-        <TicketForm initial={initial} supersedes={edit?.actionId} onProposed={setProposed} />
+    <RequestSteps
+      tool="create_support_ticket"
+      titles={{ new: "New support ticket", edit: "Edit ticket request", review: "Review ticket request" }}
+      subtitle="Nothing is created until you approve the request on the next step."
+      renderForm={({ initialArgs, supersedes, onProposed }) => (
+        <TicketForm initial={initialArgs as Partial<TicketValues> | undefined} supersedes={supersedes} onProposed={onProposed} />
       )}
-    </>
+    />
   );
 }

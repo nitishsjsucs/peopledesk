@@ -1483,8 +1483,8 @@ React 19, `react-router` 8.4.0 (`createBrowserRouter`, `RouterProvider`), plain 
 | `/chat`, `/chat/:conversationId` | ChatPage | ConversationList, MessageList, ChatComposer; message variants: answer (CitationChip list, SourceDrawer), clarify, refuse, error (with a retry button), ToolResultCard, ApprovalCard |
 | `/policies` | PoliciesPage | Category filter, search box, list of accessible documents with current version and EffectiveDateBadge |
 | `/policies/:docId`, `/policies/:docId/v/:version` | PolicyDocumentPage | Rendered markdown, VersionTimeline with current, superseded, scheduled badges; superseded versions visibly marked |
-| `/requests/ticket` | NewTicketPage | TicketForm, then review step that shows the ApprovalCard |
-| `/requests/orientation` | ScheduleOrientationPage | Session table with seats remaining; for managers, a direct-report selector from `/api/team`; review step with ApprovalCard |
+| `/requests/ticket` | NewTicketPage | TicketForm, then review step that shows the ApprovalCard. The steps are addressed by the URL (2026-10-15): `?review=<actionId>` shows that request's card in its current state, `?edit=<actionId>` the prefilled form that supersedes it (no form once it is decided or expired), `?from=<actionId>` a prefilled form that proposes a new request; a successful propose replaces the history entry with `?review=<newId>` |
+| `/requests/orientation` | ScheduleOrientationPage | Session table with seats remaining; for managers, a direct-report selector from `/api/team`; review step with ApprovalCard; the same URL-addressed steps as `/requests/ticket` |
 | `/tickets` | TicketsPage | Own tickets (status filter is P1) |
 | `/onboarding` | OnboardingPage | Own checklist and percent complete (the manager view of direct reports in onboarding is P1) |
 | `/actions` | ActionsPage | Own pending and past actions; `?focus=<id>` highlights one (target of `approvalUrl`) |

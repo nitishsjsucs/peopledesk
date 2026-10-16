@@ -88,3 +88,40 @@ export function installFetch(routes: Route[]): Array<{ method: string; path: str
   });
   return calls;
 }
+
+/**
+ * A stateful fake of the actions API for the request pages: POST /api/actions proposes (and, with
+ * supersedes, marks the replaced request rejected with supersededBy, as the server does), GET
+ * /api/actions lists newest first. Returns the routes and the live list.
+ */
+export function actionsServer(initial: PendingActionView[] = []): { routes: Route[]; actions: PendingActionView[] } {
+  const actions = [...initial];
+  let n = 0;
+  const routes: Route[] = [
+    { path: "/api/actions", body: () => ({ actions }) },
+    {
+      method: "POST",
+      path: "/api/actions",
+      status: 201,
+      body: (init: RequestInit) => {
+        const sent = JSON.parse(String(init.body)) as { tool: PendingActionView["tool"]; arguments: Record<string, unknown>; supersedes?: string };
+        n++;
+        const view = pendingTicket({
+          actionId: `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`,
+          tool: sent.tool,
+          arguments: sent.arguments,
+          source: "form",
+          conversationId: null,
+          preview: { title: sent.tool === "create_support_ticket" ? "New support ticket" : "Book orientation session", fields: [] },
+        });
+        if (sent.supersedes) {
+          const old = actions.find((a) => a.actionId === sent.supersedes);
+          if (old) Object.assign(old, { status: "rejected", supersededBy: view.actionId });
+        }
+        actions.unshift(view);
+        return view;
+      },
+    },
+  ];
+  return { routes, actions };
+}
