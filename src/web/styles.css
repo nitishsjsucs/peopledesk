@@ -961,3 +961,19 @@ label {
   flex-wrap: wrap;
   gap: 8px;
 }
+
+/* A button whose request is in flight: it keeps focus (aria-disabled), and looks disabled. */
+.btn[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: progress;
+}
+
+.approval-outcome p {
+  margin: 0 0 8px;
+}
+
+.approval-next {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

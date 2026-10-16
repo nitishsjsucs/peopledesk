@@ -1446,7 +1446,7 @@ Verified for this design in my probe (`scratchpad/pd-verify`, plugin 1.3.7): two
 | File | Priority | What it proves |
 |---|---|---|
 | `ChatPage.test.tsx` | P0 | Renders answers with citation chips (title, doc id, version, effective date) and opens the source drawer; renders clarify, refuse and error states |
-| `ApprovalCard.test.tsx` | P0 | Shows preview fields and expiry; Approve and Reject call the right endpoints; buttons disable after a decision; "Edit" opens the prefilled form |
+| `ApprovalCard.test.tsx` | P0 | Shows preview fields and expiry; Approve and Reject call the right endpoints; after a decision the buttons give way to the outcome and its next step (2026-10-15: My tickets, onboarding, another session, the replacement, or "Start again with these details"), and focus moves to the outcome; a 409 or 410 re-reads the current state; the countdown is announced only at one minute left and at expiry; "Edit" opens the prefilled form at `?edit=<actionId>` |
 | `TicketForm.test.tsx` | P0 | Client validation uses the shared zod schema; submit goes to `/api/actions`; review step shows the pending action |
 | `markdown.test.tsx` | P0 (kept although the review listed it under P1: it is the only check that R2 markdown never reaches the DOM as raw HTML) | Restricted renderer outputs headings, lists and paragraphs and never injects raw HTML |
 | `PolicyDocumentPage.test.tsx` | P1 | Version timeline badges (current, superseded, scheduled) and effective dates |
@@ -1490,7 +1490,7 @@ React 19, `react-router` 8.4.0 (`createBrowserRouter`, `RouterProvider`), plain 
 | `/actions` | ActionsPage | Own pending and past actions; `?focus=<id>` highlights one (target of `approvalUrl`) |
 | `*` | NotFoundPage | |
 
-Components: `AppShell` (nav, `UserBadge`), `ConversationList`, `MessageList`, `ChatComposer` (2000-char counter, disabled while a turn runs), `CitationChip` (title, `POL-014 v3`, "effective 2026-01-01"), `SourceDrawer` (passage quote, effective range, link to the version page), `EffectiveDateBadge`, `ApprovalCard` (preview fields, expiry countdown, Approve, Reject, Edit; a replayed approve shows the stored outcome), `ToolResultCard` (TicketTable, OnboardingChecklist, SessionTable), `TicketForm`, `OrientationForm`, `VersionTimeline`, `ErrorBanner`, `EmptyState`.
+Components: `AppShell` (nav, `UserBadge`), `ConversationList`, `MessageList`, `ChatComposer` (2000-char counter, disabled while a turn runs), `CitationChip` (title, `POL-014 v3`, "effective 2026-01-01"), `SourceDrawer` (passage quote, effective range, link to the version page), `EffectiveDateBadge`, `ApprovalCard` (preview fields, expiry countdown, Approve, Reject, Edit; a replayed approve shows the stored outcome; a decided card shows its outcome and the next step instead of the buttons), `ToolResultCard` (TicketTable, OnboardingChecklist, SessionTable), `TicketForm`, `OrientationForm`, `VersionTimeline`, `ErrorBanner`, `EmptyState`.
 
 Dev login is not part of the SPA: the Worker serves a minimal HTML persona picker at `/dev/login` in dev mode only, which posts to `/dev/token` and redirects to `/`.
 

@@ -176,7 +176,8 @@ describe("ChatPage", () => {
       const { container } = renderChat();
       await screen.findByText("Rejected. Nothing was submitted.");
       const card = container.querySelector('[data-testid="approval-card"]') as HTMLElement;
-      expect((within(card).getByRole("button", { name: "Approve" }) as HTMLButtonElement).disabled).toBe(true);
+      expect(within(card).queryByRole("button", { name: "Approve" })).toBeNull();
+      expect(within(card).getByRole("link", { name: "Start again with these details" })).toBeTruthy();
       expect(within(card).queryByText(/Expires in/)).toBeNull();
       expect(calls.filter((c) => c.path === "/api/actions")).toHaveLength(1);
     });

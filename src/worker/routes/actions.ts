@@ -74,7 +74,7 @@ export const actionRoutes = new Hono<AppEnv>()
     if (!outcome.replayed) {
       const summary =
         outcome.status === "executed"
-          ? `Approved and done: ${Object.values(outcome.result).join(", ")}.`
+          ? `Approved and done: ${executedSummary(outcome.result)}.`
           : `Approved, but it could not be completed (${outcome.errorCode}).`;
       await notifyConversation(c.env, s, principal, id, outcome.status, summary);
     }
@@ -90,6 +90,13 @@ export const actionRoutes = new Hono<AppEnv>()
     await notifyConversation(c.env, s, principal, id, "rejected", "Rejected. Nothing was submitted.");
     return c.json(out);
   });
+
+/** The transcript's words for an executed action: the ticket id, or the session booked (never the booking's own id). */
+function executedSummary(result: Record<string, unknown>): string {
+  if (typeof result["ticketId"] === "string") return result["ticketId"];
+  if (typeof result["sessionId"] === "string") return `booked into ${result["sessionId"]}`;
+  return Object.values(result).join(", ");
+}
 
 /**
  * Records the outcome in the originating conversation's transcript (chat-proposed actions only). Best

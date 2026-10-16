@@ -172,7 +172,8 @@ describe("TicketForm", () => {
     fireEvent.click(screen.getByRole("button", { name: "Test back" }));
     await waitFor(() => expect(location()).toBe(`/requests/ticket?review=${id(1)}`));
     expect(await screen.findByText(/Replaced by an edited request/)).toBeTruthy();
-    expect(screen.queryAllByRole("button", { name: "Approve" }).every((b) => (b as HTMLButtonElement).disabled)).toBe(true);
+    expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();
+    expect(screen.getByRole("link", { name: "See the new request" }).getAttribute("href")).toBe(`/actions?focus=${id(2)}`);
   });
 
   it("opens the orientation page when a ticket URL names a booking request", async () => {

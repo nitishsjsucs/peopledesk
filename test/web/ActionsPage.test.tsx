@@ -1,8 +1,9 @@
 // ActionsPage is where every MCP approvalUrl (/actions?focus=<actionId>) lands: a human opens it and
 // approves there, because there is no approve tool.
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
+import { setFetch } from "../../src/web/lib/api.ts";
 import { ActionsPage } from "../../src/web/pages/ActionsPage.tsx";
 import { installFetch, pendingTicket } from "./fixtures.ts";
 
@@ -14,8 +15,7 @@ const executed = pendingTicket({
   preview: { title: "Executed ticket", fields: [{ label: "Subject", value: "VPN keeps dropping" }] },
 });
 
-const enabledApproveButtons = () =>
-  screen.queryAllByRole("button", { name: "Approve" }).filter((b) => !(b as HTMLButtonElement).disabled);
+const approveButtons = () => screen.queryAllByRole("button", { name: "Approve" });
 
 function renderAt(url: string, actions: unknown[]) {
   const calls = installFetch([{ path: "/api/actions", body: { actions } }]);
@@ -28,7 +28,7 @@ function renderAt(url: string, actions: unknown[]) {
 }
 
 describe("ActionsPage", () => {
-  it("lists requests awaiting approval apart from earlier ones and highlights the focused one", async () => {
+  it("lists requests awaiting approval apart from earlier ones, highlights the focused one and moves focus to it", async () => {
     const { container, calls } = renderAt(`/actions?focus=${awaiting.actionId}`, [awaiting, executed]);
     await screen.findByText("Awaiting approval");
     expect(screen.getByText("Earlier")).toBeTruthy();
@@ -36,20 +36,38 @@ describe("ActionsPage", () => {
     const other = container.querySelector(`#action-${executed.actionId} .approval-card`);
     expect(focused?.classList.contains("focus-ring")).toBe(true);
     expect(other?.classList.contains("focus-ring")).toBe(false);
-    // A decided request keeps its buttons, disabled; only the awaiting one can be approved.
-    expect(enabledApproveButtons()).toHaveLength(1);
+    await waitFor(() => expect(document.activeElement).toBe(focused));
+    // A decided request shows its outcome instead of buttons; only the awaiting one can be approved.
+    expect(approveButtons()).toHaveLength(1);
     expect(screen.queryByText("That request was not found among yours.")).toBeNull();
     expect(calls).toEqual([{ method: "GET", path: "/api/actions", body: undefined }]);
   });
 
-  it("says so when the focused request is not among the viewer's own", async () => {
+  it("says so when the focused request is not among the viewer's own, with a link to all requests", async () => {
     renderAt("/actions?focus=33333333-3333-4333-8333-333333333333", [executed]);
     await screen.findByText("That request was not found among yours.");
-    expect(enabledApproveButtons()).toHaveLength(0);
+    expect(screen.getByRole("link", { name: "See all your requests" }).getAttribute("href")).toBe("/actions");
+    expect(approveButtons()).toHaveLength(0);
   });
 
-  it("shows an empty state when there are no requests", async () => {
+  it("shows a loading line until the requests arrive", async () => {
+    let release: (r: Response) => void = () => {};
+    setFetch(() => new Promise<Response>((resolve) => (release = resolve)));
+    render(
+      <MemoryRouter initialEntries={["/actions"]}>
+        <ActionsPage />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("status").textContent).toBe("Loading your requests...");
+    release(new Response(JSON.stringify({ actions: [awaiting] }), { status: 200 }));
+    await screen.findByText("Awaiting approval");
+    expect(screen.queryByText("Loading your requests...")).toBeNull();
+  });
+
+  it("shows an empty state with the next steps when there are no requests", async () => {
     renderAt("/actions", []);
     await screen.findByText("No requests yet");
+    expect(screen.getByRole("link", { name: "Open a ticket" }).getAttribute("href")).toBe("/requests/ticket");
+    expect(screen.getByRole("link", { name: "Ask in chat" }).getAttribute("href")).toBe("/chat");
   });
 });

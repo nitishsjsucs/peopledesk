@@ -113,6 +113,26 @@ describe("approval outcomes in the transcript", () => {
     expect(note?.kind).toBe("action_outcome");
     expect(note?.text).toMatch(/Approved and done: TKT-\d{6}/);
   });
+
+  it("records an approved chat booking by its session, never by the booking's own id", async () => {
+    const { booked, org, planned, spareEmployees } = await import("../helpers/fixtures.ts");
+    const who = spareEmployees(1, (e) => planned.has(e.id) && !booked.has(e.id))[0]!.email;
+    const taken = new Map<string, number>();
+    for (const b of org.bookings) taken.set(b.sessionId, (taken.get(b.sessionId) ?? 0) + 1);
+    const session = org.sessions.find((s) => s.startsAt.slice(0, 10) > "2026-10-02" && (taken.get(s.id) ?? 0) < s.capacity)!;
+    const id = await newConversation(who);
+    const r = await send(who, id, `Please book me into orientation session ${session.id}`);
+    expect(r.kind).toBe("approval_required");
+    expect(r.pendingAction?.tool).toBe("schedule_orientation_session");
+    const approve = await api(`/api/actions/${r.pendingAction!.actionId}/approve`, { as: who, body: {} });
+    expect(approve.status).toBe(200);
+    const conv = await expectJson(await api(`/api/conversations/${id}`, { as: who }), ConversationSchema);
+    const note = conv.messages.find((m) => m.role === "system");
+    expect(note?.kind).toBe("action_outcome");
+    expect(note?.text).toBe(`Approved and done: booked into ${session.id}.`);
+    expect(note?.text).toMatch(/booked into ORI-\d{3}/);
+    expect(note?.text).not.toContain("BKG-");
+  });
 });
 
 describe("eval header", () => {
