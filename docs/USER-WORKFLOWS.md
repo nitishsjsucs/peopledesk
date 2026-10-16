@@ -1,6 +1,6 @@
 # User workflows
 
-How each kind of person moves through PeopleDesk, as the app works after the 2026-10-15 workflow round, the review fixes that followed it, and the 2026-10-16 round of status views and charts (see [Changed on 2026-10-16](#changed-on-2026-10-16), with screenshots). The personas are the six seeded employees from `/dev/login` (all synthetic). The steps are covered by the web and Worker tests, and the main ones were also driven by a scripted browser (Playwright) against `npm run dev` with these personas, at 1280px and 375px wide, in light and dark themes. Dates and counts below are those of the local dataset, whose business date is 2026-10-01. None of it was checked in production.
+How each kind of person moves through PeopleDesk, as the app works after the 2026-10-15 workflow round, the review fixes that followed it, the 2026-10-16 round of status views and charts (see [Changed on 2026-10-16](#changed-on-2026-10-16), with screenshots) and the fixes after its review. The personas are the six seeded employees from `/dev/login` (all synthetic). The steps are covered by the web and Worker tests, and the main ones were also driven by a scripted browser (Playwright) against `npm run dev` with these personas, at 1280px and 375px wide, in light and dark themes. Dates and counts below are those of the local dataset, whose business date is 2026-10-01. None of it was checked in production.
 
 Two rules hold in every workflow:
 
@@ -158,7 +158,7 @@ A round of status views and charts, each answering a question one of the persona
   ![Deepa's Onboarding at 375px in the dark theme](screenshots/onboarding-manager-375-dark.png)
 
 - **Where onboarding is stuck (Kenji, Deepa).** "Which step is holding people up, and who owns it?" A table of checklist steps with blocked and overdue tasks, with bars on one scale beside the numbers; a step filters the list to its people. Owner says who owns the step, not who must unblock it.
-- **Checklists are next steps (Nadia, Gabriel, and the manager and HR pane).** "What do I need to do now, what is overdue, and what am I waiting on?" Before, a 12-row table in template order with blocked manager tasks among done rows, and nothing marked overdue. Now a plan header with the task bar, then Overdue, Due in the next 7 days, Later, Waiting on someone else (your own checklist only) and Done folded. Nadia's page at 375px went from 1,548px to 900px tall. Without the business date the page shows the old table and never says overdue; the chat's onboarding card is unchanged.
+- **Checklists are next steps (Nadia, Gabriel, and the manager and HR pane).** "What do I need to do now, what is overdue, and what am I waiting on?" Before, a 12-row table in template order with blocked manager tasks among done rows, and nothing marked overdue. Now a plan header with the task bar, then Overdue, Due in the next 7 days, Later, Waiting on someone else (your own checklist only) and Done folded. Nadia's page at 375px went from 1,548px to 792px tall (measured in a window shorter than the page; a 900px-tall window reads 900px because the page no longer fills it). Without the business date the page shows the old table and never says overdue; the chat's onboarding card is unchanged.
 
   ![Nadia's checklist at 1280px](screenshots/my-checklist-1280-light.png)
 
@@ -190,7 +190,21 @@ A round of status views and charts, each answering a question one of the persona
 
   ![The Wellness Stipend timeline with Today at 375px in the dark theme](screenshots/policy-timeline-375-dark.png)
 
-- **Without color.** In forced colors (Windows high contrast) the task bar's segments are solid, hatched and outlined, and every value is also in the text line.
+- **Without color.** In forced colors (Windows high contrast) the task bar's segments are solid, hatched and outlined, and every value is also in the text line. The pressed tile has a wider border and a bold label, which forced colors keep.
 
   ![Task bars in forced colors](screenshots/task-bars-forced-colors.png)
+
+  ![Kenji's tiles in forced colors with "With overdue tasks" pressed](screenshots/tiles-forced-colors.png)
+
+## Fixed after a review of the status views round (2026-10-16)
+
+A review of the round reported 7 findings, 2 important and 5 minor. Each was checked here before it was fixed (in a scripted browser where a browser could show it); none was rejected.
+
+- **The pressed tile shows in forced colors.** Its tint, border color and inset shadow were all that marked it, and forced colors replace the first two and drop shadows, so in Windows high contrast the four tiles looked the same. Now it has a 2px border (3px in the system highlight color under forced colors) and a bold label, and the tiles do not move when one is pressed.
+- **"Overdue" means one thing.** The stuck summary said "26 overdue" for the table's "Overdue, not blocked" column, while the tiles and each person's line count every overdue task (46 for Kenji). It now says "26 overdue and not blocked".
+- **Tile names start with what the tile shows.** A speech-input user saying "19 with overdue tasks" might not reach a tile named "19 people with overdue tasks". Names now start with the visible number and label and then say what is counted: "19 with overdue tasks, 19 people".
+- **Not booked means still needs orientation.** Four people in the seed have their orientation task done but no booking. They were counted as Not booked and offered Book orientation, two of them beside "12 of 12 done". `GET /api/team/onboarding` now says whether the orientation task is done; those four read "Orientation done", get no Book link, and Kenji's Not booked count is 8.
+- **Home holds the panel's place while it loads.** A manager's or HR admin's Home showed the old Onboarding card until the overview arrived, then swapped it for the panel, so a card could vanish under the cursor or focus. Now the panel's place says "Loading the people you support...", and the card appears only when there is no one to show or the overview failed. The tiles are taller than the loading line, so the quick actions below still move down when they arrive (for Kenji, 70px at 375px and 35px at 1280px).
+- **No chunk size warning in the build.** The client JavaScript had passed Vite's 500 kB warning (511 kB). React, React Router and zod now load as a separate chunk (404 kB) beside the app (107 kB), 512 kB in all.
+- **Docs.** Nadia's Onboarding height is 792px, not 900px (above), and the screenshot total and the README's CI date are corrected.
 
